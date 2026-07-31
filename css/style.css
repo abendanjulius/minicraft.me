@@ -557,41 +557,46 @@ body.inv-open #inv{
 #invHead{ flex: 0 0 auto !important; }
 #invSearch{ flex: 0 0 140px !important; display: block !important; }
 
-/* ===== v1.8.2 — mobile inventory: CSS grid so the item list never collapses ===== */
+/* ===== v1.8.3 — mobile inventory: compact panel (not full-screen) ===== */
 @media (max-width: 900px), (max-height: 520px){
   body.inv-open #inv{
     display: grid !important;
-    grid-template-columns: 48px minmax(0, 1fr) !important;
-    grid-template-rows: minmax(180px, 1fr) minmax(120px, 0.45fr) !important;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(160px, 1fr) minmax(100px, 0.38fr) !important;
     grid-template-areas:
       "rail main"
       "rail side" !important;
-    width: 96vw !important;
-    height: min(92vh, 640px) !important;
-    max-height: 92vh !important;
+    /* leave world visible around the edges */
+    width: min(88vw, 720px) !important;
+    height: min(72vh, 420px) !important;
+    max-width: 88vw !important;
+    max-height: 72vh !important;
     padding: 6px !important;
     gap: 6px !important;
     flex-direction: unset !important;
     flex-wrap: unset !important;
     align-items: unset !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,.45) !important;
   }
   #invRail{
     grid-area: rail !important;
     flex: unset !important;
-    width: 48px !important;
+    width: 44px !important;
     height: auto !important;
     max-height: none !important;
   }
   #invMain{
     grid-area: main !important;
     flex: unset !important;
-    min-height: 180px !important;
+    min-height: 140px !important;
     height: auto !important;
     max-height: none !important;
     overflow: hidden !important;
+    padding: 6px 8px !important;
   }
   #invGrid{
-    min-height: 140px !important;
+    min-height: 120px !important;
     height: 100% !important;
     max-height: none !important;
     overflow-y: auto !important;
@@ -601,22 +606,41 @@ body.inv-open #inv{
     grid-area: side !important;
     flex: unset !important;
     min-width: 0 !important;
-    min-height: 110px !important;
+    min-height: 90px !important;
     height: auto !important;
     max-height: none !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    padding: 8px 10px !important;
   }
-  .railBtn{ width: 40px !important; height: 38px !important; font-size: 17px !important; }
+  .railBtn{ width: 38px !important; height: 36px !important; font-size: 16px !important; }
   .invItem{
-    width: 44px !important; height: 44px !important;
-    min-width: 44px !important; min-height: 44px !important;
+    width: 40px !important; height: 40px !important;
+    min-width: 40px !important; min-height: 40px !important;
   }
-  .invItem .sw{ width: 26px !important; height: 26px !important; }
-  #invSearch{ flex: 0 0 90px !important; }
+  .invItem .sw{ width: 24px !important; height: 24px !important; }
+  #invSearch{ flex: 0 0 80px !important; font-size: 11px !important; padding: 4px 6px !important; }
+  #invTitle{ font-size: 13px !important; }
+  #invClose{ top: 6px !important; right: 8px !important; width: 26px !important; height: 26px !important; }
 }
 @media (max-width: 560px){
   #invSearch{ display: none !important; }
   #invTitle{ font-size: 12px !important; }
+  body.inv-open #inv{
+    width: min(92vw, 560px) !important;
+    height: min(70vh, 400px) !important;
+  }
 }
 
+
+/* Sleep transition */
+#sleepFade{
+  position:fixed; inset:0; background:#000; z-index:8;
+  opacity:0; pointer-events:none; transition:opacity .7s ease;
+}
+#sleepFade.on{ opacity:1; pointer-events:auto; }
+#sleepFade .sleepMsg{
+  position:absolute; left:50%; top:48%; transform:translate(-50%,-50%);
+  color:#ddd; font-family:monospace; font-size:18px; letter-spacing:2px;
+  text-shadow:0 0 12px #000; opacity:.9;
+}

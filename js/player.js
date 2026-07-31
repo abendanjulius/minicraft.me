@@ -40,7 +40,8 @@ function pickEntity(){
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
-export const state = { playing:false, mineHeld:false, mining:null, paused:false, flying:false };
+export const state = { playing:false, mineHeld:false, mining:null, paused:false, flying:false, sleeping:false };
+let sleepSeq = null; // {phase, t, bed:{x,y,z}}
 export const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
@@ -329,14 +330,11 @@ export function placeAction(){
       placeAnim = 1;
       return;
     }
-    if(hit===58){ // Bed — set spawn / sleep
+    if(hit===58){ // Bed — set spawn + sleep animation
       survival.setBedSpawn(hx, hy, hz);
       placeAnim = 1;
       sfx.place();
-      // Nightfall: skip night if dark enough
-      if(!gm.forge && dayIsNight()){
-        survival.sleepTillDawn();
-      }
+      startSleep(hx, hy, hz);
       return;
     }
     if(hit===62 || hit===63){ // Trapdoor toggle
@@ -452,9 +450,96 @@ function collide(pos){
   return false;
 }
 
+
+function startSleep(bx, by, bz){
+  if(state.sleeping || state.paused || survival.sv.dead) return;
+  // Nightfall: only full sleep-to-dawn at night; daytime still plays a short rest
+  state.sleeping = true;
+  state.flying = false;
+  for(const k in keys) keys[k] = false;
+  sleepSeq = {
+    phase: 'approach', // approach -> lie -> fadeIn -> rest -> fadeOut -> wake
+    t: 0,
+    bed: {x:bx, y:by, z:bz},
+    skipNight: !gm.forge && dayIsNight(),
+    startYaw: view.yaw,
+    startPitch: view.pitch,
+  };
+  const fade = document.getElementById('sleepFade');
+  if(fade){
+    fade.innerHTML = '<div class="sleepMsg">Z z z …</div>';
+    fade.classList.remove('on');
+  }
+}
+function updateSleep(dt){
+  if(!sleepSeq) return;
+  const s = sleepSeq;
+  s.t += dt;
+  const bed = s.bed;
+  const targetX = bed.x + 0.5, targetY = bed.y + 0.55, targetZ = bed.z + 0.5;
+
+  if(s.phase === 'approach'){
+    // glide onto the bed
+    const k = Math.min(1, s.t / 0.7);
+    player.pos.x += (targetX - player.pos.x) * Math.min(1, dt * 4);
+    player.pos.z += (targetZ - player.pos.z) * Math.min(1, dt * 4);
+    player.pos.y += (targetY - player.pos.y) * Math.min(1, dt * 3);
+    player.vel.set(0,0,0);
+    view.pitch += (0.9 - view.pitch) * Math.min(1, dt * 3); // look up at sky while lying
+    if(s.t >= 0.75){ s.phase = 'lie'; s.t = 0; }
+  } else if(s.phase === 'lie'){
+    player.pos.set(targetX, targetY, targetZ);
+    player.vel.set(0,0,0);
+    view.pitch = 0.95;
+    if(s.t >= 0.45){ s.phase = 'fadeIn'; s.t = 0;
+      document.getElementById('sleepFade')?.classList.add('on');
+    }
+  } else if(s.phase === 'fadeIn'){
+    player.pos.set(targetX, targetY, targetZ);
+    if(s.t >= 0.75){
+      s.phase = 'rest'; s.t = 0;
+      if(s.skipNight) survival.sleepTillDawn();
+      else {
+        // short rest heal even by day
+        survival.sv.hp = Math.min(20, survival.sv.hp + 2);
+        survival.renderVitals?.();
+      }
+    }
+  } else if(s.phase === 'rest'){
+    if(s.t >= (s.skipNight ? 0.6 : 0.35)){
+      s.phase = 'fadeOut'; s.t = 0;
+      document.getElementById('sleepFade')?.classList.remove('on');
+    }
+  } else if(s.phase === 'fadeOut'){
+    if(s.t >= 0.8){
+      s.phase = 'wake'; s.t = 0;
+    }
+  } else if(s.phase === 'wake'){
+    // sit up beside the bed
+    player.pos.set(targetX, bed.y + 1.15, targetZ);
+    view.pitch += (0 - view.pitch) * Math.min(1, dt * 4);
+    if(s.t >= 0.5){
+      state.sleeping = false;
+      sleepSeq = null;
+      const fade = document.getElementById('sleepFade');
+      if(fade){ fade.classList.remove('on'); fade.innerHTML = ''; }
+      document.exitPointerLock?.();
+      relock();
+    }
+  }
+}
+
+
 export function update(dt, elapsed){
   if(!state.playing) return;
   if(state.paused) return;
+  if(state.sleeping){
+    updateSleep(dt);
+    // still keep camera on player while sleeping
+    camera.position.copy(player.pos).add(new THREE.Vector3(0, 0.35, 0));
+    camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
+    return;
+  }
   if(!invOpen && !survival.sv.dead){
     // Sprint: hold Shift (or mobile sprint flag) while moving
     const sprinting = !!(keys.ShiftLeft || keys.ShiftRight || keys.sprint);

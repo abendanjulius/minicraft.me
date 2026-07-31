@@ -21,8 +21,10 @@ export function setBedSpawn(x,y,z){
   note('bed');
 }
 export function sleepTillDawn(){
-  import('./render.js').then(r=>{ try{ r.setDayTime(0.25); }catch(e){} });
-  sv.hp = Math.min(20, sv.hp + 4);
+  // time skip is driven by the sleep animation in player.js
+  import('./render.js').then(r=>{ try{ r.setDayTime(0.28); }catch(e){} });
+  sv.hp = Math.min(20, sv.hp + 6);
+  sv.hunger = Math.min(20, sv.hunger + 2);
   renderVitals();
   note('sleep');
 }
@@ -94,7 +96,7 @@ export function note(what, arg){
 }
 
 // ---- Vitals UI ----
-function renderVitals(){
+export function renderVitals(){
   const h = $('hearts'), f = $('hungerBar');
   let hs = '', fs = '';
   for(let i=0;i<10;i++){

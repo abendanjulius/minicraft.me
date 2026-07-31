@@ -206,16 +206,20 @@ function texFrom(desc){
     });
   }
   if(kind==='bed'){
+    // Top-down bed icon: pillow + blanket + wood frame
     return canvasTex(gc=>{
       for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-        const d=jit(12);
-        const isPillow = y>=12;
-        const isFrame = y<=2 || x<=1 || x>=14;
-        if(isFrame) gc.fillStyle=rgb(110+d,70+d,40+d);
-        else if(isPillow) gc.fillStyle=rgb(230+d,220+d,210+d);
-        else gc.fillStyle=rgb(r+d,g+d,bl+d);
+        const d=jit(10);
+        const edge = x<=1||x>=14||y<=1||y>=14;
+        if(edge) gc.fillStyle=rgb(90+d,55+d,28+d);
+        else if(y>=11) gc.fillStyle=rgb(235+d,230+d,220+d); // pillow
+        else if(y===10) gc.fillStyle=rgb(200+d,200+d,195+d); // seam
+        else gc.fillStyle=rgb(r+d, g+d*0.3|0, bl+d*0.3|0); // blanket
         gc.fillRect(x,y,1,1);
       }
+      // white stripe on blanket
+      gc.fillStyle=rgb(245,245,245);
+      for(let x=3;x<13;x++) gc.fillRect(x,5,1,2);
     });
   }
   if(kind==='stairs'){
@@ -451,7 +455,7 @@ export function buildChunk(cx,cz){
   const chunk = chunks[ci], byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
-    if(!t || t===10 || (t>=48&&t<=55)) continue; // torches & doors have custom meshes
+    if(!t || t===10 || (t>=48&&t<=55) || t===58) continue; // torches, doors, beds = custom meshes
     const x = x0+lx, z = z0+lz;
     if(occludes(x+1,y,z)&&occludes(x-1,y,z)&&occludes(x,y+1,z)&&
        occludes(x,y-1,z)&&occludes(x,y,z+1)&&occludes(x,y,z-1)) continue;
@@ -530,6 +534,10 @@ export function updateChunkVisibility(px,pz){
     const b = m.userData.base;
     if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
   }
+  for(const m of bedMeshes.values()){
+    const b = m.userData.base;
+    if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
+  }
 }
 
 // ---- Torches: individual small meshes + a pool of real point lights ----
@@ -584,6 +592,42 @@ export function nearestTorchDist(x,z){
 
 
 // ---- Doors: thin hinged panels (not full cubes) ----
+
+// ---- Beds: low custom mesh (not a full cube) ----
+export const bedMeshes = new Map();
+function makeBedMesh(x, y, z){
+  const g = new THREE.Group();
+  // four legs
+  for(const [lx,lz] of [[-.38,-.38],[-.38,.38],[.38,-.38],[.38,.38]]){
+    g.add(box(.12,.22,.12, 0x6b4423, lx, -.39, lz));
+  }
+  // wood frame / base
+  g.add(box(.92,.1,.92, 0x8b5a2b, 0, -.22, 0));
+  // mattress / blanket (red with white band)
+  g.add(box(.86,.12,.86, 0xc0392b, 0, -.08, 0));
+  g.add(box(.86,.04,.18, 0xf5f5f5, 0, -.01, -.1)); // white stripe
+  // pillow at head (+Z end)
+  g.add(box(.5,.1,.28, 0xf0ebe3, 0, .02, .28));
+  // subtle headboard
+  g.add(box(.9,.28,.08, 0x6b4423, 0, -.05, .46));
+  g.position.set(x, y, z);
+  g.userData.base = [x, y, z];
+  return g;
+}
+export function trackBed(x,y,z,prev,t){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  if(prev===58 && bedMeshes.has(k)){
+    scene.remove(bedMeshes.get(k));
+    bedMeshes.delete(k);
+  }
+  if(t===58){
+    if(bedMeshes.has(k)){ scene.remove(bedMeshes.get(k)); bedMeshes.delete(k); }
+    const m = makeBedMesh(wrapC(x), y, wrapC(z));
+    scene.add(m);
+    bedMeshes.set(k, m);
+  }
+}
+
 export const doorMeshes = new Map(); // "x,y,z" -> group
 function makeDoorMesh(x, y, z, facing, open){
   const g = new THREE.Group();
@@ -650,6 +694,7 @@ export function applyEdit(x,y,z,t,burst=true){
   setBlock(x,y,z,t);
   trackTorch(x,y,z,old,t);
   trackDoor(x,y,z,old,t);
+  trackBed(x,y,z,old,t);
   editRecorder?.(wrapC(x), y, wrapC(z), t);
   rebuildAt(x,z);
   if(burst){
@@ -679,7 +724,7 @@ export function applyEditsBatch(list){
     const old = getBlock(x,y,z);
     setBlock(x,y,z,t);
     trackTorch(x,y,z,old,t);
-    trackDoor(x,y,z,old,t);
+    trackDoor(x,y,z,old,t); trackBed(x,y,z,old,t);
     editRecorder?.(x, y, z, t);
     mark(x,z);
   }
