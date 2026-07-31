@@ -341,8 +341,12 @@ export function toggleInv(open, tab){
   document.body.classList.toggle('inv-open', invOpen);
   if(invOpen){
     invPick = null;
-    // Prefer a tab that always has content (empty pack looked "broken")
-    const start = tab || (gm.forge ? 'build' : 'inv');
+    // Prefer a tab that always has content (empty pack looked "broken" on mobile)
+    let start = tab;
+    if(!start){
+      const hasItems = Object.values(inventory).some(n => n > 0);
+      start = hasItems ? 'inv' : (gm.forge ? 'build' : 'can');
+    }
     switchTab(start);
     renderInv();
     document.exitPointerLock?.();
@@ -423,6 +427,13 @@ function initTouch(hooks){
   if(sp){
     sp.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.sprint?.(true); });
     sp.addEventListener('touchend', ()=>hooks.sprint?.(false));
+  }
+  const bf = $('btnFly');
+  if(bf){
+    bf.addEventListener('touchstart', e=>{
+      e.preventDefault(); e.stopPropagation();
+      hooks.fly?.();
+    });
   }
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
 }

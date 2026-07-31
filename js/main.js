@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.8.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.8.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -104,6 +104,11 @@ onModeChange(forge=>{
   survival.showVitals(playerMod.state.playing && !forge);
   $('btnMode').textContent = forge ? '🔨' : '🌙';
   if(forge){ survival.sv.hp = 20; survival.sv.hunger = 20; }
+  else playerMod.state.flying = false;
+  const bf = $('btnFly');
+  if(bf){ bf.style.display = (forge && playerMod.state.playing && document.body.classList.contains('touch')) ? 'flex' : 'none';
+    bf.classList.toggle('active', playerMod.state.flying); }
+  playerMod.onModeMaybeChanged?.();
 });
 function toggleMode(){
   if(net.mode==='client') return; // host decides for the room
@@ -281,6 +286,8 @@ function begin(seed, edits, authority, saved){
     $('loading').style.display = 'none';
     $('hud').style.display = 'block';
     $('btnQuit').style.display = 'flex';
+    const bf = $('btnFly');
+    if(bf) bf.style.display = (gm.forge && document.body.classList.contains('touch')) ? 'flex' : 'none';
     startMusic();
 
     if(isTouch){
@@ -304,6 +311,8 @@ initUI({
   place: ()=>playerMod.placeAction(),
   drop: ()=>playerMod.dropHeld(),
   sprint: (on)=>{ playerMod.keys.sprint = !!on; },
+  fly: ()=>playerMod.toggleFly(),
+  jump: (b)=>playerMod.jump(b),
   relock: ()=>playerMod.relock(),
 });
 setCraftApi(craftMod);

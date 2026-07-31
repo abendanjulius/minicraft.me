@@ -170,7 +170,21 @@ export function relock(){
 }
 
 export function onModeMaybeChanged(){
-  if(!gm.forge) state.flying = false;
+  if(!gm.forge){ state.flying = false; }
+  // refresh mobile fly button if present
+  const bf = document.getElementById('btnFly');
+  if(bf){
+    bf.style.display = (gm.forge && state.playing) ? 'flex' : 'none';
+    bf.classList.toggle('active', state.flying);
+  }
+}
+export function toggleFly(){
+  if(!gm.forge || !state.playing) return false;
+  state.flying = !state.flying;
+  player.vel.y = 0;
+  const bf = document.getElementById('btnFly');
+  if(bf) bf.classList.toggle('active', state.flying);
+  return state.flying;
 }
 export function setPaused(on){
   state.paused = !!on;
@@ -230,8 +244,7 @@ export function initControls(){
     if(e.code==='KeyM') toggleMusic();
     // Forge fly toggle
     if(e.code==='KeyF' && state.playing && gm.forge){
-      state.flying = !state.flying;
-      player.vel.y = 0;
+      toggleFly();
     }
   });
   document.addEventListener('keyup', e=>keys[e.code]=false);
@@ -460,10 +473,11 @@ export function update(dt, elapsed){
     const onLadder = getBlock(px0, Math.round(player.pos.y), pz0)===44 ||
                      getBlock(px0, Math.round(player.pos.y+1), pz0)===44;
     if(state.flying && gm.forge){
-      // Creative flight: Space up, Shift down, no gravity
+      // Creative flight: Space/Jump up, Shift or Sprint down, no gravity
       let vy = 0;
       if(keys.Space) vy += sprinting ? 10 : 6;
-      if(keys.ShiftLeft || keys.ShiftRight) vy -= sprinting ? 10 : 6;
+      if(keys.ShiftLeft || keys.ShiftRight || keys.sprint) vy -= sprinting ? 10 : 6;
+      // if both up+down held, net near zero
       player.vel.y = vy;
       player.onGround = false;
     } else if(onLadder){
