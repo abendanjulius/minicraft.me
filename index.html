@@ -22,8 +22,7 @@
     <button id="modeNight" class="modeBtn">🌙 Nightfall<br><small>survive the horde</small></button>
     <button id="modeForge" class="modeBtn">🔨 Forge<br><small>pure creation</small></button>
   </div>
-  <button id="btnSolo" class="mbtn">▶ Play Solo</button>
-  <button id="btnHost" class="mbtn">🌐 Host Game</button>
+  <div id="worlds"></div>
   <div class="joinRow">
     <input id="codeInput" maxlength="6" placeholder="ROOM CODE" autocomplete="off">
     <button id="btnJoin" class="mbtn">Join</button>
@@ -32,6 +31,8 @@
   <p id="menuError"></p>
   <p class="hint">Host shares the room code · friends join from any device.<br>
   WASD/mouse on desktop · joystick + buttons on mobile.</p>
+  <button id="btnImport" class="linkBtn">⬆ Import world file</button>
+  <input id="importFile" type="file" accept=".json,application/json" style="display:none">
   <p id="verLabel"></p>
 </div>
 

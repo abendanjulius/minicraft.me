@@ -265,6 +265,15 @@ export function initChat(onSend){
 export function setCompass(deg){
   $('compassArrow').style.transform = `rotate(${deg}deg)`;
 }
+export function restoreInv(inv, slots){
+  for(const k of Object.keys(inventory)) delete inventory[k];
+  Object.assign(inventory, inv||{});
+  if(Array.isArray(slots) && slots.length===10){
+    for(let i=0;i<10;i++) hotbarSlots[i] = slots[i] && slots[i].k && slots[i].id!=null ? {k:slots[i].k, id:slots[i].id} : null;
+  }
+  sel.slot = 0;
+  renderHotbar();
+}
 export function setBanner(text){
   const b = $('banner');
   b.textContent = text || '';

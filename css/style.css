@@ -170,3 +170,18 @@ body:not(.touch) #btnQuit{right:10px}
 .modeBtn.active{border-color:#fff;box-shadow:0 0 0 2px #5cab3c;background:#eaf6e2}
 #btnMode{position:fixed;top:10px;right:172px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:20px;display:none;align-items:center;justify-content:center;z-index:3;cursor:pointer}
 body:not(.touch) #btnMode{right:64px}
+
+
+/* v1.5 — world slots */
+#worlds{display:flex;flex-direction:column;gap:8px;width:280px}
+.worldCard{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.9);border:2px solid #365;border-radius:6px;padding:8px 10px;color:#243}
+.worldCard.empty{background:rgba(255,255,255,.55);justify-content:center}
+.wNew{background:none;border:none;font-family:monospace;font-size:14px;cursor:pointer;color:#243;line-height:1.6;padding:4px}
+.wInfo{display:flex;flex-direction:column;text-align:left;gap:2px}
+.wInfo b{font-size:13px}
+.wInfo small{font-size:9px;opacity:.7}
+.wBtns{display:flex;gap:4px}
+.wBtns button{width:32px;height:32px;border:1px solid #587;border-radius:5px;background:#eaf6e2;cursor:pointer;font-size:14px}
+.wBtns .wDel{background:#f6e2e2;border-color:#a66}
+.linkBtn{background:none;border:none;color:#eaf6e2;font-family:monospace;font-size:11px;text-decoration:underline;cursor:pointer;margin-top:4px}
+@media (max-height:760px){ #menu{gap:6px} #menu h1{font-size:30px} }

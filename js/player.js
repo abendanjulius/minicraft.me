@@ -94,6 +94,11 @@ function buildBody(){
   armMesh.material.color.setHex(c.sk.skin); // first-person arm matches skin
 }
 
+export function setPosYaw(x,y,z,yaw){
+  player.pos.set(x,y,z);
+  player.vel.set(0,0,0);
+  view.yaw = yaw||0;
+}
 export function spawn(){
   player.pos.set(CENTER, heightAt(CENTER,CENTER)+3, CENTER);
   player.vel.set(0,0,0);

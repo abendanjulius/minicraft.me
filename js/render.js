@@ -382,10 +382,13 @@ export function nearestTorchDist(x,z){
 }
 
 // ---- Apply a block edit (local or from network). Returns the previous type. ----
+let editRecorder = null;
+export function setEditRecorder(fn){ editRecorder = fn; }
 export function applyEdit(x,y,z,t,burst=true){
   const old = getBlock(x,y,z);
   setBlock(x,y,z,t);
   trackTorch(x,y,z,old,t);
+  editRecorder?.(wrapC(x), y, wrapC(z), t);
   rebuildAt(x,z);
   if(burst){
     const color = TYPES[old||t]?.pc ?? 0xffffff;

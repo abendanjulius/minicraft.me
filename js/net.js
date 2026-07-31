@@ -151,6 +151,10 @@ export function sendHit(kind, eid, dmg, px, pz){
   if(mode==='client'){ safeSendHost({t:'hit', id0:peer?.id, kind, eid, dmg, px, pz}); }
   else hostHandleHit('me', kind, eid, dmg, px, pz); // solo + host resolve locally
 }
+export function seedEditLog(arr){
+  editLog.length = 0;
+  for(const e of arr) editLog.push(e);
+}
 export function reportDeath(pos){
   if(mode==='client'){ safeSendHost({t:'died', x:+pos.x.toFixed(1), y:+pos.y.toFixed(1), z:+pos.z.toFixed(1)}); }
   else mobs.addCorpse(pos.x, pos.y, pos.z);

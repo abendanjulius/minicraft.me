@@ -143,6 +143,11 @@ let vitalsT = 0;
 
 export function jumpCost(){ sv.hunger = Math.max(0, sv.hunger - .05); }
 
+export function restore(hp, hunger){
+  sv.hp = Math.min(20, Math.max(1, hp ?? 20));
+  sv.hunger = Math.min(20, Math.max(0, hunger ?? 20));
+  renderVitals();
+}
 export function initSurvival(hooks){
   onRespawn = hooks.onRespawn;
   onDeath = hooks.onDeath;
