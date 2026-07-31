@@ -1,10 +1,10 @@
 // sw.js — cache app shell so solo mode works offline / installed
-const CACHE = 'minicraft-v4';
+const CACHE = 'minicraft-v5';
 const CORE = [
   './', './index.html', './css/style.css', './manifest.json',
   './js/main.js', './js/world.js', './js/render.js', './js/player.js',
   './js/animals.js', './js/net.js', './js/ui.js', './js/audio.js',
-  './icons/icon-192.png', './icons/icon-512.png',
+  './icons/icon-192.png', './icons/icon-512.png', './assets/music.mp3',
 ];
 
 self.addEventListener('install', e=>{

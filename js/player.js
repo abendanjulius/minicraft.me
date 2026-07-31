@@ -257,17 +257,19 @@ export function update(dt, elapsed){
     bodyG.position.copy(player.pos).addScaledVector(fwdH, -0.24);
     bodyG.rotation.y = view.yaw + Math.PI;
     const movingNow2 = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
+    const miningNow = state.mineHeld && !invOpen;
     if(movingNow2){
       const sw = Math.sin(elapsed*9)*.6;
       bLegL.rotation.x = sw; bLegR.rotation.x = -sw;
-      bArmL.rotation.x = -sw*.7;
-      if(!state.mineHeld) bArmR.rotation.x = sw*.7;
+      // left arm swings only from walking, and never while mining
+      bArmL.rotation.x = miningNow ? bArmL.rotation.x*.8 : -sw*.7;
+      if(!miningNow) bArmR.rotation.x = sw*.7;
     } else {
       bLegL.rotation.x *= .8; bLegR.rotation.x *= .8;
       bArmL.rotation.x *= .8;
-      if(!state.mineHeld) bArmR.rotation.x *= .8;
+      if(!miningNow) bArmR.rotation.x *= .8;
     }
-    if(state.mineHeld && !invOpen) bArmR.rotation.x = -1 - Math.abs(Math.sin(swingT))*.9;
+    if(miningNow) bArmR.rotation.x = -1 - Math.abs(Math.sin(swingT))*.9;
   }
 
   // First-person hand animation
