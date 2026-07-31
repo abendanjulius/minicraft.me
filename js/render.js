@@ -1,6 +1,7 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
 import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
+import { gm } from './mode.js';
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 export const VIEW = isTouch ? 56 : 120;
@@ -23,7 +24,7 @@ scene.add(sun);
 
 // ---- Day/night cycle ----
 export const day = { t: .28 };            // 0..1; .25 ≈ noon
-const DAY_LEN = 240;                      // seconds per full day
+const DAY_LEN = 1200;  // ~20 min full cycle (was 240 / 4 min)                      // seconds per full day
 const skyDay = new THREE.Color(0x87ceeb), skyNight = new THREE.Color(0x0b1026), skyDusk = new THREE.Color(0xe8935a);
 function discTex(color){
   const c=document.createElement('canvas'); c.width=c.height=64;
@@ -37,7 +38,9 @@ moonSpr.scale.set(5,5,1); scene.add(moonSpr);
 const _sky = new THREE.Color();
 export function setDayTime(t){ day.t = ((t%1)+1)%1; }
 export function updateDayNight(dt, focus){
-  day.t = (day.t + dt/DAY_LEN) % 1;
+  // Forge: lock bright noon (no night)
+  if(gm.forge){ day.t = 0.28; }
+  else { day.t = (day.t + dt/DAY_LEN) % 1; }
   const ang = day.t*Math.PI*2;
   const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), .3).normalize();
   sun.position.copy(dir);
@@ -109,6 +112,9 @@ export const TYPES = {
   7:{name:'Planks',mats:six(mPlank), icon:plankTex.url, hard:1.4, pc:0xb28a5a},
   8:{name:'Brick', mats:six(mBrick), icon:brickTex.url, hard:3,   pc:0x96463c},
   9:{name:'Glass', mats:six(mGlass), icon:glassTex.url, hard:.5,  pc:0xc8e6f5},
+  10:{name:'Torch', mats:six(M(torchTex,true)), icon:torchTex.url, hard:.2, pc:0xffb066, light:{c:0xffb066,i:.9}},
+  11:{name:'Fence', mats:six(M(fenceTex)), icon:fenceTex.url, hard:1.2, pc:0x96703f, tool:'axe'},
+  12:{name:'Wool',  mats:six(M(woolTex)),  icon:woolTex.url,  hard:.4,  pc:0xeeebe6},
 };
 // ---- Generated textures for content-defined blocks ----
 function texFrom(desc){

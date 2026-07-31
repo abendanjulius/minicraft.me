@@ -32,10 +32,10 @@ const BASE_GUIDE = [
 ];
 export const GUIDE = [...BASE_GUIDE, ...EXTRA_GUIDE];
 
-const nameOf = id => id>=100 ? ITEMS[id].name : TYPES[id].name;
+const nameOf = id => id>=100 ? (ITEMS[id]?.name || ('Item '+id)) : (TYPES[id]?.name || ('Block '+id));
 const iconHTML = id => id>=100
-  ? `<span class="ticon">${ITEMS[id].icon}</span>`
-  : `<div class="sw" style="background-image:url(${TYPES[id].icon})"></div>`;
+  ? `<span class="ticon">${ITEMS[id]?.icon || '❓'}</span>`
+  : `<div class="sw" style="background-image:url(${TYPES[id]?.icon || ''})"></div>`;
 
 export function canCraft(r){ return gm.forge || r.in.every(([id,n])=>(inventory[id]||0)>=n); }
 export function craft(r){

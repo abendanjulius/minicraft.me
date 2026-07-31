@@ -242,4 +242,30 @@ export const EXTRA_GUIDE = [
   {id:124,where:'Pigs drop hide.', uses:'Cure into leather.'},
   {id:130,where:'Defeat zombies.', uses:'Tonics and strange jams.'},
   {id:131,where:'Zombies drop bones.', uses:'Bone blocks, knives, clubs.'},
+  {id:10, where:'Craft (Stick + Log) or tar batch.', uses:'Place to light the dark. Zombies will not spawn nearby.'},
+  {id:40, where:'Craft from Iron Ingot + Torch.', uses:'Bright caged flame — better than a torch.'},
+  {id:41, where:'Craft from Crystal Shards + Glass.', uses:'Cool crystal glow, very bright.'},
+  {id:42, where:'Craft from Logs + Coal + Stone.', uses:'Cozy campfire light.'},
+  {id:11, where:'Craft from Sticks + Planks.', uses:'Fence for pens and yards.'},
+  {id:12, where:'Sheep drop wool, or craft from cloth.', uses:'Soft building block; dye it.'},
 ];
+
+/** Short blurb for inventory popups. */
+export function itemBlurb(id, TYPES, ITEMS){
+  const g = EXTRA_GUIDE.find(x=>x.id===+id) || null;
+  if(g) return g.uses;
+  const it = ITEMS?.[id];
+  if(it){
+    const bits = [];
+    if(it.food) bits.push(`Restores ${it.food} hunger`);
+    if(it.heal) bits.push(`Heals ${it.heal} HP`);
+    if(it.dmg)  bits.push(`${it.dmg} attack damage`);
+    if(bits.length) return bits.join(' · ');
+    return 'Crafting ingredient';
+  }
+  const bl = TYPES?.[id];
+  if(bl?.light) return 'Placeable light source — keeps the horde away';
+  if(bl) return 'Building block';
+  return '';
+}
+

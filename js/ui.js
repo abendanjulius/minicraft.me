@@ -1,6 +1,7 @@
 // ui.js — 10-slot hotbar (tools live in slots), inventory, chat, compass, touch controls
 import { TYPES, TOOLS, ITEMS, isTouch } from './render.js';
 import { gm } from './mode.js';
+import { itemBlurb } from './content.js';
 
 export const inventory = {};
 // Slots hold null | {k:'b', id:blockType} | {k:'t', id:toolId}. Tools start in slots 8/9/0.
@@ -78,10 +79,38 @@ export function renderHotbar(){
   onHeldChange?.();
 }
 
+
+function showItemInfo(name, blurb, anchorEl){
+  let tip = $('itemInfo');
+  if(!tip){
+    tip = document.createElement('div');
+    tip.id = 'itemInfo';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = `<b>${name}</b>${blurb ? `<span>${blurb}</span>` : ''}`;
+  tip.classList.add('show');
+  if(anchorEl){
+    const r = anchorEl.getBoundingClientRect();
+    const x = Math.min(window.innerWidth - 200, Math.max(8, r.left + r.width/2 - 90));
+    const y = Math.max(8, r.top - 8);
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+    tip.style.transform = 'translateY(-100%)';
+  }
+  clearTimeout(showItemInfo._t);
+  showItemInfo._t = setTimeout(()=>tip.classList.remove('show'), 2200);
+}
+function bindItemInfo(el, name, blurb, onPick){
+  el.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    showItemInfo(name, blurb, el);
+    onPick?.();
+  });
+}
+
 export let invOpen = false;
 export function renderInv(){
   if(gm.forge){ renderInvForge(); return; }
-  // Tools row — always available so a swapped-out tool is never lost
   const tr = $('invTools'); tr.innerHTML = '';
   for(const t of TOOLS){
     if(t.id==='hand') continue;
@@ -93,10 +122,10 @@ export function renderInv(){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invt:'+t.id));
     }
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
+    bindItemInfo(d, t.name, 'Mining tool — equip to the selected hotbar slot',
+      ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
     tr.appendChild(d);
   }
-  // Blocks
   const grid = $('invGrid'); grid.innerHTML = '';
   let any = false;
   for(const tid in inventory){
@@ -105,14 +134,17 @@ export function renderInv(){
     const d = document.createElement('div');
     d.className = 'invItem';
     const isFood = +tid>=100;
+    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
+    const blurb = itemBlurb(+tid, TYPES, ITEMS);
     d.innerHTML = isFood
-      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">${inventory[tid]}</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
+      ? `<span class="ticon">${ITEMS[tid]?.icon || '❓'}</span><span class="cnt">${inventory[tid]}</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon || ''})"></div><span class="cnt">${inventory[tid]}</span>`;
     if(!isTouch){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
     }
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
+    bindItemInfo(d, name, blurb,
+      ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
     grid.appendChild(d);
   }
   if(!any) grid.innerHTML = '<span class="empty-note">Nothing yet — go mine some blocks.</span>';
@@ -125,14 +157,14 @@ export function switchTab(tab){
   tabHook?.(tab);
 }
 function renderInvForge(){
-  // Full catalog, everything infinite
   const tr = $('invTools'); tr.innerHTML = '';
   for(const t of TOOLS){
     if(t.id==='hand') continue;
     const d = document.createElement('div');
     d.className = 'invItem';
     d.innerHTML = `<span class="ticon">${t.icon}</span>`;
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
+    bindItemInfo(d, t.name, 'Mining tool — equip to the selected hotbar slot',
+      ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
     tr.appendChild(d);
   }
   const grid = $('invGrid'); grid.innerHTML = '';
@@ -141,13 +173,15 @@ function renderInvForge(){
     const isItem = tid>=100;
     const d = document.createElement('div');
     d.className = 'invItem';
-    d.title = isItem ? ITEMS[tid].name : TYPES[tid].name;
+    const name = isItem ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
+    const blurb = itemBlurb(tid, TYPES, ITEMS);
+    d.title = name;
     d.innerHTML = isItem
-      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">∞</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">∞</span>`;
-    d.addEventListener('pointerdown', ()=>{
+      ? `<span class="ticon">${ITEMS[tid]?.icon || '❓'}</span><span class="cnt">∞</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon || ''})"></div><span class="cnt">∞</span>`;
+    bindItemInfo(d, name, blurb, ()=>{
       hotbarSlots[sel.slot] = {k: isItem?'f':'b', id:tid};
-      if(isItem) inventory[tid] = 999; // so eat/weapon logic works
+      if(isItem) inventory[tid] = 999;
       renderHotbar();
     });
     grid.appendChild(d);
