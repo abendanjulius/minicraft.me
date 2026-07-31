@@ -106,12 +106,68 @@ export const TOOLS = [
   {id:'shovel', name:'Shovel',  icon:'🪏', good:[1,2,6]},
 ];
 export const SKINS = [
-  {name:'Alex',   shirt:0x2c7fb8, pants:0x3a3f5c, skin:0xdba97c},
-  {name:'Scout',  shirt:0x4caf50, pants:0x33691e, skin:0xd8a271},
-  {name:'Miner',  shirt:0xe07b39, pants:0x5d4037, skin:0xc98e5a},
-  {name:'Frost',  shirt:0x90caf9, pants:0xeceff1, skin:0xf0c8a0},
-  {name:'Shadow', shirt:0x37474f, pants:0x212121, skin:0x8d6e63},
+  {name:'Alex',   skin:0xdba97c, hair:0x5b3a1e, shirt:0x2c7fb8, pants:0x3a3f5c, eyes:0x3b6ea5},
+  {name:'Scout',  skin:0xd8a271, hair:0x1d1d1d, shirt:0x4caf50, pants:0x33691e, eyes:0x3f7d3a},
+  {name:'Miner',  skin:0xc98e5a, hair:0x8a4b1f, shirt:0xe07b39, pants:0x5d4037, eyes:0x5d4a2f},
+  {name:'Frost',  skin:0xf0c8a0, hair:0xe8dcb8, shirt:0x90caf9, pants:0x78909c, eyes:0x4f8fc7},
+  {name:'Shadow', skin:0x8d6e63, hair:0x0d0d0d, shirt:0x37474f, pants:0x212121, eyes:0xb03a2e},
 ];
+
+// ---- Pixel faces & Minecraft-style characters ----
+const hex = n=>'#'+n.toString(16).padStart(6,'0');
+const skinTexCache = {};
+function skinTextures(idx){
+  if(skinTexCache[idx]) return skinTexCache[idx];
+  const sk = SKINS[idx]||SKINS[0];
+  const face = canvasTex(g=>{
+    pix(g,(x,y)=>{
+      if(y<5) return hex(sk.hair);                                    // hair
+      if(y===5 && (x<3||x>12)) return hex(sk.hair);                   // fringe corners
+      if(y===8 && (x===4||x===5||x===10||x===11)) return '#ffffff';   // eye whites
+      const d=jit(14); return rgb((sk.skin>>16)+d, ((sk.skin>>8)&255)+d, (sk.skin&255)+d);
+    });
+    g.fillStyle = hex(sk.eyes); g.fillRect(5,8,1,1); g.fillRect(10,8,1,1); // pupils
+    g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(6,12,4,1);                 // mouth
+  });
+  const side = canvasTex(g=>pix(g,(x,y)=>{
+    if(y<5) return hex(sk.hair);
+    const d=jit(14); return rgb((sk.skin>>16)+d, ((sk.skin>>8)&255)+d, (sk.skin&255)+d);
+  }));
+  const mSide = M(side), mHair = new THREE.MeshLambertMaterial({color:sk.hair}),
+        mSkin = new THREE.MeshLambertMaterial({color:sk.skin});
+  // face on +z (character's forward)
+  const headMats = [mSide, mSide, mHair, mSkin, M(face), mSide];
+  skinTexCache[idx] = { headMats, faceURL: face.url };
+  return skinTexCache[idx];
+}
+export const faceURL = idx=>skinTextures(idx).faceURL;
+
+// A limb pivoting at its top (shoulder/hip) so rotation.x swings naturally
+function limb(x, pivotY, w, topH, topCol, botH, botCol){
+  const g = new THREE.Group();
+  g.position.set(x, pivotY, 0);
+  g.add(box(w, topH, w, topCol, 0, -topH/2, 0));
+  g.add(box(w, botH, w, botCol, 0, -topH - botH/2, 0));
+  return g;
+}
+export function makeCharacter(idx, withHead=true){
+  const sk = SKINS[idx]||SKINS[0];
+  const g = new THREE.Group();
+  const shoe = 0x2b2b2b;
+  const legL = limb( .13, .7, .2,  .5, sk.pants, .2, shoe);
+  const legR = limb(-.13, .7, .2,  .5, sk.pants, .2, shoe);
+  const armL = limb(-.34, 1.4, .16, .25, sk.shirt, .35, sk.skin); // sleeve + forearm
+  const armR = limb( .34, 1.4, .16, .25, sk.shirt, .35, sk.skin);
+  g.add(legL, legR, armL, armR);
+  g.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));
+  let head = null;
+  if(withHead){
+    head = new THREE.Mesh(new THREE.BoxGeometry(.44,.44,.44), skinTextures(idx).headMats);
+    head.position.set(0,1.62,0);
+    g.add(head);
+  }
+  return {g, head, armL, armR, legL, legR, sk};
+}
 
 // ---- Small helpers used by hand, avatars, animals ----
 export function box(w,h,d,color,x,y,z){

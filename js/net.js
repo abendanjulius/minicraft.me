@@ -1,6 +1,6 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
-import { scene, camera, box, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES, SKINS,
+import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES, SKINS,
          day, setDayTime } from './render.js';
 import { setBanner, setPlayers, addChat } from './ui.js';
 import { sfx } from './audio.js';
@@ -34,18 +34,11 @@ function nameSprite(name){
   return s;
 }
 function makeAvatar(name, skinIdx=0){
-  const g = new THREE.Group();
-  const sk = SKINS[skinIdx] || SKINS[0];
-  g.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));                    // torso
-  const head = box(.42,.42,.42, sk.skin, 0,1.6,0); g.add(head);
-  const armR = box(.16,.6,.16, sk.skin, .34,1.1,0); g.add(armR);
-  g.add(box(.16,.6,.16, sk.skin, -.34,1.1,0));
-  const legL = box(.2,.7,.2, sk.pants, .13,.35,0); g.add(legL);
-  const legR = box(.2,.7,.2, sk.pants, -.13,.35,0); g.add(legR);
-  const tag = nameSprite(name); tag.position.y = 2.1; g.add(tag);
-  const held = new THREE.Group(); held.position.set(.34,.8,-.15); armR.name='armR'; g.add(held);
-  scene.add(g);
-  return {g, armR, legL, legR, held, heldKey:'', tgt:null, swing:0, chip:0, name};
+  const c = makeCharacter(skinIdx, true);
+  const tag = nameSprite(name); tag.position.y = 2.15; c.g.add(tag);
+  const held = new THREE.Group(); held.position.set(.34,.8,.15); c.g.add(held);
+  scene.add(c.g);
+  return {g:c.g, armR:c.armR, legL:c.legL, legR:c.legR, held, heldKey:'', tgt:null, swing:0, chip:0, name};
 }
 function setHeldItem(r, tool, blk){
   const key = tool!=='hand' ? 't:'+tool : (blk ? 'b:'+blk : '');

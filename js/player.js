@@ -1,6 +1,6 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt } from './world.js';
-import { scene, camera, renderer, TYPES, TOOLS, SKINS, isTouch, box, makeToolModel, makeBlockCube,
+import { scene, camera, renderer, TYPES, TOOLS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
          applyEdit, spawnParticles, spawnDust, jit } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
@@ -44,20 +44,15 @@ function updateHeld(){
 }
 setHeldChangeHook(updateHeld);
 
-// ---- Visible first-person body (torso/arms/legs seen when looking down) ----
+// ---- Visible first-person body — pushed back behind the camera like Minecraft's ----
 let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null;
 function buildBody(){
   if(bodyG) scene.remove(bodyG);
-  const sk = SKINS[skinIdx()];
-  bodyG = new THREE.Group();
-  bodyG.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));                 // torso (no head — camera is the head)
-  bArmL = box(.16,.6,.16, sk.skin, -.34,1.1,0); bodyG.add(bArmL);
-  bArmR = box(.16,.6,.16, sk.skin,  .34,1.1,0); bodyG.add(bArmR);
-  bLegL = box(.2,.7,.2, sk.pants,  .13,.35,0); bodyG.add(bLegL);
-  bLegR = box(.2,.7,.2, sk.pants, -.13,.35,0); bodyG.add(bLegR);
+  const c = makeCharacter(skinIdx(), false); // headless — the camera is the head
+  bodyG = c.g; bArmL = c.armL; bArmR = c.armR; bLegL = c.legL; bLegR = c.legR;
   bodyG.visible = false;
   scene.add(bodyG);
-  armMesh.material.color.setHex(sk.skin); // first-person arm matches skin
+  armMesh.material.color.setHex(c.sk.skin); // first-person arm matches skin
 }
 
 export function spawn(){
@@ -256,9 +251,10 @@ export function update(dt, elapsed){
     shake = Math.max(0, shake - dt*1.5);
   }
 
-  // Body follows player, faces view direction, walks and swings
+  // Body follows player, offset backward so the torso sits behind the camera line
   if(bodyG){
-    bodyG.position.copy(player.pos);
+    const fwdH = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
+    bodyG.position.copy(player.pos).addScaledVector(fwdH, -0.24);
     bodyG.rotation.y = view.yaw + Math.PI;
     const movingNow2 = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
     if(movingNow2){

@@ -1,7 +1,7 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
-         updateParticles, updateDayNight, SKINS } from './render.js';
+         updateParticles, updateDayNight, SKINS, faceURL } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass } from './ui.js';
 import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
@@ -19,9 +19,9 @@ function buildSkinRow(){
     const d = document.createElement('button');
     d.className = 'skinBtn' + (i===cur?' active':'');
     d.title = s.name;
-    d.innerHTML = `<span class="skHead" style="background:#${s.skin.toString(16).padStart(6,'0')}"></span>
+    d.innerHTML = `<img class="skFace" src="${faceURL(i)}" alt="${s.name}">
                    <span class="skBody" style="background:#${s.shirt.toString(16).padStart(6,'0')}"></span>
-                   <span class="skLegs" style="background:#${s.pants.toString(16).padStart(6,'0')}"></span>`;
+                   <span class="skName">${s.name}</span>`;
     d.addEventListener('click', ()=>{ localStorage.setItem('mc_skin', i); buildSkinRow(); });
     row.appendChild(d);
   });

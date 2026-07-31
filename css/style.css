@@ -99,3 +99,8 @@ body:not(.touch) #btnQuit{right:10px}
   .slot .ticon{font-size:15px}
   #hotbar{gap:4px;bottom:8px}
 }
+
+/* v1.1.6 — real character faces in picker */
+.skinBtn{width:52px;height:74px}
+.skFace{width:28px;height:28px;image-rendering:pixelated;border-radius:2px}
+.skName{font-size:8px;color:#243;font-family:monospace}
