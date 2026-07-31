@@ -1,6 +1,6 @@
 // mobs.js — night zombies. Host (or solo) simulates; clients render what the host says.
 import { WORLD, topY } from './world.js';
-import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW } from './render.js';
+import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist } from './render.js';
 import { sfx } from './audio.js';
 
 export const zombies = new Map(); // id -> zombie
@@ -60,7 +60,7 @@ export function hostTick(dt, dl, targets){
       const a = Math.random()*Math.PI*2, r = 16+Math.random()*14;
       const x = t.x+Math.cos(a)*r, z = t.z+Math.sin(a)*r;
       const gy = topY(Math.round(x), Math.round(z));
-      if(gy>0) create(x, gy+.5, z);
+      if(gy>0 && nearestTorchDist(x,z) > 10) create(x, gy+.5, z); // torches keep spawns away
     }
   }
   if(!night && zombies.size){

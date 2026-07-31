@@ -115,11 +115,18 @@ export function renderInv(){
   }
   if(!any) grid.innerHTML = '<span class="empty-note">Nothing yet — go mine some blocks.</span>';
 }
-export function toggleInv(open){
+let tabHook = null;
+export function setTabHook(fn){ tabHook = fn; }
+export function switchTab(tab){
+  document.querySelectorAll('.itab').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  for(const t of ['items','craft','guide']) $('tab-'+t).style.display = (t===tab)?'block':'none';
+  tabHook?.(tab);
+}
+export function toggleInv(open, tab){
   invOpen = open ?? !invOpen;
   $('inv').style.display = invOpen ? 'block' : 'none';
   document.body.classList.toggle('inv-open', invOpen);
-  if(invOpen){ renderInv(); document.exitPointerLock?.(); }
+  if(invOpen){ renderInv(); switchTab(tab||'items'); document.exitPointerLock?.(); }
   else playerHooks?.relock?.();
 }
 
@@ -134,6 +141,7 @@ export function initUI(hooks){
     if(data.startsWith('slot:')){ hotbarSlots[+data.slice(5)] = null; renderHotbar(); }
   });
   $('invClear').addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot]=null; renderHotbar(); });
+  document.querySelectorAll('.itab').forEach(b=>b.addEventListener('pointerdown', e=>{ e.stopPropagation(); switchTab(b.dataset.tab); }));
   renderHotbar();
   if(isTouch) initTouch(hooks);
 }

@@ -40,8 +40,9 @@ function makeAnimal(kind,x,z){
                 hp:4, alive:true, respawnT:0, fleeT:0});
 }
 
-const DROPS = {pig:101, sheep:102, chicken:103}; // food item ids
-// Host: apply a hit to animal idx. Returns dropped item id if it died, else null.
+import { ANIMAL_DROPS } from './content.js';
+const DROPS = ANIMAL_DROPS;
+// Host: apply a hit to animal idx. Returns array of dropped item ids if it died, else null.
 export function hit(idx, dmg, fromPos){
   const a = animals[idx];
   if(!a || !a.alive) return null;

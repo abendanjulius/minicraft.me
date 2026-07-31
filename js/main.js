@@ -1,8 +1,9 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
-         updateParticles, updateDayNight, SKINS, faceURL } from './render.js';
-import { initUI, toggleInv, setHud, initChat, addChat, setCompass } from './ui.js';
+         updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights } from './render.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook } from './ui.js';
+import { renderCraft, renderGuide } from './craft.js';
 import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
@@ -13,7 +14,7 @@ import * as net from './net.js';
 const $ = id=>document.getElementById(id);
 
 // ---- Version check ----
-const APP_VERSION = '1.2.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.3.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -118,7 +119,7 @@ function begin(seed, edits, authority){
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
     generateWorld(seed);
-    for(const [x,y,z,t] of edits) setBlock(x,y,z,t); // replay history before meshing
+    for(const [x,y,z,t] of edits){ const prev = 0; setBlock(x,y,z,t); trackTorch(x,y,z,prev,t); } // replay history before meshing
     buildAllChunks();
     animals.init(authority, seed);
     mobs.init(authority);
@@ -153,6 +154,7 @@ initUI({
   place: ()=>playerMod.placeAction(),
   relock: ()=>playerMod.relock(),
 });
+setTabHook(tab=>{ if(tab==='craft') renderCraft(); if(tab==='guide') renderGuide(); });
 // clicking the canvas re-acquires pointer lock after Esc
 $('game').addEventListener('click', ()=>{ if(playerMod.state.playing) playerMod.relock(); });
 initChat(text=>{
@@ -185,7 +187,11 @@ function loop(now){
     survival.tick(dt, movingH, dl);
     net.update(dt, elapsed);
     cullTimer -= dt;
-    if(cullTimer<=0){ updateChunkVisibility(playerMod.player.pos.x, playerMod.player.pos.z); cullTimer=.3; }
+    if(cullTimer<=0){
+      updateChunkVisibility(playerMod.player.pos.x, playerMod.player.pos.z);
+      updateTorchLights(playerMod.player.pos.x, playerMod.player.pos.z);
+      cullTimer=.3;
+    }
     // Compass points home to spawn
     const dx = CENTER - playerMod.player.pos.x, dz = CENTER - playerMod.player.pos.z;
     const angle = Math.atan2(dx, dz) - playerMod.view.yaw;

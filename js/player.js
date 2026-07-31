@@ -8,10 +8,11 @@ import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
 import { sfx, toggleMusic } from './audio.js';
 import * as net from './net.js';
 import * as survival from './survival.js';
+import { BLOCK_DROPS } from './content.js';
 import { animals } from './animals.js';
 import { zombies } from './mobs.js';
 
-const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; return (s && s.k==='f') ? s.id : 0; };
+const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
 // Aim at a nearby entity (animal or zombie) in front of the crosshair
 function pickEntity(){
@@ -56,11 +57,23 @@ for(const t of TOOLS) if(t.id!=='hand'){
   handGroup.add(m); toolModels[t.id] = m;
 }
 let heldBlockMesh = null;
+const swordModel = (()=>{
+  const g = new THREE.Group();
+  g.add(box(.05,.16,.05,0x8a5a2b,0,-.02,0));           // grip
+  g.add(box(.14,.04,.06,0x6a6a6a,0,.07,0));            // guard
+  g.add(box(.05,.42,.03,0xd7dde2,0,.3,0));             // blade
+  g.position.set(0,.06,-.22); g.rotation.x = -.5; g.visible = false;
+  return g;
+})();
+handGroup.add(swordModel);
 function updateHeld(){
   const tool = slotTool(), blk = slotBlock();
+  const held = hotbarSlots[sel.slot];
+  const isWeapon = held?.k==='f' && ITEMS[held.id]?.dmg;
   for(const id in toolModels) toolModels[id].visible = (tool===id);
+  swordModel.visible = !!isWeapon;
   if(heldBlockMesh){ handGroup.remove(heldBlockMesh); heldBlockMesh = null; }
-  if(tool==='hand' && blk && inventory[blk]>0){
+  if(tool==='hand' && !isWeapon && blk && inventory[blk]>0){
     heldBlockMesh = makeBlockCube(blk);
     heldBlockMesh.position.set(0,.05,-.3);
     handGroup.add(heldBlockMesh);
@@ -94,7 +107,9 @@ export function setMine(b){
   if(b){
     const e = pickEntity();
     if(e){
-      const dmg = slotTool()!=='hand' ? 3 : 2;
+      const held = hotbarSlots[sel.slot];
+      const wDmg = (held?.k==='f' && ITEMS[held.id]?.dmg) || 0;
+      const dmg = wDmg || (slotTool()!=='hand' ? 3 : 2);
       net.sendHit(e.kind, e.eid, dmg, player.pos.x, player.pos.z);
       placeAnim = 1;      // single chop animation
       sfx.punch();
@@ -129,6 +144,7 @@ export function initControls(){
       if(slot>=0 && slot<10){ sel.slot=slot; renderHotbar(); }
     }
     if(e.code==='KeyE' && state.playing) toggleInv();
+    if(e.code==='KeyC' && state.playing) toggleInv(true,'craft');
     if(e.code==='KeyQ') nextToolSlot();
     if(e.code==='KeyM') toggleMusic();
   });
@@ -192,7 +208,7 @@ export function placeAction(){
   inventory[tid]--;
   placeAnim = 1;
   sfx.place();
-  survival.note('place');
+  survival.note('place', tid);
   renderHotbar();
   net.sendEdit(px,py,pz,tid);
 }
@@ -219,7 +235,11 @@ function updateMining(dt){
   mineFill.style.width = Math.min(100, m.progress/m.total*100)+'%';
   if(m.progress >= m.total){
     const old = applyEdit(bx,by,bz,0,true);
-    if(old){ addToInventory(old); sfx.break(old); addShake(.16); survival.note('mine', old); }
+    if(old){
+      addToInventory(old); sfx.break(old); addShake(.16); survival.note('mine', old);
+      const rolls = BLOCK_DROPS[old];
+      if(rolls) for(const [item,p] of rolls) if(Math.random()<p) addToInventory(item);
+    }
     net.sendEdit(bx,by,bz,0);
     state.mining = null;
   }
@@ -228,7 +248,8 @@ function updateMining(dt){
 function collide(pos){
   const r=.3;
   for(const ox of [-r,r]) for(const oz of [-r,r]) for(const oy of [0,.9,1.7]){
-    if(getBlock(Math.round(pos.x+ox), Math.round(pos.y+oy), Math.round(pos.z+oz))) return true;
+    const b = getBlock(Math.round(pos.x+ox), Math.round(pos.y+oy), Math.round(pos.z+oz));
+    if(b && b!==10) return true; // torches are walk-through
   }
   return false;
 }

@@ -60,13 +60,21 @@
 <div id="btnQuit" style="display:none" title="Quit to menu">🚪</div>
 
 <div id="inv">
-  <h3>Inventory</h3>
-  <p id="invHelp"></p>
-  <div class="invLabel">Tools</div>
-  <div id="invTools"></div>
-  <div class="invLabel">Blocks</div>
-  <div id="invGrid"></div>
-  <button id="invClear">Clear selected slot</button>
+  <div id="invTabs">
+    <button class="itab active" data-tab="items">Items</button>
+    <button class="itab" data-tab="craft">Craft</button>
+    <button class="itab" data-tab="guide">Guide</button>
+  </div>
+  <div id="tab-items">
+    <p id="invHelp"></p>
+    <div class="invLabel">Tools</div>
+    <div id="invTools"></div>
+    <div class="invLabel">Blocks &amp; Items</div>
+    <div id="invGrid"></div>
+    <button id="invClear">Clear selected slot</button>
+  </div>
+  <div id="tab-craft" style="display:none"><div id="craftCats"></div><div id="craftList"></div></div>
+  <div id="tab-guide" style="display:none"><div id="guideList"></div></div>
 </div>
 
 <div id="touchUI">

@@ -28,7 +28,7 @@ export function setBlock(x,y,z,t){
   chunks[cIndex(x>>4, z>>4)][bIndex(x&15, y, z&15)] = t;
 }
 // glass (9) doesn't hide its neighbours
-export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9; };
+export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10; };
 
 // Frequencies are exact multiples of 2π/WORLD so terrain tiles seamlessly at the wrap seam
 const F = n => Math.PI*2*n/WORLD;

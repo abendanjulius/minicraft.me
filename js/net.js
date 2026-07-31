@@ -8,6 +8,7 @@ import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as mobs from './mobs.js';
 import * as survival from './survival.js';
+import { MOB_DROPS } from './content.js';
 import { addToInventory } from './ui.js';
 
 export let mode = 'solo';           // 'solo' | 'host' | 'client'
@@ -125,11 +126,14 @@ function sendToPeer(peerId, msg){
 export function hostHandleHit(hitterId, kind, eid, dmg, px, pz){
   const from = {x:px, z:pz};
   if(kind==='a'){
-    const drop = animals.hit(eid, dmg, from);
-    if(drop) sendToPeer(hitterId, {t:'give', item:drop});
+    const drops = animals.hit(eid, dmg, from);
+    if(drops) for(const item of drops) sendToPeer(hitterId, {t:'give', item});
   } else if(kind==='z'){
     const res = mobs.hit(eid, dmg);
-    if(res==='killed') sendToPeer(hitterId, {t:'kudos', what:'zkill'});
+    if(res==='killed'){
+      sendToPeer(hitterId, {t:'kudos', what:'zkill'});
+      for(const [item,p] of MOB_DROPS.zombie) if(Math.random()<p) sendToPeer(hitterId, {t:'give', item});
+    }
   }
 }
 export function sendHit(kind, eid, dmg, px, pz){

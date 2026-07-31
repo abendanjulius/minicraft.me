@@ -1,5 +1,6 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
 import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock } from './world.js';
+import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 export const VIEW = isTouch ? 56 : 120;
@@ -81,6 +82,16 @@ const sandTex  = canvasTex(g=>pix(g,()=>{const d=jit(20);return rgb(218+d,204+d,
 const plankTex = canvasTex(g=>pix(g,(x,y)=>{const seam=(y%4===3)?-40:0,off=((y>>2)%2)*8,end=((x+off)%8===7)?-30:0,d=jit(14);return rgb(178+seam+end+d,138+seam+end+d,90+seam+end+d)}));
 const brickTex = canvasTex(g=>pix(g,(x,y)=>{const my=y%4===3,off=((y>>2)%2)*4,mx=(x+off)%8===7;if(my||mx)return rgb(188,188,188);const d=jit(20);return rgb(150+d,70+d,60+d)}));
 const glassTex = canvasTex(g=>{g.clearRect(0,0,16,16);pix(g,(x,y)=>{if(x===0||y===0||x===15||y===15)return rgb(200,225,235,.9);if((x+y)%7===0&&x>2&&x<13)return rgb(230,245,255,.5);return rgb(200,230,245,.13)})});
+const torchTex = canvasTex(g=>{g.clearRect(0,0,16,16);pix(g,(x,y)=>{
+  if(x>=7&&x<=8&&y>=6&&y<=15){const d=jit(16);return rgb(120+d,84+d,45+d);}
+  if(x>=6&&x<=9&&y>=3&&y<=5)return rgb(255,208,110);
+  if(x>=7&&x<=8&&y===2)return rgb(255,240,180);
+  return null;})});
+const fenceTex = canvasTex(g=>pix(g,(x,y)=>{
+  const post=(x<3||x>12||(x>=7&&x<=8)), bar=(y>=4&&y<=5)||(y>=10&&y<=11);
+  if(post||bar){const d=jit(14);return rgb(150+d,112+d,68+d);}
+  const d=jit(10);return rgb(105+d,78+d,48+d);}));
+const woolTex  = canvasTex(g=>pix(g,()=>{const d=jit(16);return rgb(238+d,236+d,230+d)}));
 
 const M=(x,tr)=>new THREE.MeshLambertMaterial({map:x.t, transparent:!!tr});
 const mDirt=M(dirtTex), mGrassTop=M(grassTop), mGrassSide=M(grassSide), mStone=M(stoneTex),
@@ -99,12 +110,72 @@ export const TYPES = {
   8:{name:'Brick', mats:six(mBrick), icon:brickTex.url, hard:3,   pc:0x96463c},
   9:{name:'Glass', mats:six(mGlass), icon:glassTex.url, hard:.5,  pc:0xc8e6f5},
 };
+// ---- Generated textures for content-defined blocks ----
+function texFrom(desc){
+  const [kind,a,b] = desc;
+  const cr = n=>[(n>>16)&255,(n>>8)&255,n&255];
+  if(kind==='glassy'){
+    const [r,g,bl] = cr(a);
+    return canvasTex(gc=>{gc.clearRect(0,0,16,16);pix(gc,(x,y)=>{
+      if(x===0||y===0||x===15||y===15) return rgb(r,g,bl,.9);
+      if((x+y)%6===0) return rgb(Math.min(255,r+30),Math.min(255,g+30),Math.min(255,bl+30),.45);
+      return rgb(r,g,bl,.2);});});
+  }
+  const [r,g,bl] = cr(a);
+  if(kind==='noise'){
+    const v = b||16;
+    return canvasTex(gc=>pix(gc,()=>{const d=jit(v);return rgb(r+d,g+d,bl+d)}));
+  }
+  if(kind==='bricks'){
+    const [mr,mg,mb] = cr(b);
+    return canvasTex(gc=>pix(gc,(x,y)=>{
+      const my=y%4===3, off=((y>>2)%2)*4, mx=(x+off)%8===7;
+      if(my||mx) return rgb(mr,mg,mb);
+      const d=jit(18); return rgb(r+d,g+d,bl+d);}));
+  }
+  if(kind==='planks'){
+    return canvasTex(gc=>pix(gc,(x,y)=>{
+      const seam=(y%4===3)?-38:0, off=((y>>2)%2)*8, end=((x+off)%8===7)?-28:0, d=jit(12);
+      return rgb(r+seam+end+d, g+seam+end+d, bl+seam+end+d);}));
+  }
+  if(kind==='speckle'){
+    const [fr,fg,fb] = cr(b);
+    return canvasTex(gc=>pix(gc,()=>{
+      if(Math.random()<.16) return rgb(fr+jit(14),fg+jit(14),fb+jit(14));
+      const d=jit(14); return rgb(r+d,g+d,bl+d);}));
+  }
+  if(kind==='bands'){
+    const [br,bg,bb] = cr(b);
+    return canvasTex(gc=>pix(gc,(x,y)=>{
+      const band = (y>>2)%2===1, d=jit(12);
+      return band ? rgb(br+d,bg+d,bb+d) : rgb(r+d,g+d,bl+d);}));
+  }
+  if(kind==='checker'){
+    const [br,bg,bb] = cr(b);
+    return canvasTex(gc=>pix(gc,(x,y)=>{
+      const alt = ((x>>2)+(y>>2))%2===1, d=jit(10);
+      return alt ? rgb(br+d,bg+d,bb+d) : rgb(r+d,g+d,bl+d);}));
+  }
+}
+for(const id in EXTRA_BLOCKS){
+  const d = EXTRA_BLOCKS[id];
+  const t = texFrom(d.tex);
+  TYPES[id] = {name:d.name, mats:six(M(t, d.transparent)), icon:t.url, hard:d.hard, pc:d.pc,
+               light:d.light||null, tool:d.tool||null};
+}
+export const LIGHT_BLOCKS = {10:{c:0xffb066,i:.9}};
+for(const id in TYPES) if(TYPES[id].light) LIGHT_BLOCKS[id] = {c:TYPES[id].light.c, i:TYPES[id].light.i};
+
 export const TOOLS = [
   {id:'hand',   name:'Hand',    icon:'✋',  good:[]},
   {id:'pick',   name:'Pickaxe', icon:'⛏️', good:[3,8,9]},
-  {id:'axe',    name:'Axe',     icon:'🪓', good:[4,5,7]},
+  {id:'axe',    name:'Axe',     icon:'🪓', good:[4,5,7,11]},
   {id:'shovel', name:'Shovel',  icon:'🪏', good:[1,2,6]},
 ];
+for(const id in TYPES){
+  const tl = TYPES[id].tool;
+  if(tl){ const t = TOOLS.find(x=>x.id===tl); if(t && !t.good.includes(+id)) t.good.push(+id); }
+}
 export const SKINS = [
   {name:'Alex',   skin:0xdba97c, hair:0x5b3a1e, shirt:0x2c7fb8, pants:0x3a3f5c, eyes:0x3b6ea5},
   {name:'Scout',  skin:0xd8a271, hair:0x1d1d1d, shirt:0x4caf50, pants:0x33691e, eyes:0x3f7d3a},
@@ -113,11 +184,13 @@ export const SKINS = [
   {name:'Shadow', skin:0x8d6e63, hair:0x0d0d0d, shirt:0x37474f, pants:0x212121, eyes:0xb03a2e},
 ];
 
-export const ITEMS = { // non-block inventory items (food)
+export const ITEMS = { // non-block inventory items
   101:{name:'Porkchop', icon:'🍖', food:8},
   102:{name:'Mutton',   icon:'🥩', food:6},
   103:{name:'Chicken',  icon:'🍗', food:5},
+  110:{name:'Stick',    icon:'🥢'},
 };
+Object.assign(ITEMS, EXTRA_ITEMS);
 export const ZOMBIE_SKIN = {key:'zombie', name:'Zombie', skin:0x57a05a, hair:0x2f6d30, shirt:0x2e8b8b, pants:0x5b4a8a, eyes:0x111111};
 
 // ---- Pixel faces & Minecraft-style characters ----
@@ -212,7 +285,7 @@ export function buildChunk(cx,cz){
   const chunk = chunks[ci], byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
-    if(!t) continue;
+    if(!t || t===10) continue; // torches render as their own small meshes
     const x = x0+lx, z = z0+lz;
     if(occludes(x+1,y,z)&&occludes(x-1,y,z)&&occludes(x,y+1,z)&&
        occludes(x,y-1,z)&&occludes(x,y,z+1)&&occludes(x,y,z-1)) continue;
@@ -259,10 +332,60 @@ export function updateChunkVisibility(px,pz){
   }
 }
 
+// ---- Torches: individual small meshes + a pool of real point lights ----
+export const torches = new Map(); // "x,y,z" -> mesh group
+function makeTorchMesh(x,y,z){
+  const g = new THREE.Group();
+  g.add(box(.09,.45,.09, 0x7a5430, 0, -.08, 0));
+  const tip = new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.13), new THREE.MeshBasicMaterial({color:0xffd77a}));
+  tip.position.y = .18; g.add(tip);
+  g.position.set(x,y,z);
+  return g;
+}
+export const lightBlocks = new Map(); // "x,y,z" -> {x,y,z,type}
+export function trackTorch(x,y,z,prev,t){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  if(LIGHT_BLOCKS[prev]){
+    lightBlocks.delete(k);
+    if(prev===10 && torches.has(k)){ scene.remove(torches.get(k)); torches.delete(k); }
+  }
+  if(LIGHT_BLOCKS[t]){
+    lightBlocks.set(k, {x:wrapC(x), y, z:wrapC(z), type:t});
+    if(t===10 && !torches.has(k)){ const m = makeTorchMesh(wrapC(x),y,wrapC(z)); scene.add(m); torches.set(k,m); }
+  }
+}
+const torchLights = Array.from({length:4},()=>{ const l=new THREE.PointLight(0xffb066, 0, 10); scene.add(l); return l; });
+export function updateTorchLights(px,pz){
+  const near = [];
+  for(const lb of lightBlocks.values()){
+    const d = Math.hypot(lb.x-px, lb.z-pz);
+    if(d<26) near.push([d,lb]);
+  }
+  near.sort((a,b)=>a[0]-b[0]);
+  for(let i=0;i<torchLights.length;i++){
+    const l = torchLights[i], e = near[i]?.[1];
+    if(e){
+      const spec = LIGHT_BLOCKS[e.type];
+      l.position.set(e.x, e.y+.4, e.z);
+      l.color.setHex(spec.c);
+      l.intensity = spec.i;
+    } else l.intensity = 0;
+  }
+}
+export function nearestTorchDist(x,z){
+  let best = 1e9;
+  for(const lb of lightBlocks.values()){
+    const d = Math.hypot(lb.x-x, lb.z-z);
+    if(d<best) best = d;
+  }
+  return best;
+}
+
 // ---- Apply a block edit (local or from network). Returns the previous type. ----
 export function applyEdit(x,y,z,t,burst=true){
   const old = getBlock(x,y,z);
   setBlock(x,y,z,t);
+  trackTorch(x,y,z,old,t);
   rebuildAt(x,z);
   if(burst){
     const color = TYPES[old||t]?.pc ?? 0xffffff;

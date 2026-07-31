@@ -14,6 +14,8 @@ const ACH = [
   {id:'ruin1',  name:'Ruin Raider',    goal:'Mine brick, planks or glass from a ruin'},
   {id:'build10',name:'Constructor',    goal:'Place 10 blocks'},
   {id:'meal1',  name:'Tasty',          goal:'Eat some food'},
+  {id:'craft1', name:'Craftsman',      goal:'Craft something (press C)'},
+  {id:'torch1', name:'Let There Be Light', goal:'Place a torch'},
   {id:'night1', name:'Sunrise',        goal:'Survive a night'},
   {id:'zkill1', name:'Back to Sleep',  goal:'Defeat a zombie'},
 ];
@@ -52,6 +54,8 @@ export function note(what, arg){
     if(placedCount>=10) unlock('build10');
   }
   if(what==='eat')   unlock('meal1');
+  if(what==='craft') unlock('craft1');
+  if(what==='place' && arg===10) unlock('torch1');
   if(what==='zkill'){ unlock('zkill1'); toast('Zombie defeated!'); }
 }
 
@@ -93,9 +97,12 @@ export function respawn(){
 export function eatSelected(foodId){
   if(eatCd>0 || sv.dead) return false;
   if(!inventory[foodId] || inventory[foodId]<=0) return false;
-  if(sv.hunger >= 20) return false;
+  const it = ITEMS[foodId];
+  const useful = (it.food && sv.hunger < 20) || (it.heal && sv.hp < 20);
+  if(!useful) return false;
   inventory[foodId]--;
-  sv.hunger = Math.min(20, sv.hunger + ITEMS[foodId].food);
+  if(it.food) sv.hunger = Math.min(20, sv.hunger + it.food);
+  if(it.heal) sv.hp = Math.min(20, sv.hp + it.heal);
   eatCd = 1;
   sfx.eat();
   note('eat');
