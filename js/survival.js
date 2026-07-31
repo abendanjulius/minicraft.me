@@ -5,7 +5,7 @@ import { sfx } from './audio.js';
 
 const $ = id=>document.getElementById(id);
 export const sv = { hp:20, hunger:20, dead:false };
-let onRespawn = null, eatCd = 0, starveT = 0, regenT = 0, nightWasDark = false;
+let onRespawn = null, onDeath = null, eatCd = 0, starveT = 0, regenT = 0, nightWasDark = false;
 
 // ---- Achievements ----
 const ACH = [
@@ -18,6 +18,8 @@ const ACH = [
   {id:'torch1', name:'Let There Be Light', goal:'Place a torch'},
   {id:'night1', name:'Sunrise',        goal:'Survive a night'},
   {id:'zkill1', name:'Back to Sleep',  goal:'Defeat a zombie'},
+  {id:'recover1',name:'Leave No One Behind', goal:'Recover a fallen body before the horde feeds'},
+  {id:'dayhunt1',name:'Daywalker Hunter',    goal:'Slay a hiding zombie in daylight'},
 ];
 const unlocked = new Set(JSON.parse(localStorage.getItem('mc_ach')||'[]'));
 let placedCount = +(localStorage.getItem('mc_placed')||0);
@@ -57,6 +59,8 @@ export function note(what, arg){
   if(what==='craft') unlock('craft1');
   if(what==='place' && arg===10) unlock('torch1');
   if(what==='zkill'){ unlock('zkill1'); toast('Zombie defeated!'); }
+  if(what==='dayhunt'){ unlock('zkill1'); unlock('dayhunt1'); toast('Hider slain! The horde weakens faster.'); }
+  if(what==='recover'){ unlock('recover1'); toast('🕯 Body recovered — the horde learns nothing.'); }
 }
 
 // ---- Vitals UI ----
@@ -82,6 +86,7 @@ export function damage(n, cause){
 }
 function die(cause){
   sv.dead = true;
+  onDeath?.();
   const msg = {fall:'You fell from a high place', zombie:'A zombie got you', starve:'You starved'}[cause] || 'You died';
   $('deathMsg').textContent = msg;
   $('deathScreen').style.display = 'flex';
@@ -139,6 +144,7 @@ export function jumpCost(){ sv.hunger = Math.max(0, sv.hunger - .05); }
 
 export function initSurvival(hooks){
   onRespawn = hooks.onRespawn;
+  onDeath = hooks.onDeath;
   $('respawnBtn').addEventListener('click', respawn);
   $('respawnBtn').addEventListener('touchstart', e=>{ e.preventDefault(); respawn(); });
   renderVitals();

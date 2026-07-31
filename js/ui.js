@@ -243,6 +243,12 @@ export function setHud(fps, pos){
   $('fps').textContent = fps;
   $('pos').textContent = pos;
 }
+export function setHorde(n){
+  const el = $('horde');
+  el.style.display = n>0 ? 'inline' : 'none';
+  el.textContent = '🧠 Horde: ' + '★'.repeat(n) + '☆'.repeat(3-n);
+  el.className = 'iq'+n;
+}
 export function setPlayers(list){
   $('players').textContent = list.length ? '👥 ' + list.join(', ') : '';
 }

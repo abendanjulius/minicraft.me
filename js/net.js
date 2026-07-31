@@ -2,7 +2,7 @@
 import { WORLD, seed } from './world.js';
 import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES, SKINS,
          day, setDayTime } from './render.js';
-import { setBanner, setPlayers, addChat } from './ui.js';
+import { setBanner, setPlayers, addChat, setHorde } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
@@ -74,9 +74,13 @@ function handle(msg, fromConn){
   } else if(msg.t==='anim'){
     animals.applyRemote(msg.d);
     if(msg.z) mobs.applyRemote(msg.z);
+    if(msg.c) mobs.applyCorpses(msg.c);
+    if(msg.iq!==undefined){ mobs.setIntel(msg.iq); setHorde(msg.iq); }
     if(msg.tod!==undefined) setDayTime(msg.tod);
   } else if(msg.t==='hit' && mode==='host'){
     hostHandleHit(msg.id0, msg.kind, msg.eid, msg.dmg, msg.px, msg.pz);
+  } else if(msg.t==='died' && mode==='host'){
+    mobs.addCorpse(msg.x, msg.y, msg.z);
   } else if(msg.t==='hurt'){
     survival.damage(msg.dmg, msg.cause||'zombie');
   } else if(msg.t==='give'){
@@ -130,15 +134,37 @@ export function hostHandleHit(hitterId, kind, eid, dmg, px, pz){
     if(drops) for(const item of drops) sendToPeer(hitterId, {t:'give', item});
   } else if(kind==='z'){
     const res = mobs.hit(eid, dmg);
-    if(res==='killed'){
-      sendToPeer(hitterId, {t:'kudos', what:'zkill'});
+    if(res==='killed' || res==='killed_dormant'){
+      sendToPeer(hitterId, {t:'kudos', what: res==='killed_dormant' ? 'dayhunt' : 'zkill'});
       for(const [item,p] of MOB_DROPS.zombie) if(Math.random()<p) sendToPeer(hitterId, {t:'give', item});
+    }
+  } else if(kind==='c'){
+    if(mobs.recoverCorpse(eid)){
+      sendToPeer(hitterId, {t:'kudos', what:'recover'});
+      systemMsg('🕯 A fallen body was recovered — the horde learns nothing.');
     }
   }
 }
 export function sendHit(kind, eid, dmg, px, pz){
   if(mode==='client'){ safeSendHost({t:'hit', id0:peer?.id, kind, eid, dmg, px, pz}); }
   else hostHandleHit('me', kind, eid, dmg, px, pz); // solo + host resolve locally
+}
+export function reportDeath(pos){
+  if(mode==='client'){ safeSendHost({t:'died', x:+pos.x.toFixed(1), y:+pos.y.toFixed(1), z:+pos.z.toFixed(1)}); }
+  else mobs.addCorpse(pos.x, pos.y, pos.z);
+}
+export function systemMsg(text){
+  addChat('📢', text);
+  if(mode!=='solo'){
+    const msg = {t:'chat', id:'sys', name:'📢', text};
+    if(mode==='host') relay(msg, null);
+    else safeSendHost(msg);
+  }
+}
+// The host pushes horde-made block edits into the same pipeline as player edits
+export function hostWorldEdit(x,y,z,t){
+  applyEdit(x,y,z,t,true);
+  if(mode==='host'){ editLog.push([x,y,z,t]); relay({t:'edit', x,y,z, v:t, id:'horde'}, null); }
 }
 // Targets for zombie AI: authority player + all remotes
 export function getTargets(myPos){
@@ -214,7 +240,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), tod:day.t}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), iq:mobs.getIntel(), tod:day.t}, null); }
   }
 
   // animate remote avatars

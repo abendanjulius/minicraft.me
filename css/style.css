@@ -155,3 +155,9 @@ body:not(.touch) #btnQuit{right:10px}
 #craftCats{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
 #craftCats .itab{flex:none;padding:5px 9px;font-size:10px}
 #inv{min-width:340px;max-width:min(94vw,480px)}
+
+
+/* v1.4 — horde intelligence */
+#horde.iq1{color:#e8d34a}
+#horde.iq2{color:#ff9c50}
+#horde.iq3{color:#ff5a5a;text-shadow:0 0 6px #a00}

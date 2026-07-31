@@ -2,7 +2,7 @@
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights } from './render.js';
-import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook } from './ui.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook, setHorde as setHordeHud } from './ui.js';
 import { renderCraft, renderGuide } from './craft.js';
 import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
@@ -14,7 +14,7 @@ import * as net from './net.js';
 const $ = id=>document.getElementById(id);
 
 // ---- Version check ----
-const APP_VERSION = '1.3.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.4.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -124,7 +124,11 @@ function begin(seed, edits, authority){
     animals.init(authority, seed);
     mobs.init(authority);
     isAuthority = authority;
-    survival.initSurvival({ onRespawn: ()=>playerMod.spawn() });
+    survival.initSurvival({
+      onRespawn: ()=>playerMod.spawn(),
+      onDeath: ()=>net.reportDeath(playerMod.player.pos),
+    });
+    mobs.setAnnouncer((text, iq)=>{ net.systemMsg(text); setHordeHud(iq); });
     survival.showVitals(true);
     playerMod.spawn();
     playerMod.state.playing = true;
@@ -179,8 +183,9 @@ function loop(now){
     const dl = updateDayNight(dt, playerMod.player.pos);
     animals.update(dt, elapsed, playerMod.player.pos);
     if(isAuthority){
-      const hurts = mobs.hostTick(dt, dl, net.getTargets(playerMod.player.pos));
+      const {hurts, digs} = mobs.hostTick(dt, dl, net.getTargets(playerMod.player.pos));
       net.dispatchHurts(hurts);
+      for(const d of digs) net.hostWorldEdit(d.x, d.y, d.z, 0);
     }
     mobs.commonTick(dt, elapsed, playerMod.player.pos);
     const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;

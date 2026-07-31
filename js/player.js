@@ -10,7 +10,7 @@ import * as net from './net.js';
 import * as survival from './survival.js';
 import { BLOCK_DROPS } from './content.js';
 import { animals } from './animals.js';
-import { zombies } from './mobs.js';
+import { zombies, corpses } from './mobs.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
@@ -30,6 +30,7 @@ function pickEntity(){
   };
   animals.forEach((a,i)=>{ if(a.alive && a.g.visible) consider('a', i, a.g.position); });
   for(const zb of zombies.values()) if(zb.c.g.visible) consider('z', zb.id, zb.c.g.position);
+  for(const [cid,c] of corpses) consider('c', cid, c.mesh.position);
   return best;
 }
 
