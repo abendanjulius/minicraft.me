@@ -89,6 +89,8 @@ export function note(what, arg){
   if(what==='zkill'){ unlock('zkill1'); toast('Zombie defeated!'); }
   if(what==='dayhunt'){ unlock('zkill1'); unlock('dayhunt1'); toast('Hider slain! The horde weakens faster.'); }
   if(what==='recover'){ unlock('recover1'); toast('🕯 Body recovered — the horde learns nothing.'); }
+  if(what==='bed'){ unlock('bed'); toast('🛏 Respawn point set'); }
+  if(what==='sleep'){ unlock('sleep'); toast('😴 Slept till dawn'); }
 }
 
 // ---- Vitals UI ----

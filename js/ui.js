@@ -156,11 +156,12 @@ const nameOf = id => (id>=100 ? ITEMS[id]?.name : TYPES[id]?.name) || 'Unknown';
 
 function idsForCat(cat){
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
+  const hideVariant = id => (id>=49 && id<=55) || id===63;
   if(cat==='inv'){
-    if(gm.forge) return all;
-    return all.filter(id => (inventory[id]||0) > 0);
+    if(gm.forge) return all.filter(id => !hideVariant(id));
+    return all.filter(id => !hideVariant(id) && (inventory[id]||0) > 0);
   }
-  if(cat==='can') return all.filter(id => recipesFor(id).length && (gm.forge || canCraftNow(id)));
+  if(cat==='can') return all.filter(id => !hideVariant(id) && recipesFor(id).length && (gm.forge || canCraftNow(id)));
   if(cat==='guide'){
     const guide = craftApi?.GUIDE || [];
     // unique ids from guide entries that still exist as items/blocks
@@ -174,7 +175,10 @@ function idsForCat(cat){
     }
     return ids;
   }
-  return all.filter(id => catOf(id) === cat);
+  return all.filter(id => {
+    if((id>=49 && id<=55) || id===63) return false; // door/trapdoor state variants
+    return catOf(id) === cat;
+  });
 }
 
 function renderRail(){
@@ -257,11 +261,13 @@ function renderDetail(){
 }
 
 export function renderInv(){
+  const grid = $('invGrid');
+  if(!grid) return;
   renderRail();
   document.body.classList.toggle('inv-guide', invCat==='guide');
-  $('invTitle').textContent = CATS.find(c=>c.id===invCat)?.label || 'Inventory';
+  const title = $('invTitle');
+  if(title) title.textContent = CATS.find(c=>c.id===invCat)?.label || 'Inventory';
   const q = getSearchQuery();
-  const grid = $('invGrid');
   grid.innerHTML = '';
 
   // tools always live in the Equipment tab and in Inventory
@@ -323,17 +329,27 @@ export function setInvCat(cat){ invCat = cat; renderInv(); }
 
 export function setTabHook(fn){ tabHook = fn; }
 export function switchTab(tab){
-  // legacy entry points from hotkeys / menu
-  if(tab==='craft') setInvCat('can');
+  if(tab==='craft' || tab==='can') setInvCat('can');
   else if(tab==='guide') setInvCat('guide');
+  else if(tab==='build' || tab==='construction') setInvCat('build');
+  else if(tab==='gear' || tab==='food' || tab==='light' || tab==='nature') setInvCat(tab);
   else setInvCat('inv');
 }
 export function toggleInv(open, tab){
   invOpen = open ?? !invOpen;
-  $('inv').style.display = invOpen ? 'block' : 'none';
+  // CSS drives visibility via body.inv-open (display:flex !important) — do not fight it with inline styles
   document.body.classList.toggle('inv-open', invOpen);
-  if(invOpen){ invPick = null; switchTab(tab||'items'); document.exitPointerLock?.(); }
-  else { document.body.classList.remove('inv-guide'); playerHooks?.relock?.(); }
+  if(invOpen){
+    invPick = null;
+    // Prefer a tab that always has content (empty pack looked "broken")
+    const start = tab || (gm.forge ? 'build' : 'inv');
+    switchTab(start);
+    renderInv();
+    document.exitPointerLock?.();
+  } else {
+    document.body.classList.remove('inv-guide');
+    playerHooks?.relock?.();
+  }
 }
 
 export function initUI(hooks){
