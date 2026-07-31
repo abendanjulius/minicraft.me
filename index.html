@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#87ceeb">
+<title>MiniCraft — build together</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div id="rotate">🔄<br>Rotate your device to landscape</div>
+
+<div id="menu">
+  <h1>⛏ MiniCraft</h1>
+  <p class="tagline">A tiny blocky world in your browser · minicraft.me</p>
+  <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="off">
+  <button id="btnSolo" class="mbtn">▶ Play Solo</button>
+  <button id="btnHost" class="mbtn">🌐 Host Game</button>
+  <div class="joinRow">
+    <input id="codeInput" maxlength="6" placeholder="ROOM CODE" autocomplete="off">
+    <button id="btnJoin" class="mbtn">Join</button>
+  </div>
+  <p id="menuStatus"></p>
+  <p id="menuError"></p>
+  <p class="hint">Host shares the room code · friends join from any device.<br>
+  WASD/mouse on desktop · joystick + buttons on mobile.</p>
+</div>
+
+<div id="loading">Generating world…</div>
+
+<div id="game"></div>
+
+<div id="hud" style="display:none">FPS: <span id="fps">0</span> &nbsp; XYZ: <span id="pos"></span> &nbsp; Tool: <span id="toolName">Hand</span> &nbsp; <span id="players"></span></div>
+<div id="banner" style="display:none"></div>
+<div id="crosshair">+</div>
+<div id="mineBar"><div></div></div>
+<div id="tools"></div>
+<div id="hotbar"></div>
+
+<div id="inv">
+  <h3>Inventory</h3>
+  <p id="invHelp"></p>
+  <div id="invGrid"></div>
+  <button id="invClear">Clear selected slot</button>
+</div>
+
+<div id="touchUI">
+  <div id="joyZone"><div id="joyBase"></div><div id="joyStick"></div></div>
+  <div class="tbtn" id="btnJump">JUMP</div>
+  <div class="tbtn" id="btnMine">MINE</div>
+  <div class="tbtn" id="btnPlace">PLACE</div>
+  <div id="btnInv">🎒</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
