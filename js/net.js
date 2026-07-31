@@ -6,6 +6,9 @@ import { setBanner, setPlayers, addChat } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
+import * as mobs from './mobs.js';
+import * as survival from './survival.js';
+import { addToInventory } from './ui.js';
 
 export let mode = 'solo';           // 'solo' | 'host' | 'client'
 let peer = null, conns = [];        // host: all client conns; client: [hostConn]
@@ -69,7 +72,16 @@ function handle(msg, fromConn){
     if(mode==='host'){ editLog.push([msg.x,msg.y,msg.z,msg.v]); relay(msg, fromConn); }
   } else if(msg.t==='anim'){
     animals.applyRemote(msg.d);
+    if(msg.z) mobs.applyRemote(msg.z);
     if(msg.tod!==undefined) setDayTime(msg.tod);
+  } else if(msg.t==='hit' && mode==='host'){
+    hostHandleHit(msg.id0, msg.kind, msg.eid, msg.dmg, msg.px, msg.pz);
+  } else if(msg.t==='hurt'){
+    survival.damage(msg.dmg, msg.cause||'zombie');
+  } else if(msg.t==='give'){
+    addToInventory(msg.item);
+  } else if(msg.t==='kudos'){
+    survival.note(msg.what);
   } else if(msg.t==='chat'){
     addChat(msg.name||'Player', String(msg.text).slice(0,120));
     sfx.chat();
@@ -101,6 +113,40 @@ export function sendChat(text){
   const msg = {t:'chat', id:peer?.id, name:myName, text:String(text).slice(0,120)};
   if(mode==='host') relay(msg, null);
   else safeSendHost(msg);
+}
+
+// ---- Combat ----
+function sendToPeer(peerId, msg){
+  if(peerId==='me' || peerId===peer?.id){ handle(msg, null); return; }
+  const c = conns.find(c=>c.peer===peerId);
+  if(c?.open){ try{ c.send(msg); }catch(e){} }
+}
+// Runs on the authority (host or solo). hitterId 'me' = the authority player.
+export function hostHandleHit(hitterId, kind, eid, dmg, px, pz){
+  const from = {x:px, z:pz};
+  if(kind==='a'){
+    const drop = animals.hit(eid, dmg, from);
+    if(drop) sendToPeer(hitterId, {t:'give', item:drop});
+  } else if(kind==='z'){
+    const res = mobs.hit(eid, dmg);
+    if(res==='killed') sendToPeer(hitterId, {t:'kudos', what:'zkill'});
+  }
+}
+export function sendHit(kind, eid, dmg, px, pz){
+  if(mode==='client'){ safeSendHost({t:'hit', id0:peer?.id, kind, eid, dmg, px, pz}); }
+  else hostHandleHit('me', kind, eid, dmg, px, pz); // solo + host resolve locally
+}
+// Targets for zombie AI: authority player + all remotes
+export function getTargets(myPos){
+  const list = [{id:'me', x:myPos.x, y:myPos.y, z:myPos.z}];
+  for(const [id,r] of remotes) list.push({id, x:r.g.position.x, y:r.g.position.y, z:r.g.position.z});
+  return list;
+}
+export function dispatchHurts(hurts){
+  for(const h of hurts){
+    if(h.id==='me') survival.damage(h.dmg, 'zombie');
+    else sendToPeer(h.id, {t:'hurt', dmg:h.dmg, cause:'zombie'});
+  }
 }
 export function sendEdit(x,y,z,v){
   if(mode==='solo') return;
@@ -164,7 +210,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), tod:day.t}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), tod:day.t}, null); }
   }
 
   // animate remote avatars

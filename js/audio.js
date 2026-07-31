@@ -44,6 +44,11 @@ export const sfx = {
   jump:  ()=>osc({freq:300,end:520,type:'sine',dur:.12,vol:.12}),
   land:  ()=>noise({dur:.09,vol:.2,freq:350,q:.9}),
   chat:  ()=>osc({freq:900,end:1200,type:'sine',dur:.08,vol:.1}),
+  punch: ()=>{ noise({dur:.07,vol:.2,freq:300,q:.8}); osc({freq:180,end:90,type:'triangle',dur:.08,vol:.12}); },
+  hurt:  ()=>{ osc({freq:240,end:110,type:'sawtooth',dur:.18,vol:.14}); noise({dur:.1,vol:.14,freq:250,q:1}); },
+  eat:   ()=>{ noise({dur:.08,vol:.14,freq:900,q:1.2}); osc({freq:500,end:300,type:'triangle',dur:.12,vol:.09}); },
+  zgroan:()=>{ osc({freq:120+Math.random()*40,end:70,type:'sawtooth',dur:.5,vol:.07}); },
+  ach:   ()=>{ osc({freq:660,end:660,type:'sine',dur:.09,vol:.1}); setTimeout(()=>osc({freq:880,end:880,type:'sine',dur:.16,vol:.1}),90); },
 };
 
 // ---- Background music: royalty-free track, looped at low volume ----

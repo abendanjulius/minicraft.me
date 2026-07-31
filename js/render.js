@@ -113,12 +113,18 @@ export const SKINS = [
   {name:'Shadow', skin:0x8d6e63, hair:0x0d0d0d, shirt:0x37474f, pants:0x212121, eyes:0xb03a2e},
 ];
 
+export const ITEMS = { // non-block inventory items (food)
+  101:{name:'Porkchop', icon:'🍖', food:8},
+  102:{name:'Mutton',   icon:'🥩', food:6},
+  103:{name:'Chicken',  icon:'🍗', food:5},
+};
+export const ZOMBIE_SKIN = {key:'zombie', name:'Zombie', skin:0x57a05a, hair:0x2f6d30, shirt:0x2e8b8b, pants:0x5b4a8a, eyes:0x111111};
+
 // ---- Pixel faces & Minecraft-style characters ----
 const hex = n=>'#'+n.toString(16).padStart(6,'0');
 const skinTexCache = {};
-function skinTextures(idx){
-  if(skinTexCache[idx]) return skinTexCache[idx];
-  const sk = SKINS[idx]||SKINS[0];
+function skinTextures(sk, key){
+  if(skinTexCache[key]) return skinTexCache[key];
   const face = canvasTex(g=>{
     pix(g,(x,y)=>{
       if(y<5) return hex(sk.hair);                                    // hair
@@ -137,10 +143,12 @@ function skinTextures(idx){
         mSkin = new THREE.MeshLambertMaterial({color:sk.skin});
   // face on +z (character's forward)
   const headMats = [mSide, mSide, mHair, mSkin, M(face), mSide];
-  skinTexCache[idx] = { headMats, faceURL: face.url };
-  return skinTexCache[idx];
+  skinTexCache[key] = { headMats, faceURL: face.url };
+  return skinTexCache[key];
 }
-export const faceURL = idx=>skinTextures(idx).faceURL;
+const skinOf = s => (typeof s==='number') ? (SKINS[s]||SKINS[0]) : s;
+const keyOf  = s => (typeof s==='number') ? 'idx'+s : (s.key||s.name);
+export const faceURL = idx=>skinTextures(skinOf(idx), keyOf(idx)).faceURL;
 
 // A limb pivoting at its top (shoulder/hip) so rotation.x swings naturally
 function limb(x, pivotY, w, topH, topCol, botH, botCol){
@@ -150,8 +158,8 @@ function limb(x, pivotY, w, topH, topCol, botH, botCol){
   g.add(box(w, botH, w, botCol, 0, -topH - botH/2, 0));
   return g;
 }
-export function makeCharacter(idx, withHead=true){
-  const sk = SKINS[idx]||SKINS[0];
+export function makeCharacter(skinLike, withHead=true){
+  const sk = skinOf(skinLike);
   const g = new THREE.Group();
   const shoe = 0x2b2b2b;
   const legL = limb( .13, .7, .2,  .5, sk.pants, .2, shoe);
@@ -162,7 +170,7 @@ export function makeCharacter(idx, withHead=true){
   g.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));
   let head = null;
   if(withHead){
-    head = new THREE.Mesh(new THREE.BoxGeometry(.44,.44,.44), skinTextures(idx).headMats);
+    head = new THREE.Mesh(new THREE.BoxGeometry(.44,.44,.44), skinTextures(sk, keyOf(skinLike)).headMats);
     head.position.set(0,1.62,0);
     g.add(head);
   }

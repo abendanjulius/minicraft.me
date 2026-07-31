@@ -1,6 +1,6 @@
 // animals.js — blocky wildlife. Host (or solo) runs the AI; clients render what the host says.
 import { WORLD, CENTER, topY, mulberry32 } from './world.js';
-import { scene, box, VIEW } from './render.js';
+import { scene, box, VIEW, spawnParticles } from './render.js';
 
 const KINDS = ['pig','sheep','chicken'];
 export const animals = [];
@@ -36,7 +36,28 @@ function makeAnimal(kind,x,z){
   g.position.set(x, gy+0.5, z);
   scene.add(g);
   animals.push({g, legs, kind, yaw:0, speed:kind==='chicken'?1:1.4, mode:'idle',
-                timer:1, phase:Math.random()*10, tgt:null});
+                timer:1, phase:Math.random()*10, tgt:null,
+                hp:4, alive:true, respawnT:0, fleeT:0});
+}
+
+const DROPS = {pig:101, sheep:102, chicken:103}; // food item ids
+// Host: apply a hit to animal idx. Returns dropped item id if it died, else null.
+export function hit(idx, dmg, fromPos){
+  const a = animals[idx];
+  if(!a || !a.alive) return null;
+  a.hp -= dmg;
+  spawnParticles(a.g.position.x, a.g.position.y+.5, a.g.position.z, 0x8b2b2b, 6);
+  if(a.hp<=0){
+    a.alive = false;
+    a.g.visible = false;
+    a.respawnT = 60;
+    spawnParticles(a.g.position.x, a.g.position.y+.5, a.g.position.z, 0xdddddd, 12);
+    return DROPS[a.kind];
+  }
+  // flee from the attacker
+  if(fromPos) a.yaw = Math.atan2(a.g.position.z-fromPos.z, a.g.position.x-fromPos.x);
+  a.mode = 'walk'; a.fleeT = 2; a.timer = 2.5;
+  return null;
 }
 
 export function init(isAuthority, seed){
@@ -54,6 +75,18 @@ export function init(isAuthority, seed){
 
 export function update(dt, time, playerPos){
   for(const a of animals){
+    // Host respawns dead animals after a while
+    if(authority && !a.alive){
+      a.respawnT -= dt;
+      if(a.respawnT<=0){
+        const gx = Math.round(CENTER+(Math.random()-.5)*160), gz = Math.round(CENTER+(Math.random()-.5)*160);
+        const gy = topY(gx,gz);
+        if(gy>0){ a.g.position.set(gx, gy+.5, gz); a.alive = true; a.hp = 4; a.g.visible = true; }
+        else a.respawnT = 5;
+      }
+      continue;
+    }
+    if(!a.alive) continue;
     const ax = a.g.position.x-playerPos.x, az = a.g.position.z-playerPos.z;
     const far = ax*ax+az*az > VIEW*VIEW;
     a.g.visible = !far;
@@ -61,6 +94,8 @@ export function update(dt, time, playerPos){
     if(!authority){
       // Client mode: glide toward the host's reported state
       if(a.tgt){
+        a.g.visible = a.tgt.alive && !far;
+        if(!a.tgt.alive) continue;
         a.g.position.x += (a.tgt.x - a.g.position.x)*Math.min(1,dt*8);
         a.g.position.y += (a.tgt.y - a.g.position.y)*Math.min(1,dt*8);
         a.g.position.z += (a.tgt.z - a.g.position.z)*Math.min(1,dt*8);
@@ -74,6 +109,7 @@ export function update(dt, time, playerPos){
     }
     if(far) continue; // authority skips AI for far animals
 
+    a.fleeT = Math.max(0, a.fleeT - dt);
     a.timer -= dt;
     if(a.timer<=0){
       a.mode = Math.random()<.6 ? 'walk' : 'idle';
@@ -81,8 +117,9 @@ export function update(dt, time, playerPos){
       a.timer = 1.5+Math.random()*3.5;
     }
     if(a.mode==='walk'){
-      const nx = a.g.position.x + Math.cos(a.yaw)*a.speed*dt;
-      const nz = a.g.position.z + Math.sin(a.yaw)*a.speed*dt;
+      const sp = a.speed * (a.fleeT>0 ? 2.2 : 1);
+      const nx = a.g.position.x + Math.cos(a.yaw)*sp*dt;
+      const nz = a.g.position.z + Math.sin(a.yaw)*sp*dt;
       const gy = topY(Math.round(nx), Math.round(nz));
       const cy = Math.round(a.g.position.y-0.5);
       if(gy<0 || gy-cy>1){ a.yaw += Math.PI/2 + Math.random(); continue; }
@@ -105,12 +142,12 @@ export function update(dt, time, playerPos){
 export function serialize(){
   return animals.map(a=>[
     +a.g.position.x.toFixed(1), +a.g.position.y.toFixed(1), +a.g.position.z.toFixed(1),
-    +a.g.rotation.y.toFixed(2), a.mode==='walk'?1:0
+    +a.g.rotation.y.toFixed(2), a.mode==='walk'?1:0, a.alive?1:0
   ]);
 }
 export function applyRemote(d){
   for(let i=0;i<d.length && i<animals.length;i++){
-    const [x,y,z,ry,m] = d[i];
-    animals[i].tgt = {x,y,z,ry, m: m?'walk':'idle'};
+    const [x,y,z,ry,m,alive] = d[i];
+    animals[i].tgt = {x,y,z,ry, m: m?'walk':'idle', alive:alive!==0};
   }
 }

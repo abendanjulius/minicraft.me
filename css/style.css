@@ -104,3 +104,19 @@ body:not(.touch) #btnQuit{right:10px}
 .skinBtn{width:52px;height:74px}
 .skFace{width:28px;height:28px;image-rendering:pixelated;border-radius:2px}
 .skName{font-size:8px;color:#243;font-family:monospace}
+
+
+/* v1.2 — survival */
+#vitals{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);display:none;gap:26px;z-index:2;pointer-events:none}
+#hearts,#hungerBar{display:flex;gap:1px}
+.vit{font-size:14px;text-shadow:1px 1px 1px #000}
+.vit.half{opacity:.55}
+.vit.off{opacity:.18;filter:grayscale(1)}
+#goal{position:fixed;top:52px;left:50%;transform:translateX(-50%);color:#fff;text-shadow:1px 1px 2px #000;font-size:11px;font-family:monospace;z-index:2;pointer-events:none;display:none;background:rgba(0,0,0,.25);padding:3px 10px;border-radius:4px}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center, transparent 45%, rgba(180,20,20,.65) 100%)}
+#toasts{position:fixed;top:80px;right:12px;z-index:4;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:rgba(20,20,20,.85);border:1px solid #666;color:#ffd97a;font-family:monospace;font-size:12px;padding:8px 14px;border-radius:6px;transform:translateX(120%);transition:transform .35s}
+.toast.show{transform:translateX(0)}
+#deathScreen{position:fixed;inset:0;background:rgba(110,10,10,.55);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:6;color:#fff;text-align:center;font-family:monospace}
+#deathScreen h2{font-size:28px;text-shadow:2px 2px 0 #400}
+@media (max-width:860px){ #vitals{bottom:52px} .vit{font-size:12px} }

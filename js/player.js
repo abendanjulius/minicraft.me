@@ -7,6 +7,30 @@ import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          chat, openChat } from './ui.js';
 import { sfx, toggleMusic } from './audio.js';
 import * as net from './net.js';
+import * as survival from './survival.js';
+import { animals } from './animals.js';
+import { zombies } from './mobs.js';
+
+const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; return (s && s.k==='f') ? s.id : 0; };
+
+// Aim at a nearby entity (animal or zombie) in front of the crosshair
+function pickEntity(){
+  const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ'));
+  const eye = player.pos.clone().add(new THREE.Vector3(0,1.6,0));
+  const blockHit = castBlock();
+  const maxD = blockHit ? blockHit.dist : 3.6;
+  let best = null, bestT = Math.min(3.6, maxD);
+  const consider = (kind, eid, pos)=>{
+    const to = pos.clone().add(new THREE.Vector3(0,.7,0)).sub(eye);
+    const t = to.dot(dir);
+    if(t<0.3 || t>bestT) return;
+    const perp = to.clone().addScaledVector(dir,-t).length();
+    if(perp < .85){ best = {kind, eid}; bestT = t; }
+  };
+  animals.forEach((a,i)=>{ if(a.alive && a.g.visible) consider('a', i, a.g.position); });
+  for(const zb of zombies.values()) if(zb.c.g.visible) consider('z', zb.id, zb.c.g.position);
+  return best;
+}
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
@@ -65,7 +89,21 @@ export function look(dx,dy){
   view.yaw -= dx; view.pitch -= dy;
   view.pitch = Math.max(-Math.PI/2+.01, Math.min(Math.PI/2-.01, view.pitch));
 }
-export function setMine(b){ state.mineHeld = b; if(!b) state.mining = null; }
+export function setMine(b){
+  if(survival.sv.dead){ state.mineHeld=false; state.mining=null; return; }
+  if(b){
+    const e = pickEntity();
+    if(e){
+      const dmg = slotTool()!=='hand' ? 3 : 2;
+      net.sendHit(e.kind, e.eid, dmg, player.pos.x, player.pos.z);
+      placeAnim = 1;      // single chop animation
+      sfx.punch();
+      return;             // a punch, not a mining hold
+    }
+  }
+  state.mineHeld = b;
+  if(!b) state.mining = null;
+}
 export function relock(){
   if(state.playing && !isTouch){
     try{ renderer.domElement.requestPointerLock()?.catch?.(()=>{}); }catch(e){}
@@ -104,13 +142,13 @@ export function initControls(){
     if(isTouch || !state.playing || invOpen) return;
     if(e.target.closest('#hotbar,#inv,#btnQuit')) return;
     if(usingLock){
-      if(e.button===0) state.mineHeld = true;
+      if(e.button===0) setMine(true);
       else if(e.button===2) placeAction();
       return;
     }
     mouseDown = {x:e.clientX, y:e.clientY, button:e.button};
     dragging = false;
-    if(e.button===0) state.mineHeld = true;
+    if(e.button===0) setMine(true);
   });
   document.addEventListener('mouseup', e=>{
     if(isTouch) return;
@@ -132,13 +170,16 @@ export function castBlock(){
   for(let t=0;t<6;t+=.05){
     const p = eye.clone().addScaledVector(dir,t);
     const bx=Math.round(p.x), by=Math.round(p.y), bz=Math.round(p.z);
-    if(getBlock(bx,by,bz)) return {hit:[bx,by,bz], place:prev};
+    if(getBlock(bx,by,bz)) return {hit:[bx,by,bz], place:prev, dist:t};
     prev = [bx,by,bz];
   }
   return null;
 }
 
 export function placeAction(){
+  if(survival.sv.dead) return;
+  const food = slotFood();
+  if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
   const r = castBlock();
   if(!r || !r.place) return;
   const tid = slotBlock();
@@ -151,6 +192,7 @@ export function placeAction(){
   inventory[tid]--;
   placeAnim = 1;
   sfx.place();
+  survival.note('place');
   renderHotbar();
   net.sendEdit(px,py,pz,tid);
 }
@@ -177,7 +219,7 @@ function updateMining(dt){
   mineFill.style.width = Math.min(100, m.progress/m.total*100)+'%';
   if(m.progress >= m.total){
     const old = applyEdit(bx,by,bz,0,true);
-    if(old){ addToInventory(old); sfx.break(old); addShake(.16); }
+    if(old){ addToInventory(old); sfx.break(old); addShake(.16); survival.note('mine', old); }
     net.sendEdit(bx,by,bz,0);
     state.mining = null;
   }
@@ -193,7 +235,7 @@ function collide(pos){
 
 export function update(dt, elapsed){
   if(!state.playing) return;
-  if(!invOpen){
+  if(!invOpen && !survival.sv.dead){
     const speed = 5;
     const fwd = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
     const right = new THREE.Vector3(-fwd.z,0,fwd.x);
@@ -204,7 +246,7 @@ export function update(dt, elapsed){
     move.multiplyScalar(speed);
     player.vel.x = move.x; player.vel.z = move.z;
     player.vel.y -= 20*dt;
-    if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; sfx.jump(); }
+    if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; sfx.jump(); survival.jumpCost(); }
     fallV = player.vel.y;
 
     for(const axis of ['x','z','y']){
@@ -218,6 +260,7 @@ export function update(dt, elapsed){
     if(player.onGround && !wasGround && fallV < -8){
       sfx.land();
       addShake(Math.min(.22, -fallV*.015));
+      if(fallV < -12) survival.damage(Math.round((-fallV-12)*1.2), 'fall');
     }
     wasGround = player.onGround;
 

@@ -1,5 +1,5 @@
 // ui.js — 10-slot hotbar (tools live in slots), inventory, chat, compass, touch controls
-import { TYPES, TOOLS, isTouch } from './render.js';
+import { TYPES, TOOLS, ITEMS, isTouch } from './render.js';
 
 export const inventory = {};
 // Slots hold null | {k:'b', id:blockType} | {k:'t', id:toolId}. Tools start in slots 8/9/0.
@@ -26,9 +26,10 @@ export function nextToolSlot(){
 
 export function addToInventory(t){
   inventory[t] = (inventory[t]||0)+1;
-  if(!hotbarSlots.some(s=>s?.k==='b' && s.id===t)){
+  const kind = t>=100 ? 'f' : 'b';
+  if(!hotbarSlots.some(s=>s?.k===kind && s.id===t)){
     const empty = hotbarSlots.findIndex(s=>s===null);
-    if(empty !== -1) hotbarSlots[empty] = {k:'b', id:t};
+    if(empty !== -1) hotbarSlots[empty] = {k:kind, id:t};
   }
   renderHotbar();
   if(invOpen) renderInv();
@@ -39,12 +40,14 @@ export function renderHotbar(){
   const hb = $('hotbar'); hb.innerHTML = '';
   hotbarSlots.forEach((s,i)=>{
     const d = document.createElement('div');
-    const isBlock = s?.k==='b', isTool = s?.k==='t';
-    const count = isBlock ? (inventory[s.id]||0) : 0;
-    d.className = 'slot' + (i===sel.slot?' active':'') + (s?'':' empty') + (isBlock&&!count?' zero':'');
+    const isBlock = s?.k==='b', isTool = s?.k==='t', isFood = s?.k==='f';
+    const count = (isBlock||isFood) ? (inventory[s.id]||0) : 0;
+    d.className = 'slot' + (i===sel.slot?' active':'') + (s?'':' empty') + ((isBlock||isFood)&&!count?' zero':'');
     const label = (i+1)%10;
     if(isTool){
       d.innerHTML = `<span class="num">${label}</span><span class="ticon">${toolInfo(s.id).icon}</span>`;
+    } else if(isFood){
+      d.innerHTML = `<span class="num">${label}</span><span class="ticon">${ITEMS[s.id].icon}</span><span class="cnt">${count}</span>`;
     } else {
       d.innerHTML = `<span class="num">${label}</span><div class="sw" ${isBlock?`style="background-image:url(${TYPES[s.id].icon})"`:''}></div>${isBlock?`<span class="cnt">${count}</span>`:''}`;
     }
@@ -56,7 +59,7 @@ export function renderHotbar(){
     d.addEventListener('drop', e=>{
       e.preventDefault();
       const data = e.dataTransfer.getData('text/plain');
-      if(data.startsWith('invb:')) hotbarSlots[i] = {k:'b', id:+data.slice(5)};
+      if(data.startsWith('invb:')){ const id=+data.slice(5); hotbarSlots[i] = {k: id>=100?'f':'b', id}; }
       else if(data.startsWith('invt:')) hotbarSlots[i] = {k:'t', id:data.slice(5)};
       else if(data.startsWith('slot:')){
         const j = +data.slice(5);
@@ -69,7 +72,8 @@ export function renderHotbar(){
   });
   // HUD label for what's held
   const t = slotTool(), b = slotBlock();
-  $('toolName').textContent = t!=='hand' ? toolInfo(t).name : (b ? TYPES[b].name : 'Hand');
+  const fd = hotbarSlots[sel.slot]?.k==='f' ? hotbarSlots[sel.slot].id : 0;
+  $('toolName').textContent = t!=='hand' ? toolInfo(t).name : fd ? ITEMS[fd].name : (b ? TYPES[b].name : 'Hand');
   onHeldChange?.();
 }
 
@@ -98,12 +102,15 @@ export function renderInv(){
     any = true;
     const d = document.createElement('div');
     d.className = 'invItem';
-    d.innerHTML = `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
+    const isFood = +tid>=100;
+    d.innerHTML = isFood
+      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">${inventory[tid]}</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
     if(!isTouch){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
     }
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'b', id:+tid}; renderHotbar(); });
+    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
     grid.appendChild(d);
   }
   if(!any) grid.innerHTML = '<span class="empty-note">Nothing yet — go mine some blocks.</span>';

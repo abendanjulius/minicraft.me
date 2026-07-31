@@ -6,6 +6,8 @@ import { initUI, toggleInv, setHud, initChat, addChat, setCompass } from './ui.j
 import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
+import * as mobs from './mobs.js';
+import * as survival from './survival.js';
 import * as net from './net.js';
 
 const $ = id=>document.getElementById(id);
@@ -83,6 +85,10 @@ function begin(seed, edits, authority){
     for(const [x,y,z,t] of edits) setBlock(x,y,z,t); // replay history before meshing
     buildAllChunks();
     animals.init(authority, seed);
+    mobs.init(authority);
+    isAuthority = authority;
+    survival.initSurvival({ onRespawn: ()=>playerMod.spawn() });
+    survival.showVitals(true);
     playerMod.spawn();
     playerMod.state.playing = true;
     document.body.classList.add('playing');
@@ -119,7 +125,7 @@ initChat(text=>{
 });
 
 // ---- Main loop ----
-let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0;
+let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true;
 function loop(now){
   requestAnimationFrame(loop);
   const dt = Math.min((now-last)/1000,.05); last=now; elapsed+=dt;
@@ -132,8 +138,15 @@ function loop(now){
 
   playerMod.update(dt, elapsed);
   if(playerMod.state.playing){
-    updateDayNight(dt, playerMod.player.pos);
+    const dl = updateDayNight(dt, playerMod.player.pos);
     animals.update(dt, elapsed, playerMod.player.pos);
+    if(isAuthority){
+      const hurts = mobs.hostTick(dt, dl, net.getTargets(playerMod.player.pos));
+      net.dispatchHurts(hurts);
+    }
+    mobs.commonTick(dt, elapsed, playerMod.player.pos);
+    const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;
+    survival.tick(dt, movingH, dl);
     net.update(dt, elapsed);
     cullTimer -= dt;
     if(cullTimer<=0){ updateChunkVisibility(playerMod.player.pos.x, playerMod.player.pos.z); cullTimer=.3; }
