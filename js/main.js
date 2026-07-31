@@ -20,7 +20,7 @@ import * as net from './net.js';
 const $ = id=>document.getElementById(id);
 
 // ---- Version check ----
-const APP_VERSION = '1.5.10'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.5.11'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{

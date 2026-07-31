@@ -225,22 +225,38 @@ export function hostTick(dt, dl, targets){
       continue;
     }
 
+    // Toroidal XZ distance (world wraps) + Y so caves can't punch the surface
+    const distXZ = (ax,az,bx,bz)=>{
+      let dx = ax-bx, dz = az-bz;
+      if(dx > WORLD/2) dx -= WORLD; if(dx < -WORLD/2) dx += WORLD;
+      if(dz > WORLD/2) dz -= WORLD; if(dz < -WORLD/2) dz += WORLD;
+      return Math.hypot(dx, dz);
+    };
+
     // choose target: nearest player, or an unattended corpse
     let best = null, bestD = 28, isCorpse = false;
     for(const t of targets){
-      const d = Math.hypot(t.x-p.x, t.z-p.z);
+      const d = distXZ(t.x, t.z, p.x, p.z);
+      const dy = Math.abs((t.y ?? p.y) - p.y);
+      if(dy > 2.5) continue; // can't reach through floors/ceilings
       if(d<bestD){ bestD=d; best=t; }
     }
     if((!best || bestD>10) && corpses.size){
       for(const [cid,c] of corpses){
-        const d = Math.hypot(c.x-p.x, c.z-p.z);
-        if(d<40 && (!best || d<bestD)){ best={x:c.x, z:c.z, corpse:cid}; bestD=d; isCorpse=true; }
+        const d = distXZ(c.x, c.z, p.x, p.z);
+        const dy = Math.abs(c.y - p.y);
+        if(dy > 3) continue;
+        if(d<40 && (!best || d<bestD)){ best={x:c.x, y:c.y, z:c.z, corpse:cid}; bestD=d; isCorpse=true; }
       }
     }
 
     let sp = 1.0;
     if(best){
-      zb.yaw = Math.atan2(best.z-p.z, best.x-p.x);
+      // Aim across the wrap seam correctly
+      let adx = best.x-p.x, adz = best.z-p.z;
+      if(adx > WORLD/2) adx -= WORLD; if(adx < -WORLD/2) adx += WORLD;
+      if(adz > WORLD/2) adz -= WORLD; if(adz < -WORLD/2) adz += WORLD;
+      zb.yaw = Math.atan2(adz, adx);
       sp = speed;
       if(isCorpse && bestD < 1.3){
         // feeding
@@ -252,7 +268,8 @@ export function hostTick(dt, dl, targets){
         }
         continue;
       }
-      if(!isCorpse && bestD < 1.35 && zb.atkCd<=0){
+      // Attack only when truly in melee range on XZ and Y
+      if(!isCorpse && bestD < 1.35 && Math.abs((best.y??p.y)-p.y) < 2.2 && zb.atkCd<=0){
         zb.atkCd = 1.1;
         hurts.push({id:best.id, dmg:3});
       }

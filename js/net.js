@@ -75,9 +75,17 @@ function refreshPlayerList(){
 // ---- Message handling ----
 function handle(msg, fromConn){
   if(msg.t==='pos'){
+    // Never spawn a remote avatar of ourselves
+    if(msg.id && peer?.id && msg.id===peer.id) return;
     let r = remotes.get(msg.id);
     if(!r){ r = makeAvatar(msg.name||'Player', msg.skin|0); remotes.set(msg.id, r); refreshPlayerList(); }
+    // Snap on first packet so the avatar isn't at origin for a frame
+    if(!r.tgt){
+      r.g.position.set(msg.x||0, msg.y||0, msg.z||0);
+      r.g.rotation.y = (msg.yaw||0) + Math.PI;
+    }
     r.tgt = msg;
+    if(msg.name) r.name = msg.name;
     setHeldItem(r, msg.tool, msg.blk, msg.item);
     if(mode==='host') relay(msg, fromConn);
   } else if(msg.t==='edit'){
@@ -216,7 +224,18 @@ export function startHost(name, newSeed, onReady, onError){
   peer.on('connection', conn=>{
     conn.on('open', ()=>{
       conns.push(conn);
-      conn.send({t:'init', seed:newSeed, edits:editLog, tod:day.t, gmF:gm.forge?1:0});
+      // Seed world + host avatar snapshot so the joiner can see the host immediately
+      const hostPos = {t:'pos', id:peer.id, name:myName, ...playerMod.netState()};
+      conn.send({
+        t:'init', seed:newSeed, edits:editLog, tod:day.t, gmF:gm.forge?1:0,
+        host: hostPos,
+      });
+      // Also push every other already-connected player so late joiners see them
+      for(const [rid, r] of remotes){
+        if(r.tgt) conn.send({t:'pos', id:rid, name:r.name, ...r.tgt});
+      }
+      // And re-send host pos on the next tick path (belt and suspenders)
+      try{ conn.send(hostPos); }catch(e){}
     });
     conn.on('data', d=>handle(d, conn));
     conn.on('close', ()=>{ conns = conns.filter(c=>c!==conn); removeRemote(conn.peer); });
@@ -232,8 +251,14 @@ export function startJoin(name, code, onInit, onError){
     let gotInit = false;
     conn.on('open', ()=>{ conns=[conn]; setBanner(`Joined room ${code.toUpperCase()}`); });
     conn.on('data', d=>{
-      if(d.t==='init' && !gotInit){ gotInit = true; if(d.tod!==undefined) setDayTime(d.tod); setMode(d.gmF===1); onInit(d.seed, d.edits); }
-      else handle(d, conn);
+      if(d.t==='init' && !gotInit){
+        gotInit = true;
+        if(d.tod!==undefined) setDayTime(d.tod);
+        setMode(d.gmF===1);
+        onInit(d.seed, d.edits);
+        // Host avatar from handshake — so joiners always see the host
+        if(d.host) handle(d.host, conn);
+      } else handle(d, conn);
     });
     conn.on('close', ()=>setBanner('Disconnected from host'));
     setTimeout(()=>{ if(!gotInit) onError?.(new Error('Could not reach that room code.')); }, 8000);
