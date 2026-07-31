@@ -1,7 +1,7 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
-import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES, SKINS,
-         day, setDayTime } from './render.js';
+import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, makeHeldItemIcon, makeWeaponModel,
+         applyEdit, spawnParticles, TYPES, ITEMS, SKINS, day, setDayTime } from './render.js';
 import { setBanner, setPlayers, addChat, setHorde } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';
@@ -45,13 +45,24 @@ function makeAvatar(name, skinIdx=0){
   scene.add(c.g);
   return {g:c.g, armR:c.armR, legL:c.legL, legR:c.legR, held, heldKey:'', tgt:null, swing:0, chip:0, name};
 }
-function setHeldItem(r, tool, blk){
-  const key = tool!=='hand' ? 't:'+tool : (blk ? 'b:'+blk : '');
+function setHeldItem(r, tool, blk, item){
+  const key = tool!=='hand' ? 't:'+tool
+            : (blk ? 'b:'+blk
+            : (item ? 'i:'+item : ''));
   if(key===r.heldKey) return;
   r.heldKey = key;
   r.held.clear();
-  if(key.startsWith('t:')){ const m = makeToolModel(tool); m.rotation.x = -.6; r.held.add(m); }
-  else if(key.startsWith('b:') && TYPES[blk]) r.held.add(makeBlockCube(blk, .3));
+  if(key.startsWith('t:')){
+    const m = makeToolModel(tool); m.rotation.x = -.6; r.held.add(m);
+  } else if(key.startsWith('b:') && TYPES[blk]){
+    r.held.add(makeBlockCube(blk, .3));
+  } else if(key.startsWith('i:') && ITEMS[item]){
+    if(ITEMS[item].dmg){
+      const m = makeWeaponModel(item); m.rotation.x = -.6; r.held.add(m);
+    } else {
+      r.held.add(makeHeldItemIcon(item, .32));
+    }
+  }
 }
 function removeRemote(id){
   const r = remotes.get(id);
@@ -67,7 +78,7 @@ function handle(msg, fromConn){
     let r = remotes.get(msg.id);
     if(!r){ r = makeAvatar(msg.name||'Player', msg.skin|0); remotes.set(msg.id, r); refreshPlayerList(); }
     r.tgt = msg;
-    setHeldItem(r, msg.tool, msg.blk);
+    setHeldItem(r, msg.tool, msg.blk, msg.item);
     if(mode==='host') relay(msg, fromConn);
   } else if(msg.t==='edit'){
     applyEdit(msg.x, msg.y, msg.z, msg.v, true);

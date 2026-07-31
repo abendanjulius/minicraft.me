@@ -24,7 +24,7 @@ scene.add(sun);
 
 // ---- Day/night cycle ----
 export const day = { t: .28 };            // 0..1; .25 ≈ noon
-const DAY_LEN = 1200;  // ~20 min full cycle (was 240 / 4 min)                      // seconds per full day
+const DAY_LEN = 1200;                     // ~20 min full cycle (was 240 / 4 min)
 const skyDay = new THREE.Color(0x87ceeb), skyNight = new THREE.Color(0x0b1026), skyDusk = new THREE.Color(0xe8935a);
 function discTex(color){
   const c=document.createElement('canvas'); c.width=c.height=64;
@@ -38,8 +38,7 @@ moonSpr.scale.set(5,5,1); scene.add(moonSpr);
 const _sky = new THREE.Color();
 export function setDayTime(t){ day.t = ((t%1)+1)%1; }
 export function updateDayNight(dt, focus){
-  // Forge: lock bright noon (no night)
-  if(gm.forge){ day.t = 0.28; }
+  if(gm.forge){ day.t = 0.28; }          // Forge: always noon
   else { day.t = (day.t + dt/DAY_LEN) % 1; }
   const ang = day.t*Math.PI*2;
   const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), .3).normalize();
@@ -299,7 +298,53 @@ export function makeToolModel(id){
   return g;
 }
 export function makeBlockCube(tid, size=.25){
-  return new THREE.Mesh(new THREE.BoxGeometry(size,size,size), TYPES[tid].mats);
+  const mats = TYPES[tid]?.mats;
+  if(!mats){
+    // fallback plain cube so missing TYPES never blank the hand
+    return new THREE.Mesh(new THREE.BoxGeometry(size,size,size),
+      new THREE.MeshLambertMaterial({color:0xaaaaaa}));
+  }
+  return new THREE.Mesh(new THREE.BoxGeometry(size,size,size), mats);
+}
+
+/** First-person held icon for non-block items (food, materials, etc.). */
+export function makeHeldItemIcon(itemId, size=.28){
+  const it = ITEMS[itemId];
+  const icon = it?.icon || '❓';
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.clearRect(0,0,64,64);
+  // soft backing so emoji reads on any sky
+  g.fillStyle = 'rgba(20,20,24,.55)';
+  g.beginPath(); g.roundRect?.(8,8,48,48,8);
+  if(!g.roundRect) g.fillRect(8,8,48,48); else g.fill();
+  g.font = '42px serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(icon, 32, 34);
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter;
+  const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, depthTest:true, side:THREE.DoubleSide});
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+  return mesh;
+}
+
+/** Weapon model tinted by damage tier so each sword looks distinct. */
+export function makeWeaponModel(itemId){
+  const dmg = ITEMS[itemId]?.dmg || 3;
+  const blade =
+    dmg >= 8 ? 0xb8f0ff :   // crystal
+    dmg >= 6 ? 0xc9cdd2 :   // iron
+    dmg >= 5 ? 0xb0b0b0 :   // spear-ish
+    dmg >= 4 ? 0x9a9a9a :   // stone/bone
+               0xd2b48c;    // wood
+  const grip = dmg >= 6 ? 0x4a4a50 : 0x8a5a2b;
+  const g = new THREE.Group();
+  g.add(box(.05,.16,.05, grip, 0,-.02,0));
+  g.add(box(.14,.04,.06, 0x6a6a6a, 0,.07,0));
+  g.add(box(.05,.42,.03, blade, 0,.3,0));
+  return g;
 }
 
 // ---- Chunk meshing ----

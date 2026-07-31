@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt } from './world.js';
-import { scene, camera, renderer, TYPES, TOOLS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         applyEdit, spawnParticles, spawnDust, jit } from './render.js';
+import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
+         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat } from './ui.js';
@@ -58,27 +58,46 @@ for(const t of TOOLS) if(t.id!=='hand'){
   m.position.set(0,.06,-.22); m.rotation.x = -.5; m.visible = false;
   handGroup.add(m); toolModels[t.id] = m;
 }
-let heldBlockMesh = null;
-const swordModel = (()=>{
-  const g = new THREE.Group();
-  g.add(box(.05,.16,.05,0x8a5a2b,0,-.02,0));           // grip
-  g.add(box(.14,.04,.06,0x6a6a6a,0,.07,0));            // guard
-  g.add(box(.05,.42,.03,0xd7dde2,0,.3,0));             // blade
-  g.position.set(0,.06,-.22); g.rotation.x = -.5; g.visible = false;
-  return g;
-})();
-handGroup.add(swordModel);
+let heldExtra = null; // block cube, weapon model, or item icon currently parented to hand
+function clearHeldExtra(){
+  if(heldExtra){ handGroup.remove(heldExtra); heldExtra = null; }
+}
 function updateHeld(){
-  const tool = slotTool(), blk = slotBlock();
+  const tool = slotTool();
   const held = hotbarSlots[sel.slot];
-  const isWeapon = held?.k==='f' && ITEMS[held.id]?.dmg;
   for(const id in toolModels) toolModels[id].visible = (tool===id);
-  swordModel.visible = !!isWeapon;
-  if(heldBlockMesh){ handGroup.remove(heldBlockMesh); heldBlockMesh = null; }
-  if(tool==='hand' && !isWeapon && blk && inventory[blk]>0){
-    heldBlockMesh = makeBlockCube(blk);
-    heldBlockMesh.position.set(0,.05,-.3);
-    handGroup.add(heldBlockMesh);
+  clearHeldExtra();
+  if(!held) return;
+
+  // Mining tools already use toolModels
+  if(held.k==='t') return;
+
+  // Blocks — show cube (Forge has infinite; survival needs count)
+  if(held.k==='b'){
+    const id = held.id;
+    if(!TYPES[id]) return;
+    if(!gm.forge && !(inventory[id]>0)) return;
+    heldExtra = makeBlockCube(id);
+    heldExtra.position.set(0,.05,-.3);
+    handGroup.add(heldExtra);
+    return;
+  }
+
+  // Items (food, materials, weapons)
+  if(held.k==='f'){
+    const id = held.id;
+    if(!ITEMS[id]) return;
+    if(!gm.forge && !(inventory[id]>0)) return;
+    if(ITEMS[id].dmg){
+      heldExtra = makeWeaponModel(id);
+      heldExtra.position.set(0,.06,-.22);
+      heldExtra.rotation.x = -.5;
+    } else {
+      heldExtra = makeHeldItemIcon(id);
+      heldExtra.position.set(0,.08,-.28);
+      heldExtra.rotation.y = .15;
+    }
+    handGroup.add(heldExtra);
   }
 }
 setHeldChangeHook(updateHeld);
@@ -378,12 +397,15 @@ export function update(dt, elapsed){
 // State snapshot for the network
 export function netState(){
   const m = state.mining;
+  const held = hotbarSlots[sel.slot];
+  const item = (held?.k==='f') ? held.id : 0;
   return {
     x:+player.pos.x.toFixed(2), y:+player.pos.y.toFixed(2), z:+player.pos.z.toFixed(2),
     yaw:+view.yaw.toFixed(2),
     mine: state.mineHeld && m ? [m.x,m.y,m.z,m.type] : 0,
     tool: slotTool(),
     blk: slotBlock(),
+    item, // non-block held item (food / weapon / material)
     skin: skinIdx(),
   };
 }

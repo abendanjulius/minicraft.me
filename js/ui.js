@@ -111,6 +111,7 @@ function bindItemInfo(el, name, blurb, onPick){
 export let invOpen = false;
 export function renderInv(){
   if(gm.forge){ renderInvForge(); return; }
+  // Tools row — always available so a swapped-out tool is never lost
   const tr = $('invTools'); tr.innerHTML = '';
   for(const t of TOOLS){
     if(t.id==='hand') continue;
@@ -126,6 +127,7 @@ export function renderInv(){
       ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
     tr.appendChild(d);
   }
+  // Blocks
   const grid = $('invGrid'); grid.innerHTML = '';
   let any = false;
   for(const tid in inventory){
@@ -134,15 +136,15 @@ export function renderInv(){
     const d = document.createElement('div');
     d.className = 'invItem';
     const isFood = +tid>=100;
-    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
-    const blurb = itemBlurb(+tid, TYPES, ITEMS);
     d.innerHTML = isFood
-      ? `<span class="ticon">${ITEMS[tid]?.icon || '❓'}</span><span class="cnt">${inventory[tid]}</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon || ''})"></div><span class="cnt">${inventory[tid]}</span>`;
+      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">${inventory[tid]}</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
     if(!isTouch){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
     }
+    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
+    const blurb = itemBlurb(+tid, TYPES, ITEMS);
     bindItemInfo(d, name, blurb,
       ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
     grid.appendChild(d);
@@ -157,14 +159,14 @@ export function switchTab(tab){
   tabHook?.(tab);
 }
 function renderInvForge(){
+  // Full catalog, everything infinite
   const tr = $('invTools'); tr.innerHTML = '';
   for(const t of TOOLS){
     if(t.id==='hand') continue;
     const d = document.createElement('div');
     d.className = 'invItem';
     d.innerHTML = `<span class="ticon">${t.icon}</span>`;
-    bindItemInfo(d, t.name, 'Mining tool — equip to the selected hotbar slot',
-      ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
+    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
     tr.appendChild(d);
   }
   const grid = $('invGrid'); grid.innerHTML = '';
@@ -173,15 +175,13 @@ function renderInvForge(){
     const isItem = tid>=100;
     const d = document.createElement('div');
     d.className = 'invItem';
-    const name = isItem ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
-    const blurb = itemBlurb(tid, TYPES, ITEMS);
-    d.title = name;
+    d.title = isItem ? ITEMS[tid].name : TYPES[tid].name;
     d.innerHTML = isItem
-      ? `<span class="ticon">${ITEMS[tid]?.icon || '❓'}</span><span class="cnt">∞</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon || ''})"></div><span class="cnt">∞</span>`;
-    bindItemInfo(d, name, blurb, ()=>{
+      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">∞</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">∞</span>`;
+    d.addEventListener('pointerdown', ()=>{
       hotbarSlots[sel.slot] = {k: isItem?'f':'b', id:tid};
-      if(isItem) inventory[tid] = 999;
+      inventory[tid] = 999; // Forge: hand model + place/eat
       renderHotbar();
     });
     grid.appendChild(d);
