@@ -156,6 +156,46 @@ function initTouch(hooks){
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
 }
 
+// ---- Chat ----
+export const chat = { open:false };
+export function addChat(name, text){
+  const log = $('chatLog');
+  const d = document.createElement('div');
+  d.className = 'chatMsg';
+  d.textContent = name + ': ' + text;
+  log.appendChild(d);
+  while(log.children.length>8) log.removeChild(log.firstChild);
+  setTimeout(()=>{ d.classList.add('fade'); setTimeout(()=>d.remove(), 1200); }, 9000);
+}
+export function openChat(){
+  if(chat.open) return;
+  chat.open = true;
+  $('chatRow').style.display = 'flex';
+  $('chatInput').focus();
+}
+export function closeChat(){
+  chat.open = false;
+  $('chatInput').value = '';
+  $('chatRow').style.display = 'none';
+  $('chatInput').blur();
+}
+export function initChat(onSend){
+  const inp = $('chatInput');
+  inp.addEventListener('keydown', e=>{
+    e.stopPropagation();
+    if(e.key==='Enter'){ const t = inp.value.trim(); if(t) onSend(t); closeChat(); }
+    if(e.key==='Escape') closeChat();
+  });
+  $('chatSend').addEventListener('pointerdown', ()=>{
+    const t = inp.value.trim(); if(t) onSend(t); closeChat();
+  });
+  $('btnChat').addEventListener('touchstart', e=>{ e.preventDefault(); openChat(); });
+}
+
+export function setCompass(deg){
+  $('compassArrow').style.transform = `rotate(${deg}deg)`;
+}
+
 export function setBanner(text){
   const b = $('banner');
   b.textContent = text || '';

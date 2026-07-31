@@ -13,10 +13,44 @@ export const renderer = new THREE.WebGLRenderer({antialias:false, powerPreferenc
 renderer.setPixelRatio(1);
 renderer.setSize(innerWidth, innerHeight);
 document.getElementById('game').appendChild(renderer.domElement);
-scene.add(new THREE.AmbientLight(0xffffff, .6));
+scene.add(new THREE.AmbientLight(0xffffff, 0)); // placeholder slot; real lights below
+const ambLight = new THREE.AmbientLight(0xffffff, .6);
+scene.add(ambLight);
 const sun = new THREE.DirectionalLight(0xffffff, .7);
 sun.position.set(1, 2, .5);
 scene.add(sun);
+
+// ---- Day/night cycle ----
+export const day = { t: .28 };            // 0..1; .25 ≈ noon
+const DAY_LEN = 240;                      // seconds per full day
+const skyDay = new THREE.Color(0x87ceeb), skyNight = new THREE.Color(0x0b1026), skyDusk = new THREE.Color(0xe8935a);
+function discTex(color){
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const g=c.getContext('2d'); g.fillStyle=color; g.beginPath(); g.arc(32,32,26,0,7); g.fill();
+  return new THREE.CanvasTexture(c);
+}
+const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#ffe9a8'), fog:false}));
+sunSpr.scale.set(9,9,1); scene.add(sunSpr);
+const moonSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#dfe7ff'), fog:false}));
+moonSpr.scale.set(5,5,1); scene.add(moonSpr);
+const _sky = new THREE.Color();
+export function setDayTime(t){ day.t = ((t%1)+1)%1; }
+export function updateDayNight(dt, focus){
+  day.t = (day.t + dt/DAY_LEN) % 1;
+  const ang = day.t*Math.PI*2;
+  const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), .3).normalize();
+  sun.position.copy(dir);
+  const dl = Math.max(0, Math.min(1, dir.y*2.2 + .15));       // daylight 0..1
+  const duskF = Math.max(0, 1 - Math.abs(dir.y)*4) * dl;      // near-horizon warmth
+  _sky.copy(skyNight).lerp(skyDay, dl).lerp(skyDusk, duskF*.55);
+  scene.background.copy(_sky);
+  scene.fog.color.copy(_sky);
+  ambLight.intensity = .18 + .45*dl;
+  sun.intensity = .15 + .6*dl;
+  sunSpr.position.copy(focus).addScaledVector(dir, VIEW*1.6);
+  moonSpr.position.copy(focus).addScaledVector(dir, -VIEW*1.6);
+  return dl; // 0 at night (mobs will want this later)
+}
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
@@ -178,6 +212,14 @@ export function spawnParticles(x,y,z,color,n){
     scene.add(m);
     particles.push({m, vel:new THREE.Vector3(jit(5.5), 2.5+Math.random()*3, jit(5.5)), life:.75});
   }
+}
+export function spawnDust(x,y,z,color){
+  if(particles.length>220) return;
+  const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color, transparent:true, opacity:.65}));
+  m.position.set(x+jit(.35), y, z+jit(.35));
+  m.scale.setScalar(.35+Math.random()*.3);
+  scene.add(m);
+  particles.push({m, vel:new THREE.Vector3(jit(1), .5+Math.random()*.7, jit(1)), life:.4});
 }
 export function updateParticles(dt){
   for(let i=particles.length-1;i>=0;i--){

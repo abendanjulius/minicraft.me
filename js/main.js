@@ -1,8 +1,9 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
-         updateParticles } from './render.js';
-import { initUI, toggleInv, setHud } from './ui.js';
+         updateParticles, updateDayNight } from './render.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass } from './ui.js';
+import { initAudio } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as net from './net.js';
@@ -28,10 +29,12 @@ function showError(msg){
 }
 
 $('btnSolo').addEventListener('click', ()=>{
+  initAudio();
   net.startSolo(getName());
   begin((Math.random()*2**31)|0, [], true);
 });
 $('btnHost').addEventListener('click', ()=>{
+  initAudio();
   const s = (Math.random()*2**31)|0;
   $('menuStatus').textContent = 'Creating room…';
   net.startHost(getName(), s,
@@ -39,6 +42,7 @@ $('btnHost').addEventListener('click', ()=>{
     e=>{ $('menuStatus').textContent=''; showError('Could not create room: '+(e?.type||e?.message||'network error')); });
 });
 $('btnJoin').addEventListener('click', ()=>{
+  initAudio();
   const code = $('codeInput').value.trim();
   if(code.length<4){ showError('Enter the room code from your host.'); return; }
   $('menuStatus').textContent = 'Connecting…';
@@ -84,6 +88,10 @@ initUI({
 });
 // clicking the canvas re-acquires pointer lock after Esc
 $('game').addEventListener('click', ()=>{ if(playerMod.state.playing) playerMod.relock(); });
+initChat(text=>{
+  addChat(localStorage.getItem('mc_name')||'Me', text);
+  net.sendChat(text);
+});
 
 // ---- Main loop ----
 let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0;
@@ -99,10 +107,15 @@ function loop(now){
 
   playerMod.update(dt, elapsed);
   if(playerMod.state.playing){
+    updateDayNight(dt, playerMod.player.pos);
     animals.update(dt, elapsed, playerMod.player.pos);
     net.update(dt, elapsed);
     cullTimer -= dt;
     if(cullTimer<=0){ updateChunkVisibility(playerMod.player.pos.x, playerMod.player.pos.z); cullTimer=.3; }
+    // Compass points home to spawn
+    const dx = CENTER - playerMod.player.pos.x, dz = CENTER - playerMod.player.pos.z;
+    const angle = Math.atan2(dx, dz) - playerMod.view.yaw;
+    setCompass(-angle * 180/Math.PI);
   }
   updateParticles(dt);
   renderer.render(scene, camera);

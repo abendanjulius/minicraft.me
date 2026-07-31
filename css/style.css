@@ -66,3 +66,14 @@ body.inv-open{cursor:default}
 /* Rotate prompt (touch portrait only) */
 #rotate{display:none;position:fixed;inset:0;background:#111;color:#fff;z-index:6;align-items:center;justify-content:center;text-align:center;font-size:18px;flex-direction:column}
 @media (orientation:portrait){ body.touch #rotate{display:flex} }
+
+/* v1.1 — compass, chat */
+#compass{position:fixed;top:10px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+#compassArrow{color:#ff6b5a;font-size:16px;display:block;transition:transform .1s linear}
+#chatLog{position:fixed;left:10px;bottom:130px;z-index:2;pointer-events:none;max-width:46vw}
+.chatMsg{background:rgba(0,0,0,.45);color:#fff;font-size:12px;padding:3px 8px;border-radius:4px;margin-top:3px;transition:opacity 1s;font-family:monospace;word-break:break-word}
+.chatMsg.fade{opacity:0}
+#chatRow{position:fixed;left:10px;bottom:96px;z-index:4;display:flex;gap:6px}
+#chatRow input{font-family:monospace;font-size:14px;padding:8px 10px;border:2px solid #555;border-radius:6px;background:rgba(20,20,20,.9);color:#fff;width:min(52vw,280px)}
+#chatRow button{font-size:14px;padding:0 14px;border:2px solid #555;border-radius:6px;background:#3c8bab;color:#fff;cursor:pointer}
+#btnChat{position:fixed;top:10px;right:64px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;z-index:3}

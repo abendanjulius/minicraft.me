@@ -34,7 +34,13 @@
 <div id="game"></div>
 
 <div id="hud" style="display:none">FPS: <span id="fps">0</span> &nbsp; XYZ: <span id="pos"></span> &nbsp; Tool: <span id="toolName">Hand</span> &nbsp; <span id="players"></span></div>
+<div id="compass"><span id="compassArrow">▲</span></div>
 <div id="banner" style="display:none"></div>
+<div id="chatLog"></div>
+<div id="chatRow" style="display:none">
+  <input id="chatInput" maxlength="120" placeholder="Say something…" autocomplete="off">
+  <button id="chatSend">➤</button>
+</div>
 <div id="crosshair">+</div>
 <div id="mineBar"><div></div></div>
 <div id="tools"></div>
@@ -53,6 +59,7 @@
   <div class="tbtn" id="btnMine">MINE</div>
   <div class="tbtn" id="btnPlace">PLACE</div>
   <div id="btnInv">🎒</div>
+  <div id="btnChat">💬</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

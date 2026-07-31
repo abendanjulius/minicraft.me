@@ -1,7 +1,9 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
-import { scene, camera, box, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES } from './render.js';
-import { setBanner, setPlayers } from './ui.js';
+import { scene, camera, box, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES,
+         day, setDayTime } from './render.js';
+import { setBanner, setPlayers, addChat } from './ui.js';
+import { sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 
@@ -74,6 +76,11 @@ function handle(msg, fromConn){
     if(mode==='host'){ editLog.push([msg.x,msg.y,msg.z,msg.v]); relay(msg, fromConn); }
   } else if(msg.t==='anim'){
     animals.applyRemote(msg.d);
+    if(msg.tod!==undefined) setDayTime(msg.tod);
+  } else if(msg.t==='chat'){
+    addChat(msg.name||'Player', String(msg.text).slice(0,120));
+    sfx.chat();
+    if(mode==='host') relay(msg, fromConn);
   } else if(msg.t==='bye'){
     removeRemote(msg.id);
     if(mode==='host') relay(msg, fromConn);
@@ -81,6 +88,12 @@ function handle(msg, fromConn){
 }
 function relay(msg, except){
   for(const c of conns) if(c!==except && c.open) c.send(msg);
+}
+export function sendChat(text){
+  if(mode==='solo') return;
+  const msg = {t:'chat', id:peer?.id, name:myName, text:String(text).slice(0,120)};
+  if(mode==='host') relay(msg, null);
+  else conns[0]?.open && conns[0].send(msg);
 }
 export function sendEdit(x,y,z,v){
   if(mode==='solo') return;
@@ -103,7 +116,7 @@ export function startHost(name, newSeed, onReady, onError){
   peer.on('connection', conn=>{
     conn.on('open', ()=>{
       conns.push(conn);
-      conn.send({t:'init', seed:newSeed, edits:editLog});
+      conn.send({t:'init', seed:newSeed, edits:editLog, tod:day.t});
     });
     conn.on('data', d=>handle(d, conn));
     conn.on('close', ()=>{ conns = conns.filter(c=>c!==conn); removeRemote(conn.peer); });
@@ -119,7 +132,7 @@ export function startJoin(name, code, onInit, onError){
     let gotInit = false;
     conn.on('open', ()=>{ conns=[conn]; setBanner(`Joined room ${code.toUpperCase()}`); });
     conn.on('data', d=>{
-      if(d.t==='init' && !gotInit){ gotInit = true; onInit(d.seed, d.edits); }
+      if(d.t==='init' && !gotInit){ gotInit = true; if(d.tod!==undefined) setDayTime(d.tod); onInit(d.seed, d.edits); }
       else handle(d, conn);
     });
     conn.on('close', ()=>setBanner('Disconnected from host'));
@@ -144,7 +157,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize()}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), tod:day.t}, null); }
   }
 
   // animate remote avatars

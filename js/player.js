@@ -1,9 +1,10 @@
 // player.js — local player: controls, physics, mining, first-person hand
 import { WORLD, WH, CENTER, getBlock, heightAt } from './world.js';
 import { camera, renderer, TYPES, TOOLS, isTouch, box, makeToolModel, makeBlockCube,
-         applyEdit, spawnParticles } from './render.js';
+         applyEdit, spawnParticles, spawnDust, jit } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar, renderTools,
-         addToInventory, setToolChangeHook } from './ui.js';
+         addToInventory, setToolChangeHook, chat, openChat } from './ui.js';
+import { sfx } from './audio.js';
 import * as net from './net.js';
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
@@ -12,6 +13,8 @@ export const state = { playing:false, mineHeld:false, mining:null }; // mining: 
 const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
+let shake = 0, wasGround = true, fallV = 0, stepTimer = 0;
+export function addShake(v){ shake = Math.min(.4, Math.max(shake, v)); }
 
 // ---- First-person hand & held item ----
 const handGroup = new THREE.Group();
@@ -63,12 +66,19 @@ export function initControls(){
     }
   });
   document.addEventListener('keydown', e=>{
+    if(chat.open) return; // typing in chat, not playing
+    if(e.code==='Enter' && state.playing){ for(const k in keys) keys[k]=false; openChat(); return; }
     keys[e.code]=true;
     if(e.code.startsWith('Digit')){ const n=+e.code[5]; if(n>=1&&n<=5){ sel.slot=n-1; renderHotbar(); } }
     if(e.code==='KeyE' && state.playing) toggleInv();
     if(e.code==='KeyQ'){ sel.tool=(sel.tool+1)%TOOLS.length; renderTools(); }
   });
   document.addEventListener('keyup', e=>keys[e.code]=false);
+  addEventListener('wheel', e=>{
+    if(!state.playing || invOpen || chat.open) return;
+    sel.slot = (sel.slot + (e.deltaY>0?1:-1) + 5) % 5;
+    renderHotbar();
+  }, {passive:true});
   document.addEventListener('mousedown', e=>{
     if(isTouch || !state.playing || invOpen) return;
     if(e.target.closest('#hotbar,#inv,#tools')) return;
@@ -119,6 +129,7 @@ export function placeAction(){
   applyEdit(px,py,pz,tid,false);
   inventory[tid]--;
   placeAnim = 1;
+  sfx.place();
   renderHotbar();
   net.sendEdit(px,py,pz,tid);
 }
@@ -135,16 +146,17 @@ function updateMining(dt){
     const t = getBlock(bx,by,bz);
     const tool = TOOLS[sel.tool];
     const speed = tool.good.includes(t) ? 4 : 1;
-    m = state.mining = {x:bx,y:by,z:bz, progress:0, total:TYPES[t].hard/speed, emit:0, type:t};
+    m = state.mining = {x:bx,y:by,z:bz, progress:0, total:TYPES[t].hard/speed, emit:0, snd:0, type:t};
   }
   m.progress += dt;
-  m.emit -= dt;
+  m.emit -= dt; m.snd -= dt;
   if(m.emit<=0){ spawnParticles(bx,by,bz,TYPES[m.type].pc,4); m.emit=.1; }
+  if(m.snd<=0){ sfx.tick(m.type); m.snd=.2; }
   mineBar.style.display='block';
   mineFill.style.width = Math.min(100, m.progress/m.total*100)+'%';
   if(m.progress >= m.total){
     const old = applyEdit(bx,by,bz,0,true);
-    if(old) addToInventory(old);
+    if(old){ addToInventory(old); sfx.break(old); addShake(.16); }
     net.sendEdit(bx,by,bz,0);
     state.mining = null;
   }
@@ -171,7 +183,8 @@ export function update(dt, elapsed){
     move.multiplyScalar(speed);
     player.vel.x = move.x; player.vel.z = move.z;
     player.vel.y -= 20*dt;
-    if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; }
+    if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; sfx.jump(); }
+    fallV = player.vel.y;
 
     for(const axis of ['x','z','y']){
       const step = player.vel[axis]*dt;
@@ -181,6 +194,23 @@ export function update(dt, elapsed){
         if(axis==='y'){ if(player.vel.y<0) player.onGround=true; player.vel.y=0; }
       } else if(axis==='y' && player.vel.y<0){ player.onGround=false; }
     }
+    if(player.onGround && !wasGround && fallV < -8){
+      sfx.land();
+      addShake(Math.min(.22, -fallV*.015));
+    }
+    wasGround = player.onGround;
+
+    // Footsteps + dust
+    const movingH = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
+    if(movingH && player.onGround){
+      stepTimer -= dt;
+      if(stepTimer<=0){
+        stepTimer = .34;
+        const bt = getBlock(Math.round(player.pos.x), Math.round(player.pos.y-1), Math.round(player.pos.z)) || 1;
+        sfx.step(bt);
+        if(bt===2||bt===6||bt===1) spawnDust(player.pos.x, player.pos.y+.05, player.pos.z, TYPES[bt].pc);
+      }
+    } else stepTimer = 0;
     if(player.pos.x < -0.5)       player.pos.x += WORLD;
     if(player.pos.x >= WORLD-0.5) player.pos.x -= WORLD;
     if(player.pos.z < -0.5)       player.pos.z += WORLD;
@@ -194,16 +224,23 @@ export function update(dt, elapsed){
 
   camera.position.copy(player.pos).add(new THREE.Vector3(0,1.6,0));
   camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+  if(shake>0){
+    camera.position.x += jit(shake);
+    camera.position.y += jit(shake*.7);
+    shake = Math.max(0, shake - dt*1.5);
+  }
 
-  // Hand animation
+  // Hand animation — bigger, punchier swing with a forward jab
   const movingNow = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
   handBob += dt * (movingNow ? 7 : 2);
   let swing = 0;
-  if(state.mineHeld && !invOpen){ swingT += dt*13; swing = -Math.abs(Math.sin(swingT))*.85; }
+  if(state.mineHeld && !invOpen){ swingT += dt*13; swing = -Math.abs(Math.sin(swingT))*1.05; }
   else swingT = 0;
-  if(placeAnim > 0){ placeAnim -= dt*4; swing = Math.min(swing, -Math.sin(Math.max(0,placeAnim)*Math.PI)*.85); }
+  if(placeAnim > 0){ placeAnim -= dt*4; swing = Math.min(swing, -Math.sin(Math.max(0,placeAnim)*Math.PI)*1.05); }
   handGroup.rotation.x = -.2 + swing;
-  handGroup.position.y = -.45 + Math.sin(handBob)*.015;
+  handGroup.rotation.y = .15 + swing*.2;
+  handGroup.position.z = -.8 + swing*.14;
+  handGroup.position.y = -.45 + Math.sin(handBob)*.015 + swing*.05;
   handGroup.position.x = .5 + Math.cos(handBob*.5)*.012;
 }
 
