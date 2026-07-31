@@ -1,50 +1,54 @@
-// ui.js — hotbar, inventory, tool row, touch controls, banners
+// ui.js — 10-slot hotbar (tools live in slots), inventory, chat, compass, touch controls
 import { TYPES, TOOLS, isTouch } from './render.js';
 
 export const inventory = {};
-export const hotbarSlots = [null,null,null,null,null];
-export const sel = { slot:0, tool:0 };   // shared selection state
-export const joy = { x:0, y:0 };         // virtual joystick output
+// Slots hold null | {k:'b', id:blockType} | {k:'t', id:toolId}. Tools start in slots 8/9/0.
+export const hotbarSlots = new Array(10).fill(null);
+hotbarSlots[7] = {k:'t', id:'pick'};
+hotbarSlots[8] = {k:'t', id:'axe'};
+hotbarSlots[9] = {k:'t', id:'shovel'};
+export const sel = { slot:0 };
+export const joy = { x:0, y:0 };
 
 const $ = id=>document.getElementById(id);
-let onToolChange = null, playerHooks = null;
+let onHeldChange = null, playerHooks = null;
+const toolInfo = id=>TOOLS.find(t=>t.id===id);
+
+// What the selected slot means
+export function slotTool(){ const s = hotbarSlots[sel.slot]; return (s && s.k==='t') ? s.id : 'hand'; }
+export function slotBlock(){ const s = hotbarSlots[sel.slot]; return (s && s.k==='b') ? s.id : 0; }
+export function nextToolSlot(){
+  for(let i=1;i<=10;i++){
+    const j = (sel.slot+i)%10;
+    if(hotbarSlots[j]?.k==='t'){ sel.slot=j; renderHotbar(); return; }
+  }
+}
 
 export function addToInventory(t){
   inventory[t] = (inventory[t]||0)+1;
-  if(!hotbarSlots.includes(t)){
-    const empty = hotbarSlots.indexOf(null);
-    if(empty !== -1) hotbarSlots[empty] = t;
+  if(!hotbarSlots.some(s=>s?.k==='b' && s.id===t)){
+    const empty = hotbarSlots.findIndex(s=>s===null);
+    if(empty !== -1) hotbarSlots[empty] = {k:'b', id:t};
   }
   renderHotbar();
   if(invOpen) renderInv();
 }
-
-export function renderTools(){
-  const div = $('tools'); div.innerHTML = '';
-  TOOLS.forEach((t,i)=>{
-    const d = document.createElement('div');
-    d.className = 'slot tool' + (i===sel.tool?' active':'');
-    d.textContent = t.icon;
-    d.title = t.name;
-    d.addEventListener('pointerdown', e=>{
-      e.stopPropagation();
-      sel.tool = i; renderTools();
-      $('toolName').textContent = t.name;
-    });
-    div.appendChild(d);
-  });
-  onToolChange?.();
-}
-export function setToolChangeHook(fn){ onToolChange = fn; }
+export function setHeldChangeHook(fn){ onHeldChange = fn; }
 
 export function renderHotbar(){
   const hb = $('hotbar'); hb.innerHTML = '';
-  hotbarSlots.forEach((tid,i)=>{
+  hotbarSlots.forEach((s,i)=>{
     const d = document.createElement('div');
-    const count = tid ? (inventory[tid]||0) : 0;
-    d.className = 'slot' + (i===sel.slot?' active':'') + (tid?'':' empty') + (tid&&!count?' zero':'');
-    d.innerHTML = `<span class="num">${i+1}</span><div class="sw" ${tid?`style="background-image:url(${TYPES[tid].icon})"`:''}></div>${tid?`<span class="cnt">${count}</span>`:''}`;
-    if(tid && !isTouch){
+    const isBlock = s?.k==='b', isTool = s?.k==='t';
+    const count = isBlock ? (inventory[s.id]||0) : 0;
+    d.className = 'slot' + (i===sel.slot?' active':'') + (s?'':' empty') + (isBlock&&!count?' zero':'');
+    const label = (i+1)%10;
+    if(isTool){
+      d.innerHTML = `<span class="num">${label}</span><span class="ticon">${toolInfo(s.id).icon}</span>`;
+    } else {
+      d.innerHTML = `<span class="num">${label}</span><div class="sw" ${isBlock?`style="background-image:url(${TYPES[s.id].icon})"`:''}></div>${isBlock?`<span class="cnt">${count}</span>`:''}`;
+    }
+    if(s && !isTouch){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','slot:'+i));
     }
@@ -52,7 +56,8 @@ export function renderHotbar(){
     d.addEventListener('drop', e=>{
       e.preventDefault();
       const data = e.dataTransfer.getData('text/plain');
-      if(data.startsWith('inv:')) hotbarSlots[i] = +data.slice(4);
+      if(data.startsWith('invb:')) hotbarSlots[i] = {k:'b', id:+data.slice(5)};
+      else if(data.startsWith('invt:')) hotbarSlots[i] = {k:'t', id:data.slice(5)};
       else if(data.startsWith('slot:')){
         const j = +data.slice(5);
         [hotbarSlots[i], hotbarSlots[j]] = [hotbarSlots[j], hotbarSlots[i]];
@@ -62,11 +67,30 @@ export function renderHotbar(){
     d.addEventListener('pointerdown', e=>{ e.stopPropagation(); sel.slot=i; renderHotbar(); });
     hb.appendChild(d);
   });
-  onToolChange?.(); // held item may have changed
+  // HUD label for what's held
+  const t = slotTool(), b = slotBlock();
+  $('toolName').textContent = t!=='hand' ? toolInfo(t).name : (b ? TYPES[b].name : 'Hand');
+  onHeldChange?.();
 }
 
 export let invOpen = false;
 export function renderInv(){
+  // Tools row — always available so a swapped-out tool is never lost
+  const tr = $('invTools'); tr.innerHTML = '';
+  for(const t of TOOLS){
+    if(t.id==='hand') continue;
+    const d = document.createElement('div');
+    d.className = 'invItem';
+    d.innerHTML = `<span class="ticon">${t.icon}</span>`;
+    d.title = t.name;
+    if(!isTouch){
+      d.draggable = true;
+      d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invt:'+t.id));
+    }
+    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
+    tr.appendChild(d);
+  }
+  // Blocks
   const grid = $('invGrid'); grid.innerHTML = '';
   let any = false;
   for(const tid in inventory){
@@ -77,9 +101,9 @@ export function renderInv(){
     d.innerHTML = `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
     if(!isTouch){
       d.draggable = true;
-      d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','inv:'+tid));
+      d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
     }
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = +tid; renderHotbar(); });
+    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'b', id:+tid}; renderHotbar(); });
     grid.appendChild(d);
   }
   if(!any) grid.innerHTML = '<span class="empty-note">Nothing yet — go mine some blocks.</span>';
@@ -95,15 +119,15 @@ export function toggleInv(open){
 export function initUI(hooks){
   playerHooks = hooks;
   $('invHelp').textContent = isTouch
-    ? 'Tap a block to put it in the selected hotbar slot. (🎒 to close)'
-    : 'Drag a block onto a hotbar slot, or tap one to fill the selected slot. Drop a slot here to clear it. (E to close)';
+    ? 'Tap a tool or block to put it in the selected hotbar slot. (🎒 to close)'
+    : 'Drag items onto hotbar slots, or tap to fill the selected slot. Drop a slot here to clear it. (E to close)';
   $('inv').addEventListener('dragover', e=>e.preventDefault());
   $('inv').addEventListener('drop', e=>{
     const data = e.dataTransfer.getData('text/plain');
     if(data.startsWith('slot:')){ hotbarSlots[+data.slice(5)] = null; renderHotbar(); }
   });
   $('invClear').addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot]=null; renderHotbar(); });
-  renderHotbar(); renderTools();
+  renderHotbar();
   if(isTouch) initTouch(hooks);
 }
 
@@ -195,16 +219,14 @@ export function initChat(onSend){
 export function setCompass(deg){
   $('compassArrow').style.transform = `rotate(${deg}deg)`;
 }
-
 export function setBanner(text){
   const b = $('banner');
   b.textContent = text || '';
   b.style.display = text ? 'block' : 'none';
 }
-export function setHud(fps, pos, tool){
+export function setHud(fps, pos){
   $('fps').textContent = fps;
   $('pos').textContent = pos;
-  if(tool) $('toolName').textContent = tool;
 }
 export function setPlayers(list){
   $('players').textContent = list.length ? '👥 ' + list.join(', ') : '';

@@ -1,6 +1,6 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
-import { scene, camera, box, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES,
+import { scene, camera, box, makeToolModel, makeBlockCube, applyEdit, spawnParticles, TYPES, SKINS,
          day, setDayTime } from './render.js';
 import { setBanner, setPlayers, addChat } from './ui.js';
 import { sfx } from './audio.js';
@@ -33,15 +33,15 @@ function nameSprite(name){
   s.scale.set(1.6,.4,1);
   return s;
 }
-function makeAvatar(name){
+function makeAvatar(name, skinIdx=0){
   const g = new THREE.Group();
-  const shirt = 0x2c7fb8, pants = 0x3a3f5c, skin = 0xdba97c;
-  g.add(box(.5,.7,.28,shirt,0,1.05,0));                  // torso
-  const head = box(.42,.42,.42,skin,0,1.6,0); g.add(head);
-  const armR = box(.16,.6,.16,skin,.34,1.1,0); g.add(armR);
-  g.add(box(.16,.6,.16,skin,-.34,1.1,0));
-  const legL = box(.2,.7,.2,pants,.13,.35,0); g.add(legL);
-  const legR = box(.2,.7,.2,pants,-.13,.35,0); g.add(legR);
+  const sk = SKINS[skinIdx] || SKINS[0];
+  g.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));                    // torso
+  const head = box(.42,.42,.42, sk.skin, 0,1.6,0); g.add(head);
+  const armR = box(.16,.6,.16, sk.skin, .34,1.1,0); g.add(armR);
+  g.add(box(.16,.6,.16, sk.skin, -.34,1.1,0));
+  const legL = box(.2,.7,.2, sk.pants, .13,.35,0); g.add(legL);
+  const legR = box(.2,.7,.2, sk.pants, -.13,.35,0); g.add(legR);
   const tag = nameSprite(name); tag.position.y = 2.1; g.add(tag);
   const held = new THREE.Group(); held.position.set(.34,.8,-.15); armR.name='armR'; g.add(held);
   scene.add(g);
@@ -67,7 +67,7 @@ function refreshPlayerList(){
 function handle(msg, fromConn){
   if(msg.t==='pos'){
     let r = remotes.get(msg.id);
-    if(!r){ r = makeAvatar(msg.name||'Player'); remotes.set(msg.id, r); refreshPlayerList(); }
+    if(!r){ r = makeAvatar(msg.name||'Player', msg.skin|0); remotes.set(msg.id, r); refreshPlayerList(); }
     r.tgt = msg;
     setHeldItem(r, msg.tool, msg.blk);
     if(mode==='host') relay(msg, fromConn);
@@ -87,19 +87,33 @@ function handle(msg, fromConn){
   }
 }
 function relay(msg, except){
-  for(const c of conns) if(c!==except && c.open) c.send(msg);
+  // A tab closed without warning can leave a dead conn that still claims to be open.
+  // If sending throws, prune it — otherwise one dead conn blocks everyone after it.
+  for(let i=conns.length-1;i>=0;i--){
+    const c = conns[i];
+    if(c===except || !c.open) continue;
+    try{ c.send(msg); }
+    catch(e){
+      conns.splice(i,1);
+      try{ c.close(); }catch(_){}
+      removeRemote(c.peer);
+    }
+  }
+}
+function safeSendHost(msg){
+  try{ conns[0]?.open && conns[0].send(msg); }catch(e){ setBanner('Disconnected from host'); }
 }
 export function sendChat(text){
   if(mode==='solo') return;
   const msg = {t:'chat', id:peer?.id, name:myName, text:String(text).slice(0,120)};
   if(mode==='host') relay(msg, null);
-  else conns[0]?.open && conns[0].send(msg);
+  else safeSendHost(msg);
 }
 export function sendEdit(x,y,z,v){
   if(mode==='solo') return;
   const msg = {t:'edit', x,y,z, v, id:peer?.id};
   if(mode==='host'){ editLog.push([x,y,z,v]); relay(msg,null); }
-  else conns[0]?.send(msg);
+  else safeSendHost(msg);
 }
 
 // ---- Session starters ----
@@ -152,7 +166,7 @@ export function update(dt, elapsed){
     posTimer = .08;
     const msg = {t:'pos', id:peer.id, name:myName, ...playerMod.netState()};
     if(mode==='host') relay(msg,null);
-    else conns[0]?.open && conns[0].send(msg);
+    else safeSendHost(msg);
   }
   // host broadcasts animals 5x/s
   if(mode==='host'){
@@ -195,6 +209,6 @@ export function update(dt, elapsed){
 addEventListener('beforeunload', ()=>{
   if(peer?.id && mode!=='solo'){
     const msg = {t:'bye', id:peer.id};
-    if(mode==='host') relay(msg,null); else conns[0]?.open && conns[0].send(msg);
+    if(mode==='host') relay(msg,null); else safeSendHost(msg);
   }
 });

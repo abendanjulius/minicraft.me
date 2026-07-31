@@ -37,11 +37,59 @@ function noise({dur=.12,vol=.2,freq=800,q=1}){
 const PITCH = {1:700,2:600,3:1400,4:900,5:1800,6:500,7:950,8:1350,9:2400};
 let stepAlt=false;
 export const sfx = {
-  break: t=>{ noise({dur:.18,vol:.3,freq:(PITCH[t]||800)*.7,q:.8}); osc({freq:(PITCH[t]||800)*.35,end:60,type:'triangle',dur:.15,vol:.12}); },
-  tick:  t=>noise({dur:.05,vol:.12,freq:PITCH[t]||900,q:2}),
-  place: ()=>{ osc({freq:220,end:160,type:'square',dur:.08,vol:.14}); noise({dur:.05,vol:.1,freq:500,q:1}); },
-  step:  t=>{ stepAlt=!stepAlt; noise({dur:.05,vol:.06,freq:(PITCH[t]||700)*.5*(stepAlt?1.15:1),q:1.4}); },
-  jump:  ()=>osc({freq:300,end:520,type:'sine',dur:.12,vol:.1}),
-  land:  ()=>noise({dur:.09,vol:.16,freq:350,q:.9}),
-  chat:  ()=>osc({freq:900,end:1200,type:'sine',dur:.08,vol:.08}),
+  break: t=>{ noise({dur:.18,vol:.38,freq:(PITCH[t]||800)*.7,q:.8}); osc({freq:(PITCH[t]||800)*.35,end:60,type:'triangle',dur:.15,vol:.15}); },
+  tick:  t=>noise({dur:.05,vol:.15,freq:PITCH[t]||900,q:2}),
+  place: ()=>{ osc({freq:220,end:160,type:'square',dur:.08,vol:.18}); noise({dur:.05,vol:.12,freq:500,q:1}); },
+  step:  t=>{ stepAlt=!stepAlt; noise({dur:.05,vol:.08,freq:(PITCH[t]||700)*.5*(stepAlt?1.15:1),q:1.4}); },
+  jump:  ()=>osc({freq:300,end:520,type:'sine',dur:.12,vol:.12}),
+  land:  ()=>noise({dur:.09,vol:.2,freq:350,q:.9}),
+  chat:  ()=>osc({freq:900,end:1200,type:'sine',dur:.08,vol:.1}),
 };
+
+// ---- Background music: slow generative pads + occasional plucks, deliberately quiet ----
+let musicOn = false, padTimer = null, pluckTimer = null, musicGain = null, chordIdx = 0;
+const CHORDS = [
+  [130.81,196.00,261.63],  // C
+  [110.00,164.81,220.00],  // Am
+  [ 87.31,130.81,174.61],  // F
+  [ 98.00,146.83,196.00],  // G
+];
+const SCALE = [261.63,293.66,329.63,392.00,440.00,523.25]; // C pentatonic
+function playPad(){
+  if(!musicOn || !ctx) return;
+  const notes = CHORDS[chordIdx++ % CHORDS.length];
+  for(const f of notes){
+    const t=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(.02,t+3);
+    g.gain.linearRampToValueAtTime(0,t+9);
+    o.connect(g).connect(musicGain);
+    o.start(t); o.stop(t+9.5);
+  }
+  padTimer = setTimeout(playPad, 8000);
+}
+function playPluck(){
+  if(!musicOn || !ctx) return;
+  if(Math.random()<.65){
+    const f = SCALE[Math.floor(Math.random()*SCALE.length)];
+    const t=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='triangle'; o.frequency.value=f;
+    g.gain.setValueAtTime(.045,t);
+    g.gain.exponentialRampToValueAtTime(.0001,t+1.4);
+    o.connect(g).connect(musicGain);
+    o.start(t); o.stop(t+1.5);
+  }
+  pluckTimer = setTimeout(playPluck, 2500+Math.random()*3500);
+}
+export function startMusic(){
+  if(!ctx || musicOn) return;
+  musicOn = true;
+  if(!musicGain){ musicGain = ctx.createGain(); musicGain.gain.value = .6; musicGain.connect(ctx.destination); }
+  playPad(); playPluck();
+}
+export function stopMusic(){
+  musicOn = false;
+  clearTimeout(padTimer); clearTimeout(pluckTimer);
+}
+export function toggleMusic(){ musicOn ? stopMusic() : startMusic(); }

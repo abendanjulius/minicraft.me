@@ -105,6 +105,13 @@ export const TOOLS = [
   {id:'axe',    name:'Axe',     icon:'🪓', good:[4,5,7]},
   {id:'shovel', name:'Shovel',  icon:'🪏', good:[1,2,6]},
 ];
+export const SKINS = [
+  {name:'Alex',   shirt:0x2c7fb8, pants:0x3a3f5c, skin:0xdba97c},
+  {name:'Scout',  shirt:0x4caf50, pants:0x33691e, skin:0xd8a271},
+  {name:'Miner',  shirt:0xe07b39, pants:0x5d4037, skin:0xc98e5a},
+  {name:'Frost',  shirt:0x90caf9, pants:0xeceff1, skin:0xf0c8a0},
+  {name:'Shadow', shirt:0x37474f, pants:0x212121, skin:0x8d6e63},
+];
 
 // ---- Small helpers used by hand, avatars, animals ----
 export function box(w,h,d,color,x,y,z){

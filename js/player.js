@@ -1,27 +1,30 @@
-// player.js — local player: controls, physics, mining, first-person hand
+// player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt } from './world.js';
-import { camera, renderer, TYPES, TOOLS, isTouch, box, makeToolModel, makeBlockCube,
+import { scene, camera, renderer, TYPES, TOOLS, SKINS, isTouch, box, makeToolModel, makeBlockCube,
          applyEdit, spawnParticles, spawnDust, jit } from './render.js';
-import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar, renderTools,
-         addToInventory, setToolChangeHook, chat, openChat } from './ui.js';
-import { sfx } from './audio.js';
+import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
+         addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
+         chat, openChat } from './ui.js';
+import { sfx, toggleMusic } from './audio.js';
 import * as net from './net.js';
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
-export const state = { playing:false, mineHeld:false, mining:null }; // mining: {x,y,z,progress,total,emit,type}
+export const state = { playing:false, mineHeld:false, mining:null };
 const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
 let shake = 0, wasGround = true, fallV = 0, stepTimer = 0;
 export function addShake(v){ shake = Math.min(.4, Math.max(shake, v)); }
+export const skinIdx = ()=>Math.min(SKINS.length-1, Math.max(0, +(localStorage.getItem('mc_skin')||0)));
 
 // ---- First-person hand & held item ----
 const handGroup = new THREE.Group();
 camera.add(handGroup);
 handGroup.position.set(.5,-.45,-.8);
 handGroup.rotation.set(-.2,.15,0);
-handGroup.add(box(.16,.16,.5,0xdba97c,0,0,.05));
+const armMesh = box(.16,.16,.5,0xdba97c,0,0,.05);
+handGroup.add(armMesh);
 const toolModels = {};
 for(const t of TOOLS) if(t.id!=='hand'){
   const m = makeToolModel(t.id);
@@ -30,20 +33,38 @@ for(const t of TOOLS) if(t.id!=='hand'){
 }
 let heldBlockMesh = null;
 function updateHeld(){
-  for(const id in toolModels) toolModels[id].visible = (TOOLS[sel.tool].id===id);
+  const tool = slotTool(), blk = slotBlock();
+  for(const id in toolModels) toolModels[id].visible = (tool===id);
   if(heldBlockMesh){ handGroup.remove(heldBlockMesh); heldBlockMesh = null; }
-  const tid = hotbarSlots[sel.slot];
-  if(TOOLS[sel.tool].id==='hand' && tid && inventory[tid]>0){
-    heldBlockMesh = makeBlockCube(tid);
+  if(tool==='hand' && blk && inventory[blk]>0){
+    heldBlockMesh = makeBlockCube(blk);
     heldBlockMesh.position.set(0,.05,-.3);
     handGroup.add(heldBlockMesh);
   }
 }
-setToolChangeHook(updateHeld);
+setHeldChangeHook(updateHeld);
+
+// ---- Visible first-person body (torso/arms/legs seen when looking down) ----
+let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null;
+function buildBody(){
+  if(bodyG) scene.remove(bodyG);
+  const sk = SKINS[skinIdx()];
+  bodyG = new THREE.Group();
+  bodyG.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));                 // torso (no head — camera is the head)
+  bArmL = box(.16,.6,.16, sk.skin, -.34,1.1,0); bodyG.add(bArmL);
+  bArmR = box(.16,.6,.16, sk.skin,  .34,1.1,0); bodyG.add(bArmR);
+  bLegL = box(.2,.7,.2, sk.pants,  .13,.35,0); bodyG.add(bLegL);
+  bLegR = box(.2,.7,.2, sk.pants, -.13,.35,0); bodyG.add(bLegR);
+  bodyG.visible = false;
+  scene.add(bodyG);
+  armMesh.material.color.setHex(sk.skin); // first-person arm matches skin
+}
 
 export function spawn(){
   player.pos.set(CENTER, heightAt(CENTER,CENTER)+3, CENTER);
   player.vel.set(0,0,0);
+  buildBody();
+  bodyG.visible = true;
 }
 export function look(dx,dy){
   view.yaw -= dx; view.pitch -= dy;
@@ -66,22 +87,27 @@ export function initControls(){
     }
   });
   document.addEventListener('keydown', e=>{
-    if(chat.open) return; // typing in chat, not playing
+    if(chat.open) return;
     if(e.code==='Enter' && state.playing){ for(const k in keys) keys[k]=false; openChat(); return; }
     keys[e.code]=true;
-    if(e.code.startsWith('Digit')){ const n=+e.code[5]; if(n>=1&&n<=5){ sel.slot=n-1; renderHotbar(); } }
+    if(e.code.startsWith('Digit')){
+      const n = +e.code[5];
+      const slot = n===0 ? 9 : n-1;
+      if(slot>=0 && slot<10){ sel.slot=slot; renderHotbar(); }
+    }
     if(e.code==='KeyE' && state.playing) toggleInv();
-    if(e.code==='KeyQ'){ sel.tool=(sel.tool+1)%TOOLS.length; renderTools(); }
+    if(e.code==='KeyQ') nextToolSlot();
+    if(e.code==='KeyM') toggleMusic();
   });
   document.addEventListener('keyup', e=>keys[e.code]=false);
   addEventListener('wheel', e=>{
     if(!state.playing || invOpen || chat.open) return;
-    sel.slot = (sel.slot + (e.deltaY>0?1:-1) + 5) % 5;
+    sel.slot = (sel.slot + (e.deltaY>0?1:-1) + 10) % 10;
     renderHotbar();
   }, {passive:true});
   document.addEventListener('mousedown', e=>{
     if(isTouch || !state.playing || invOpen) return;
-    if(e.target.closest('#hotbar,#inv,#tools')) return;
+    if(e.target.closest('#hotbar,#inv,#btnQuit')) return;
     if(usingLock){
       if(e.button===0) state.mineHeld = true;
       else if(e.button===2) placeAction();
@@ -120,7 +146,7 @@ export function castBlock(){
 export function placeAction(){
   const r = castBlock();
   if(!r || !r.place) return;
-  const tid = hotbarSlots[sel.slot];
+  const tid = slotBlock();
   if(!tid || !(inventory[tid]>0)) return;
   const [px,py,pz] = r.place;
   if(py<0||py>=WH) return;
@@ -144,7 +170,7 @@ function updateMining(dt){
   let m = state.mining;
   if(!m || m.x!==bx || m.y!==by || m.z!==bz){
     const t = getBlock(bx,by,bz);
-    const tool = TOOLS[sel.tool];
+    const tool = TOOLS.find(x=>x.id===slotTool());
     const speed = tool.good.includes(t) ? 4 : 1;
     m = state.mining = {x:bx,y:by,z:bz, progress:0, total:TYPES[t].hard/speed, emit:0, snd:0, type:t};
   }
@@ -200,7 +226,6 @@ export function update(dt, elapsed){
     }
     wasGround = player.onGround;
 
-    // Footsteps + dust
     const movingH = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
     if(movingH && player.onGround){
       stepTimer -= dt;
@@ -211,6 +236,7 @@ export function update(dt, elapsed){
         if(bt===2||bt===6||bt===1) spawnDust(player.pos.x, player.pos.y+.05, player.pos.z, TYPES[bt].pc);
       }
     } else stepTimer = 0;
+
     if(player.pos.x < -0.5)       player.pos.x += WORLD;
     if(player.pos.x >= WORLD-0.5) player.pos.x -= WORLD;
     if(player.pos.z < -0.5)       player.pos.z += WORLD;
@@ -230,7 +256,25 @@ export function update(dt, elapsed){
     shake = Math.max(0, shake - dt*1.5);
   }
 
-  // Hand animation — bigger, punchier swing with a forward jab
+  // Body follows player, faces view direction, walks and swings
+  if(bodyG){
+    bodyG.position.copy(player.pos);
+    bodyG.rotation.y = view.yaw + Math.PI;
+    const movingNow2 = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
+    if(movingNow2){
+      const sw = Math.sin(elapsed*9)*.6;
+      bLegL.rotation.x = sw; bLegR.rotation.x = -sw;
+      bArmL.rotation.x = -sw*.7;
+      if(!state.mineHeld) bArmR.rotation.x = sw*.7;
+    } else {
+      bLegL.rotation.x *= .8; bLegR.rotation.x *= .8;
+      bArmL.rotation.x *= .8;
+      if(!state.mineHeld) bArmR.rotation.x *= .8;
+    }
+    if(state.mineHeld && !invOpen) bArmR.rotation.x = -1 - Math.abs(Math.sin(swingT))*.9;
+  }
+
+  // First-person hand animation
   const movingNow = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
   handBob += dt * (movingNow ? 7 : 2);
   let swing = 0;
@@ -251,7 +295,8 @@ export function netState(){
     x:+player.pos.x.toFixed(2), y:+player.pos.y.toFixed(2), z:+player.pos.z.toFixed(2),
     yaw:+view.yaw.toFixed(2),
     mine: state.mineHeld && m ? [m.x,m.y,m.z,m.type] : 0,
-    tool: TOOLS[sel.tool].id,
-    blk: hotbarSlots[sel.slot] || 0,
+    tool: slotTool(),
+    blk: slotBlock(),
+    skin: skinIdx(),
   };
 }

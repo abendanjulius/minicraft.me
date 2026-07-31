@@ -17,6 +17,7 @@
   <h1>⛏ MiniCraft</h1>
   <p class="tagline">A tiny blocky world in your browser · minicraft.me</p>
   <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="off">
+  <div id="skinRow"></div>
   <button id="btnSolo" class="mbtn">▶ Play Solo</button>
   <button id="btnHost" class="mbtn">🌐 Host Game</button>
   <div class="joinRow">
@@ -43,21 +44,24 @@
 </div>
 <div id="crosshair">+</div>
 <div id="mineBar"><div></div></div>
-<div id="tools"></div>
 <div id="hotbar"></div>
+<div id="btnQuit" style="display:none" title="Quit to menu">🚪</div>
 
 <div id="inv">
   <h3>Inventory</h3>
   <p id="invHelp"></p>
+  <div class="invLabel">Tools</div>
+  <div id="invTools"></div>
+  <div class="invLabel">Blocks</div>
   <div id="invGrid"></div>
   <button id="invClear">Clear selected slot</button>
 </div>
 
 <div id="touchUI">
   <div id="joyZone"><div id="joyBase"></div><div id="joyStick"></div></div>
-  <div class="tbtn" id="btnJump">JUMP</div>
-  <div class="tbtn" id="btnMine">MINE</div>
-  <div class="tbtn" id="btnPlace">PLACE</div>
+  <div class="tbtn" id="btnJump">⬆️</div>
+  <div class="tbtn" id="btnMine">⛏️</div>
+  <div class="tbtn" id="btnPlace">🧱</div>
   <div id="btnInv">🎒</div>
   <div id="btnChat">💬</div>
 </div>

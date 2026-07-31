@@ -1,14 +1,37 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
-         updateParticles, updateDayNight } from './render.js';
+         updateParticles, updateDayNight, SKINS } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass } from './ui.js';
-import { initAudio } from './audio.js';
+import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as net from './net.js';
 
 const $ = id=>document.getElementById(id);
+
+// ---- Character picker ----
+function buildSkinRow(){
+  const row = $('skinRow');
+  const cur = playerMod.skinIdx();
+  row.innerHTML = '';
+  SKINS.forEach((s,i)=>{
+    const d = document.createElement('button');
+    d.className = 'skinBtn' + (i===cur?' active':'');
+    d.title = s.name;
+    d.innerHTML = `<span class="skHead" style="background:#${s.skin.toString(16).padStart(6,'0')}"></span>
+                   <span class="skBody" style="background:#${s.shirt.toString(16).padStart(6,'0')}"></span>
+                   <span class="skLegs" style="background:#${s.pants.toString(16).padStart(6,'0')}"></span>`;
+    d.addEventListener('click', ()=>{ localStorage.setItem('mc_skin', i); buildSkinRow(); });
+    row.appendChild(d);
+  });
+}
+buildSkinRow();
+
+// ---- Quit ----
+function quitGame(){ if(confirm('Quit to menu? (world is not saved yet)')) location.reload(); }
+$('btnQuit').addEventListener('click', quitGame);
+$('btnQuit').addEventListener('touchstart', e=>{ e.preventDefault(); quitGame(); });
 
 // ---- PWA ----
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
@@ -65,6 +88,8 @@ function begin(seed, edits, authority){
     document.body.classList.add('playing');
     $('loading').style.display = 'none';
     $('hud').style.display = 'block';
+    $('btnQuit').style.display = 'flex';
+    startMusic();
 
     if(isTouch){
       try{
