@@ -3,6 +3,7 @@ import { TYPES, ITEMS } from './render.js';
 import { inventory, renderHotbar, renderInv, invOpen } from './ui.js';
 import { sfx } from './audio.js';
 import { note } from './survival.js';
+import { gm } from './mode.js';
 
 const $ = id=>document.getElementById(id);
 
@@ -36,10 +37,10 @@ const iconHTML = id => id>=100
   ? `<span class="ticon">${ITEMS[id].icon}</span>`
   : `<div class="sw" style="background-image:url(${TYPES[id].icon})"></div>`;
 
-export function canCraft(r){ return r.in.every(([id,n])=>(inventory[id]||0)>=n); }
+export function canCraft(r){ return gm.forge || r.in.every(([id,n])=>(inventory[id]||0)>=n); }
 export function craft(r){
   if(!canCraft(r)) return false;
-  for(const [id,n] of r.in) inventory[id]-=n;
+  if(!gm.forge) for(const [id,n] of r.in) inventory[id]-=n;
   inventory[r.out.id] = (inventory[r.out.id]||0) + r.out.n;
   sfx.craft();
   note('craft');
@@ -71,7 +72,8 @@ export function renderCraft(){
     row.className = 'craftRow' + (ok?'':' locked');
     const ins = r.in.map(([id,n])=>{
       const have = inventory[id]||0;
-      return `<span class="cIng ${have>=n?'':'miss'}">${iconHTML(id)}<b>${have}/${n}</b></span>`;
+      const label = gm.forge ? '∞' : `${have}/${n}`;
+      return `<span class="cIng ${(gm.forge||have>=n)?'':'miss'}">${iconHTML(id)}<b>${label}</b></span>`;
     }).join('<span class="cPlus">+</span>');
     row.innerHTML = `
       <div class="cOut">${iconHTML(r.out.id)}<span>${nameOf(r.out.id)} ×${r.out.n}</span></div>

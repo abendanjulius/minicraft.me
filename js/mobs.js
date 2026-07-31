@@ -3,6 +3,7 @@
 import { WORLD, topY, getBlock } from './world.js';
 import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box } from './render.js';
 import { sfx } from './audio.js';
+import { gm } from './mode.js';
 
 export const zombies = new Map(); // id -> zombie
 export const corpses = new Map(); // id -> {mesh, x,y,z, feed}
@@ -135,6 +136,11 @@ export function hit(id, dmg){
 export function hostTick(dt, dl, targets){
   const hurts = [], digs = [];
   if(!authority) return {hurts, digs};
+  if(gm.forge){
+    for(const id of [...zombies.keys()]) remove(id, false);
+    for(const id of [...corpses.keys()]) removeCorpse(id, false);
+    return {hurts, digs};
+  }
   const night = dl < .12;
 
   // spawning (packs at higher tiers, never near light)

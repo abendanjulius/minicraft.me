@@ -9,6 +9,7 @@ import * as animals from './animals.js';
 import * as mobs from './mobs.js';
 import * as survival from './survival.js';
 import { MOB_DROPS } from './content.js';
+import { gm, setMode } from './mode.js';
 import { addToInventory } from './ui.js';
 
 export let mode = 'solo';           // 'solo' | 'host' | 'client'
@@ -76,6 +77,7 @@ function handle(msg, fromConn){
     if(msg.z) mobs.applyRemote(msg.z);
     if(msg.c) mobs.applyCorpses(msg.c);
     if(msg.iq!==undefined){ mobs.setIntel(msg.iq); setHorde(msg.iq); }
+    if(msg.gmF!==undefined) setMode(msg.gmF===1);
     if(msg.tod!==undefined) setDayTime(msg.tod);
   } else if(msg.t==='hit' && mode==='host'){
     hostHandleHit(msg.id0, msg.kind, msg.eid, msg.dmg, msg.px, msg.pz);
@@ -199,7 +201,7 @@ export function startHost(name, newSeed, onReady, onError){
   peer.on('connection', conn=>{
     conn.on('open', ()=>{
       conns.push(conn);
-      conn.send({t:'init', seed:newSeed, edits:editLog, tod:day.t});
+      conn.send({t:'init', seed:newSeed, edits:editLog, tod:day.t, gmF:gm.forge?1:0});
     });
     conn.on('data', d=>handle(d, conn));
     conn.on('close', ()=>{ conns = conns.filter(c=>c!==conn); removeRemote(conn.peer); });
@@ -215,7 +217,7 @@ export function startJoin(name, code, onInit, onError){
     let gotInit = false;
     conn.on('open', ()=>{ conns=[conn]; setBanner(`Joined room ${code.toUpperCase()}`); });
     conn.on('data', d=>{
-      if(d.t==='init' && !gotInit){ gotInit = true; if(d.tod!==undefined) setDayTime(d.tod); onInit(d.seed, d.edits); }
+      if(d.t==='init' && !gotInit){ gotInit = true; if(d.tod!==undefined) setDayTime(d.tod); setMode(d.gmF===1); onInit(d.seed, d.edits); }
       else handle(d, conn);
     });
     conn.on('close', ()=>setBanner('Disconnected from host'));
@@ -240,7 +242,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), iq:mobs.getIntel(), tod:day.t}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
   }
 
   // animate remote avatars

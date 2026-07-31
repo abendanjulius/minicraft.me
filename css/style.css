@@ -161,3 +161,12 @@ body:not(.touch) #btnQuit{right:10px}
 #horde.iq1{color:#e8d34a}
 #horde.iq2{color:#ff9c50}
 #horde.iq3{color:#ff5a5a;text-shadow:0 0 6px #a00}
+
+
+/* v1.4.5 — Forge / Nightfall modes */
+#modeRow{display:flex;gap:8px;margin:2px 0}
+.modeBtn{width:122px;padding:8px 4px;font-family:monospace;font-size:13px;border:2px solid #365;border-radius:6px;background:rgba(255,255,255,.85);cursor:pointer;color:#243;line-height:1.5}
+.modeBtn small{font-size:9px;opacity:.7}
+.modeBtn.active{border-color:#fff;box-shadow:0 0 0 2px #5cab3c;background:#eaf6e2}
+#btnMode{position:fixed;top:10px;right:172px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:20px;display:none;align-items:center;justify-content:center;z-index:3;cursor:pointer}
+body:not(.touch) #btnMode{right:64px}

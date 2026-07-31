@@ -6,6 +6,7 @@ import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat } from './ui.js';
 import { sfx, toggleMusic } from './audio.js';
+import { gm } from './mode.js';
 import * as net from './net.js';
 import * as survival from './survival.js';
 import { BLOCK_DROPS } from './content.js';
@@ -200,13 +201,14 @@ export function placeAction(){
   const r = castBlock();
   if(!r || !r.place) return;
   const tid = slotBlock();
-  if(!tid || !(inventory[tid]>0)) return;
+  if(!tid) return;
+  if(!gm.forge && !(inventory[tid]>0)) return;
   const [px,py,pz] = r.place;
   if(py<0||py>=WH) return;
   const d = new THREE.Vector3(px,py,pz).sub(player.pos);
   if(Math.abs(d.x)<.9 && Math.abs(d.z)<.9 && d.y>-.5 && d.y<2) return;
   applyEdit(px,py,pz,tid,false);
-  inventory[tid]--;
+  if(!gm.forge) inventory[tid]--;
   placeAnim = 1;
   sfx.place();
   survival.note('place', tid);
@@ -226,7 +228,8 @@ function updateMining(dt){
     const t = getBlock(bx,by,bz);
     const tool = TOOLS.find(x=>x.id===slotTool());
     const speed = tool.good.includes(t) ? 4 : 1;
-    m = state.mining = {x:bx,y:by,z:bz, progress:0, total:TYPES[t].hard/speed, emit:0, snd:0, type:t};
+    const total = gm.forge ? .15 : TYPES[t].hard/speed;
+    m = state.mining = {x:bx,y:by,z:bz, progress:0, total, emit:0, snd:0, type:t};
   }
   m.progress += dt;
   m.emit -= dt; m.snd -= dt;

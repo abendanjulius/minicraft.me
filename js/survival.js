@@ -2,6 +2,7 @@
 import { ITEMS, TYPES } from './render.js';
 import { inventory, renderHotbar, renderInv, invOpen, addChat } from './ui.js';
 import { sfx } from './audio.js';
+import { gm } from './mode.js';
 
 const $ = id=>document.getElementById(id);
 export const sv = { hp:20, hunger:20, dead:false };
@@ -75,7 +76,7 @@ function renderVitals(){
 }
 
 export function damage(n, cause){
-  if(sv.dead || n<=0) return;
+  if(gm.forge || sv.dead || n<=0) return;
   sv.hp = Math.max(0, sv.hp - n);
   renderVitals();
   sfx.hurt();
@@ -119,7 +120,7 @@ export function eatSelected(foodId){
 
 // Called every frame from the main loop. moving = horizontal movement, dl = daylight 0..1
 export function tick(dt, moving, dl){
-  if(sv.dead) return;
+  if(gm.forge || sv.dead) return;
   eatCd = Math.max(0, eatCd - dt);
   // hunger drains slowly, faster while moving
   sv.hunger = Math.max(0, sv.hunger - dt*(.015 + (moving?.02:0)));

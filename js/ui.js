@@ -1,5 +1,6 @@
 // ui.js — 10-slot hotbar (tools live in slots), inventory, chat, compass, touch controls
 import { TYPES, TOOLS, ITEMS, isTouch } from './render.js';
+import { gm } from './mode.js';
 
 export const inventory = {};
 // Slots hold null | {k:'b', id:blockType} | {k:'t', id:toolId}. Tools start in slots 8/9/0.
@@ -41,8 +42,8 @@ export function renderHotbar(){
   hotbarSlots.forEach((s,i)=>{
     const d = document.createElement('div');
     const isBlock = s?.k==='b', isTool = s?.k==='t', isFood = s?.k==='f';
-    const count = (isBlock||isFood) ? (inventory[s.id]||0) : 0;
-    d.className = 'slot' + (i===sel.slot?' active':'') + (s?'':' empty') + ((isBlock||isFood)&&!count?' zero':'');
+    const count = gm.forge ? '∞' : ((isBlock||isFood) ? (inventory[s.id]||0) : 0);
+    d.className = 'slot' + (i===sel.slot?' active':'') + (s?'':' empty') + (!gm.forge&&(isBlock||isFood)&&!count?' zero':'');
     const label = (i+1)%10;
     if(isTool){
       d.innerHTML = `<span class="num">${label}</span><span class="ticon">${toolInfo(s.id).icon}</span>`;
@@ -79,6 +80,7 @@ export function renderHotbar(){
 
 export let invOpen = false;
 export function renderInv(){
+  if(gm.forge){ renderInvForge(); return; }
   // Tools row — always available so a swapped-out tool is never lost
   const tr = $('invTools'); tr.innerHTML = '';
   for(const t of TOOLS){
@@ -121,6 +123,35 @@ export function switchTab(tab){
   document.querySelectorAll('.itab').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   for(const t of ['items','craft','guide']) $('tab-'+t).style.display = (t===tab)?'block':'none';
   tabHook?.(tab);
+}
+function renderInvForge(){
+  // Full catalog, everything infinite
+  const tr = $('invTools'); tr.innerHTML = '';
+  for(const t of TOOLS){
+    if(t.id==='hand') continue;
+    const d = document.createElement('div');
+    d.className = 'invItem';
+    d.innerHTML = `<span class="ticon">${t.icon}</span>`;
+    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
+    tr.appendChild(d);
+  }
+  const grid = $('invGrid'); grid.innerHTML = '';
+  const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
+  for(const tid of all){
+    const isItem = tid>=100;
+    const d = document.createElement('div');
+    d.className = 'invItem';
+    d.title = isItem ? ITEMS[tid].name : TYPES[tid].name;
+    d.innerHTML = isItem
+      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">∞</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">∞</span>`;
+    d.addEventListener('pointerdown', ()=>{
+      hotbarSlots[sel.slot] = {k: isItem?'f':'b', id:tid};
+      if(isItem) inventory[tid] = 999; // so eat/weapon logic works
+      renderHotbar();
+    });
+    grid.appendChild(d);
+  }
 }
 export function toggleInv(open, tab){
   invOpen = open ?? !invOpen;

@@ -4,6 +4,7 @@ import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook, setHorde as setHordeHud } from './ui.js';
 import { renderCraft, renderGuide } from './craft.js';
+import { gm, setMode, onModeChange, modeName } from './mode.js';
 import { initAudio, startMusic } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
@@ -14,7 +15,7 @@ import * as net from './net.js';
 const $ = id=>document.getElementById(id);
 
 // ---- Version check ----
-const APP_VERSION = '1.4.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.4.5'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -66,6 +67,32 @@ function buildSkinRow(){
   });
 }
 buildSkinRow();
+
+// ---- Mode selection ----
+function refreshModeRow(){
+  const forge = localStorage.getItem('mc_mode')==='forge';
+  $('modeNight').classList.toggle('active', !forge);
+  $('modeForge').classList.toggle('active', forge);
+}
+$('modeNight').addEventListener('click', ()=>{ localStorage.setItem('mc_mode','night'); refreshModeRow(); });
+$('modeForge').addEventListener('click', ()=>{ localStorage.setItem('mc_mode','forge'); refreshModeRow(); });
+refreshModeRow();
+
+onModeChange(forge=>{
+  survival.showVitals(playerMod.state.playing && !forge);
+  $('btnMode').textContent = forge ? '🔨' : '🌙';
+  if(forge){ survival.sv.hp = 20; survival.sv.hunger = 20; }
+});
+function toggleMode(){
+  if(net.mode==='client') return; // host decides for the room
+  const toForge = !gm.forge;
+  setMode(toForge);
+  net.systemMsg(toForge
+    ? '🔨 Forge Mode — the horde sleeps. Build freely with unlimited materials.'
+    : '🌙 Nightfall Mode — survival rules apply. Watch the sun.');
+}
+$('btnMode').addEventListener('click', toggleMode);
+$('btnMode').addEventListener('touchstart', e=>{ e.preventDefault(); toggleMode(); });
 
 // ---- Quit ----
 function quitGame(){ if(confirm('Quit to menu? (world is not saved yet)')) location.reload(); }
@@ -129,7 +156,10 @@ function begin(seed, edits, authority){
       onDeath: ()=>net.reportDeath(playerMod.player.pos),
     });
     mobs.setAnnouncer((text, iq)=>{ net.systemMsg(text); setHordeHud(iq); });
-    survival.showVitals(true);
+    if(authority) setMode(localStorage.getItem('mc_mode')==='forge');
+    survival.showVitals(!gm.forge);
+    $('btnMode').style.display = (net.mode==='client') ? 'none' : 'flex';
+    $('btnMode').textContent = gm.forge ? '🔨' : '🌙';
     playerMod.spawn();
     playerMod.state.playing = true;
     document.body.classList.add('playing');
