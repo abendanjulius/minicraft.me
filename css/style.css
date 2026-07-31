@@ -234,11 +234,18 @@ body:not(.touch) #btnMode{right:64px}
 #inv{
   display:none;
   position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:min(94vw, 860px); max-height:82vh;
+  width:min(94vw, 860px); max-height:78vh;
   background:rgba(24,24,26,.95); border:2px solid #6b6b6b; border-radius:8px;
   padding:0; z-index:4; color:#fff;
-  grid-template-columns:56px 1fr 220px; gap:0; overflow:hidden;
+  gap:0; overflow:hidden;
+  /* explicit areas — mixing explicit + auto placement left a phantom empty cell */
+  grid-template-columns:56px minmax(0,1fr) 220px;
+  grid-template-rows:minmax(0,1fr);
+  grid-template-areas:"rail main side";
 }
+#invRail{ grid-area:rail; }
+#invMain{ grid-area:main; min-height:0; }
+#invSide{ grid-area:side; min-height:0; }
 body.inv-open #inv{ display:grid; }
 #invRail{
   display:flex; flex-direction:column; gap:6px; padding:10px 6px;
@@ -300,12 +307,24 @@ body.inv-open #inv{ display:grid; }
 }
 /* phones / short landscape: detail panel drops under the grid */
 @media (max-width:760px), (max-height:520px){
-  #inv{ grid-template-columns:46px 1fr; grid-template-rows:1fr auto; max-height:86vh; width:96vw; }
-  #invRail{ grid-row:1 / span 2; }
-  #invSide{ grid-column:2; border-left:none; border-top:1px solid #4a4a4a; max-height:32vh; }
+  #inv{
+    width:96vw; max-height:80vh;
+    grid-template-columns:46px minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr) minmax(0,auto);
+    grid-template-areas:"rail main" "rail side";
+  }
+  #invSide{ border-left:none; border-top:1px solid #4a4a4a; max-height:30vh; }
   .railBtn{ width:34px; height:34px; font-size:16px; }
   .invItem{ width:42px; height:42px; }
   .invItem .sw{ width:24px; height:24px; }
   #invGrid{ grid-template-columns:repeat(auto-fill, minmax(42px,1fr)); }
   #invSearch{ width:100px; }
 }
+
+
+/* v1.7.3 — inventory layout corrections */
+#invRail{ min-height:0; }
+#invSide{ overflow-y:auto; }
+#invMain{ overflow:hidden; }
+/* keep the panel clear of the hotbar */
+#inv{ top:calc(50% - 26px); }
