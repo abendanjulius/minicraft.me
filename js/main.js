@@ -2,12 +2,12 @@
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
-         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES } from './render.js';
+         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook, setHorde as setHordeHud, restoreInv } from './ui.js';
 import { renderCraft, renderGuide } from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
 import * as persist from './persist.js';
-import { inventory, hotbarSlots } from './ui.js';
+import { inventory, hotbarSlots, sel } from './ui.js';
 import { day } from './render.js';
 import { sv } from './survival.js';
 import { initAudio, startMusic, sfx } from './audio.js';
@@ -18,8 +18,12 @@ import * as survival from './survival.js';
 import * as net from './net.js';
 import * as physics from './physics.js';
 import * as drops from './drops.js';
+import * as chests from './chests.js';
+import * as keg from './keg.js';
 
 const $ = id=>document.getElementById(id);
+chests.setChestChangeHook(()=>net.sendChests?.());
+
 
 // Block physics: sand/gravel settle + leaf decay triggers
 physics.setPhysicsFx((x,y,z,tid)=>spawnParticles(x,y,z, TYPES[tid]?.pc ?? 0xdacc96, 3));
@@ -32,7 +36,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.6.3'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.7.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -240,7 +244,7 @@ function begin(seed, edits, authority, saved){
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
     generateWorld(seed);
-    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); } // replay history before meshing
+    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); } // replay history before meshing
     buildAllChunks();
     animals.init(authority, seed);
     mobs.init(authority);
@@ -294,6 +298,10 @@ initUI({
   relock: ()=>playerMod.relock(),
 });
 setTabHook(tab=>{ if(tab==='craft') renderCraft(); if(tab==='guide') renderGuide(); });
+$('chestClose')?.addEventListener('pointerdown', ()=>chests.close());
+$('chestDeposit')?.addEventListener('pointerdown', ()=>{
+  chests.depositSelected(hotbarSlots, sel);
+});
 // clicking the canvas re-acquires pointer lock after Esc
 $('game').addEventListener('click', ()=>{ if(playerMod.state.playing) playerMod.relock(); });
 initChat(text=>{
@@ -391,6 +399,13 @@ function loop(now){
     }
     mobs.commonTick(dt, elapsed, playerMod.player.pos);
     drops.commonTick(dt, elapsed, playerMod.player.pos);
+    keg.tick(dt, playerMod.player.pos, (edits)=>{
+      if(net.mode==='host'){
+        for(const [x,y,z] of edits) net.hostWorldEdit(x,y,z,0);
+      } else if(net.mode==='solo'){
+        /* already applied in keg.explode */
+      }
+    });
     // auto-pickup when close
     pickupCd = (pickupCd||0) - dt;
     if(pickupCd<=0 && !gm.forge){

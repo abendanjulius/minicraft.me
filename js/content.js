@@ -38,12 +38,19 @@ export const EXTRA_BLOCKS = {
   45:{name:'Coal Ore',       tex:['ore',0x808083,0x232326],    hard:3,  pc:0x55565a, tool:'pick'},
   46:{name:'Iron Ore',       tex:['ore',0x808083,0xd8a878],    hard:3.5,pc:0xb08a68, tool:'pick'},
   47:{name:'Crystal Ore',    tex:['ore',0x76787c,0x7fd4ff],    hard:4,  pc:0x7fd4ff, tool:'pick'},
-  // Doors: closed solid / open walk-through (bottom + top halves)
-  48:{name:'Door',           tex:['door',0x8b6914],            hard:1.5,pc:0x8b6914, tool:'axe'},
-  49:{name:'Door (Open)',    tex:['dooropen',0x8b6914],        hard:1.5,pc:0x8b6914, tool:'axe', transparent:1},
-  50:{name:'Door Top',       tex:['doortop',0x8b6914],         hard:1.5,pc:0x8b6914, tool:'axe'},
-  51:{name:'Door Top Open',  tex:['doortopopen',0x8b6914],     hard:1.5,pc:0x8b6914, tool:'axe', transparent:1},
+  // Door item + world states 48-51 closed (facing), 52-55 open (facing) — rendered as thin meshes
+  48:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe'},
+  49:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe'},
+  50:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe'},
+  51:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe'},
+  52:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe', transparent:1},
+  53:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe', transparent:1},
+  54:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe', transparent:1},
+  55:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe', transparent:1},
+  56:{name:'Crate',          tex:['chest',0x9a6b3a],           hard:2,  pc:0x9a6b3a, tool:'axe'},
+  57:{name:'Powder Keg',     tex:['keg',0x5a3a2a],             hard:1.2,pc:0x5a3a2a, tool:'axe'},
 };
+
 
 
 export const EXTRA_ITEMS = {
@@ -100,6 +107,7 @@ export const EXTRA_ITEMS = {
   171:{name:'Medkit',         icon:'💊', heal:20},
   172:{name:'Zombie Tonic',   icon:'🧉', food:2, heal:8},
   165:{name:"Miner's Stew",   icon:'🥘', food:10, heal:3},
+  180:{name:'Spark Striker', icon:'🔥'},
 };
 
 // bonus rolls when a block is mined (in addition to the block itself)
@@ -224,7 +232,10 @@ R(156,2,[[116,3],[114,3],[42,1]],'med','Campfire stew, double batch'),
 R(170,1,[[123,3],[115,1]],'med','Feather-soft bandage'),
 R(172,1,[[131,1],[130,1],[114,1]],'med','Bone-steeped tonic'),
 R(44,4,[[110,3],[7,2]],'block','Climb up and down cave shafts'),
-R(48,1,[[7,6]],'block','Wooden door — place, then click to open/close'),
+R(48,1,[[7,6]],'block','Wooden door — place, click to open/close, mine to pick up'),
+R(56,1,[[7,8]],'block','Stash items — click to open'),
+R(57,1,[[120,4],[7,4]],'block','Unstable powder keg — ignite with a Spark Striker'),
+R(180,1,[[119,1],[126,1]],'mat','Ignites Powder Kegs — MiniCraft firestarter'),
 R(165,1,[[116,2],[120,1]],'food','Hot fuel for long digs — heals 3 (10)'),
 ];
 
@@ -255,7 +266,10 @@ export const EXTRA_GUIDE = [
   {id:42, where:'Craft from Logs + Coal + Stone.', uses:'Cozy campfire light.'},
   {id:11, where:'Craft from Sticks + Planks.', uses:'Fence for pens and yards.'},
   {id:12, where:'Sheep drop wool, or craft from cloth.', uses:'Soft building block; dye it.'},
-  {id:48, where:'Craft from 6 Planks.', uses:'Place in a 2-tall gap. Click to open/close. Blocks zombies when shut.'},
+  {id:48, where:'Craft from 6 Planks.', uses:'Place, click to open/close. Mine to pick up. Blocks zombies when shut.'},
+  {id:56, where:'Craft from 8 Planks.', uses:'Store items. Click to open. Survives in your world save.'},
+  {id:57, where:'Craft from Coal + Planks.', uses:'Place, then ignite with a Spark Striker. BOOM.'},
+  {id:180,where:'Craft from Flint + Iron Ingot.', uses:'Click a Powder Keg to light the fuse.'},
 ];
 
 /** Short blurb for inventory popups. */

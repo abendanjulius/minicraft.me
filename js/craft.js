@@ -1,6 +1,6 @@
 // craft.js — recipe-book crafting + materials guide
 import { TYPES, ITEMS } from './render.js';
-import { inventory, renderHotbar, renderInv, invOpen } from './ui.js';
+import { inventory, renderHotbar, renderInv, invOpen, matchesSearch } from './ui.js';
 import { sfx } from './audio.js';
 import { note } from './survival.js';
 import { gm } from './mode.js';
@@ -67,6 +67,7 @@ export function renderCraft(){
   list.innerHTML = '';
   for(const r of RECIPES){
     if(curCat!=='all' && r.cat!==curCat) continue;
+    if(!matchesSearch(nameOf(r.out.id), r.tip||'', r.cat||'')) continue;
     const ok = canCraft(r);
     const row = document.createElement('div');
     row.className = 'craftRow' + (ok?'':' locked');
@@ -87,8 +88,9 @@ export function renderCraft(){
 
 export function renderGuide(){
   const list = $('guideList');
-  if(list.childElementCount) return; // static, build once
+  list.innerHTML = '';
   for(const g of GUIDE){
+    if(!matchesSearch(nameOf(g.id), g.where||'', g.uses||'')) continue;
     const row = document.createElement('div');
     row.className = 'guideRow';
     row.innerHTML = `

@@ -183,6 +183,28 @@ function texFrom(desc){
       const alt = ((x>>2)+(y>>2))%2===1, d=jit(10);
       return alt ? rgb(br+d,bg+d,bb+d) : rgb(r+d,g+d,bl+d);}));
   }
+  if(kind==='chest'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(12), band=(y>=6&&y<=8)?-35:0;
+        gc.fillStyle=rgb(r+band+d,g+band+d,bl+band+d);
+        gc.fillRect(x,y,1,1);
+      }
+      gc.fillStyle=rgb(180,150,40); gc.fillRect(7,7,2,3); // latch
+      gc.fillStyle=rgb(r-40,g-40,bl-40); gc.fillRect(0,0,16,1); gc.fillRect(0,15,16,1);
+    });
+  }
+  if(kind==='keg'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(14), ring=((y%5)===0)?-40:0;
+        gc.fillStyle=rgb(r+ring+d,g+ring+d,bl+ring+d);
+        gc.fillRect(x,y,1,1);
+      }
+      gc.fillStyle=rgb(40,40,40); gc.fillRect(6,1,4,3); // bung
+      gc.fillStyle=rgb(200,60,40); gc.fillRect(7,0,2,2); // warning
+    });
+  }
   if(kind==='door' || kind==='doortop' || kind==='dooropen' || kind==='doortopopen'){
     const open = kind.includes('open');
     const top = kind.includes('top');
@@ -384,7 +406,7 @@ export function buildChunk(cx,cz){
   const chunk = chunks[ci], byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
-    if(!t || t===10) continue; // torches render as their own small meshes
+    if(!t || t===10 || (t>=48&&t<=55)) continue; // torches & doors have custom meshes
     const x = x0+lx, z = z0+lz;
     if(occludes(x+1,y,z)&&occludes(x-1,y,z)&&occludes(x,y+1,z)&&
        occludes(x,y-1,z)&&occludes(x,y,z+1)&&occludes(x,y,z-1)) continue;
@@ -480,6 +502,64 @@ export function nearestTorchDist(x,z){
   return best;
 }
 
+
+// ---- Doors: thin hinged panels (not full cubes) ----
+export const doorMeshes = new Map(); // "x,y,z" -> group
+function makeDoorMesh(x, y, z, facing, open){
+  const g = new THREE.Group();
+  // hinge pivot at edge of cell
+  const panel = new THREE.Group();
+  // door leaf: thin, 2 blocks tall
+  const wood = 0x8b6914, dark = 0x5c4010, handle = 0xd4b84a;
+  const leaf = box(.12, 1.95, .9, wood, 0, 0.975, 0);
+  panel.add(leaf);
+  // frame lines (decorative)
+  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, -.42));
+  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .42));
+  panel.add(box(.13, .06, .9, dark, 0, 1.92, 0));
+  panel.add(box(.13, .06, .9, dark, 0, .05, 0));
+  // handle
+  panel.add(box(.08, .08, .08, handle, .1, 0.95, .28));
+  // pivot: hinge on -Z edge of panel, offset so it sits in doorway
+  panel.position.set(0, 0, 0.45); // panel extends toward +Z from hinge
+  g.add(panel);
+  g.position.set(x, y - 0.5, z);
+  // base rotation by facing: 0=+Z wall, 1=+X, 2=-Z, 3=-X
+  const base = facing * Math.PI/2;
+  g.rotation.y = base;
+  // open swings ~95°
+  panel.rotation.y = open ? -Math.PI * 0.55 : 0;
+  g.userData = {panel, facing, open};
+  return g;
+}
+export function trackDoor(x,y,z,prev,t){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  const wasDoor = prev>=48 && prev<=55;
+  const isDoor = t>=48 && t<=55;
+  if(wasDoor && doorMeshes.has(k)){
+    scene.remove(doorMeshes.get(k));
+    doorMeshes.delete(k);
+  }
+  if(isDoor){
+    const facing = (t-48)%4;
+    const open = t>=52;
+    // remove any stale
+    if(doorMeshes.has(k)){ scene.remove(doorMeshes.get(k)); doorMeshes.delete(k); }
+    const m = makeDoorMesh(wrapC(x), y, wrapC(z), facing, open);
+    scene.add(m);
+    doorMeshes.set(k, m);
+  }
+}
+export function setDoorOpenVisual(x,y,z,open){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  const m = doorMeshes.get(k);
+  if(!m) return;
+  const panel = m.userData.panel;
+  if(panel) panel.rotation.y = open ? -Math.PI * 0.55 : 0;
+  m.userData.open = open;
+}
+
+
 // ---- Apply a block edit (local or from network). Returns the previous type. ----
 let editRecorder = null;
 export function setEditRecorder(fn){ editRecorder = fn; }
@@ -487,6 +567,7 @@ export function applyEdit(x,y,z,t,burst=true){
   const old = getBlock(x,y,z);
   setBlock(x,y,z,t);
   trackTorch(x,y,z,old,t);
+  trackDoor(x,y,z,old,t);
   editRecorder?.(wrapC(x), y, wrapC(z), t);
   rebuildAt(x,z);
   if(burst){

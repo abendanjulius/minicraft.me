@@ -1,5 +1,5 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
-import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough } from './world.js';
+import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
          makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
@@ -13,6 +13,8 @@ import { BLOCK_DROPS } from './content.js';
 import { animals } from './animals.js';
 import { zombies, corpses } from './mobs.js';
 import * as drops from './drops.js';
+import * as chests from './chests.js';
+import * as keg from './keg.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
@@ -228,29 +230,22 @@ export function castBlock(){
 }
 
 
-const DOOR_CLOSED = new Set([48,50]);
-const DOOR_OPEN = new Set([49,51]);
-const isDoor = t => DOOR_CLOSED.has(t) || DOOR_OPEN.has(t);
+
+function yawToFacing(yaw){
+  // 0 = +Z, 1 = +X, 2 = -Z, 3 = -X (door sits in the face you look at)
+  let f = Math.round(-yaw / (Math.PI/2));
+  return ((f % 4) + 4) % 4;
+}
 function toggleDoorAt(bx,by,bz){
   const t = getBlock(bx,by,bz);
   if(!isDoor(t)) return false;
-  // normalize to bottom
-  let yb = by;
-  if(t===50 || t===51) yb = by - 1;
-  const bottom = getBlock(bx, yb, bz);
-  const top = getBlock(bx, yb+1, bz);
-  if(bottom===48 || bottom===49){
-    const open = bottom===49;
-    const nb = open ? 48 : 49;
-    const nt = open ? 50 : 51;
-    applyEdit(bx, yb, bz, nb, false);
-    if(top===50 || top===51 || top===0) applyEdit(bx, yb+1, bz, nt, false);
-    net.sendEdit(bx, yb, bz, nb);
-    net.sendEdit(bx, yb+1, bz, nt);
-    sfx.place();
-    return true;
-  }
-  return false;
+  const facing = doorFacing(t);
+  const open = doorOpen(t);
+  const nt = doorType(facing, !open);
+  applyEdit(bx, by, bz, nt, false);
+  net.sendEdit(bx, by, bz, nt);
+  sfx.place();
+  return true;
 }
 
 export function placeAction(){
@@ -258,36 +253,54 @@ export function placeAction(){
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
   const r = castBlock();
-  // Right-click existing door → open/close
+  // Click door / crate / powder keg interactions
   if(r && r.hit){
     const [hx,hy,hz] = r.hit;
-    if(isDoor(getBlock(hx,hy,hz))){
+    const hit = getBlock(hx,hy,hz);
+    if(isDoor(hit)){
       toggleDoorAt(hx,hy,hz);
       placeAnim = 1;
       return;
     }
+    if(hit===56){ // Crate
+      chests.open(hx,hy,hz);
+      placeAnim = 1;
+      return;
+    }
+    // Spark Striker on Powder Keg
+    const held = hotbarSlots[sel.slot];
+    if(hit===57 && held?.k==='f' && held.id===180){
+      if(keg.ignite(hx,hy,hz)){
+        placeAnim = 1;
+        net.sendKegLit(hx,hy,hz);
+      }
+      return;
+    }
   }
   if(!r || !r.place) return;
-  const tid = slotBlock();
+  let tid = slotBlock();
   if(!tid) return;
+  // only hold "Door" item id 48 in inventory; any 48-55 treated as placeable door
+  if(tid>=48 && tid<=55) tid = 48;
   if(!gm.forge && !(inventory[tid]>0)) return;
   const [px,py,pz] = r.place;
   if(py<0||py>=WH) return;
   const d = new THREE.Vector3(px,py,pz).sub(player.pos);
   if(Math.abs(d.x)<.9 && Math.abs(d.z)<.9 && d.y>-.5 && d.y<2) return;
 
-  // Door: needs 2 blocks of headroom; place bottom+top
-  if(tid===48 || tid===49){
-    if(py+1>=WH || getBlock(px,py,pz) || getBlock(px,py+1,pz)) return;
-    applyEdit(px,py,pz,48,false);
-    applyEdit(px,py+1,pz,50,false);
-    if(!gm.forge) inventory[tid]--;
+  // Place door: one cell marker, thin mesh spans 2 tall — need air above
+  if(tid===48){
+    if(py+1>=WH || getBlock(px,py+1,pz)) return; // need headroom for the leaf
+    if(getBlock(px,py,pz)) return;
+    const facing = yawToFacing(view.yaw);
+    const dt = doorType(facing, false); // closed
+    applyEdit(px,py,pz,dt,false);
+    if(!gm.forge) inventory[48]--;
     placeAnim = 1;
     sfx.place();
     survival.note('place', 48);
     renderHotbar();
-    net.sendEdit(px,py,pz,48);
-    net.sendEdit(px,py+1,pz,50);
+    net.sendEdit(px,py,pz,dt);
     return;
   }
 
@@ -325,21 +338,18 @@ function updateMining(dt){
     const old = applyEdit(bx,by,bz,0,true);
     if(old){
       const ORE_YIELD = {45:120, 46:121, 47:122};
-      if(old===48||old===49||old===50||old===51){
+      if(old>=48 && old<=55){
         addToInventory(48);
-        const yb = (old===50||old===51) ? by-1 : by+1;
-        const other = getBlock(bx,yb,bz);
-        if(other===48||other===49||other===50||other===51){
-          applyEdit(bx,yb,bz,0,false);
-          net.sendEdit(bx,yb,bz,0);
-        }
+      } else if(old===56){
+        chests.removeAt(bx,by,bz);
+        addToInventory(56);
       } else if(ORE_YIELD[old]){
         const n = 1 + (Math.random()<.45 ? 1 : 0);
         for(let i=0;i<n;i++) addToInventory(ORE_YIELD[old]);
       } else {
         addToInventory(old);
       }
-      sfx.break(old); addShake(.16); survival.note('mine', (old===49||old===50||old===51)?48:old);
+      sfx.break(old); addShake(.16); survival.note('mine', (old>=48&&old<=55)?48:old);
       const rolls = BLOCK_DROPS[old];
       if(rolls) for(const [item,p] of rolls) if(Math.random()<p) addToInventory(item);
     }

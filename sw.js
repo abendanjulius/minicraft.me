@@ -1,9 +1,9 @@
 // sw.js — cache app shell so solo mode works offline / installed
-const CACHE = 'minicraft-v23'  // UPDATE ON EVERY RELEASE (with version.json + APP_VERSION in main.js);
+const CACHE = 'minicraft-v25'  // UPDATE ON EVERY RELEASE (with version.json + APP_VERSION in main.js);
 const CORE = [
   './', './index.html', './css/style.css', './manifest.json',
   './js/main.js', './js/world.js', './js/render.js', './js/player.js',
-  './js/animals.js', './js/net.js', './js/ui.js', './js/audio.js', './js/survival.js', './js/mobs.js', './js/craft.js', './js/content.js', './js/mode.js', './js/persist.js', './js/physics.js', './js/drops.js',
+  './js/animals.js', './js/net.js', './js/ui.js', './js/audio.js', './js/survival.js', './js/mobs.js', './js/craft.js', './js/content.js', './js/mode.js', './js/persist.js', './js/physics.js', './js/drops.js', './js/chests.js', './js/keg.js',
   './icons/icon-192.png', './icons/icon-512.png', './assets/music.mp3',
 ];
 

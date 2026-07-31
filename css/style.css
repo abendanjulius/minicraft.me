@@ -214,3 +214,17 @@ body:not(.touch) #btnMode{right:64px}
   #menu input{width:min(70vw,220px)}
   .joinRow input{width:120px}
 }
+
+/* search + chest */
+#invSearch{width:100%;box-sizing:border-box;margin:0 0 10px;padding:8px 10px;font-family:monospace;font-size:13px;
+  border:1px solid #555;border-radius:5px;background:#1a1a1a;color:#fff}
+#invSearch:focus{outline:1px solid #5cab3c;border-color:#5cab3c}
+#chestUI{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,20,20,.94);
+  border:2px solid #8b6914;border-radius:8px;padding:14px;color:#fff;z-index:5;min-width:280px;max-width:92vw}
+#chestUI h3{margin:0 0 4px;font-size:15px;font-family:monospace}
+.chestHint{margin:0 0 10px;font-size:11px;opacity:.7;font-family:monospace}
+#chestGrid{display:flex;flex-wrap:wrap;gap:6px;min-height:52px;margin-bottom:10px}
+.chestBtns{display:flex;gap:8px}
+.chestBtns button{flex:1;font-family:monospace;padding:8px;border-radius:5px;border:1px solid #666;
+  background:#5cab3c;color:#fff;cursor:pointer}
+#chestClose{background:#444!important}

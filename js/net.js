@@ -8,6 +8,8 @@ import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as mobs from './mobs.js';
 import * as drops from './drops.js';
+import * as chests from './chests.js';
+import * as keg from './keg.js';
 import * as survival from './survival.js';
 import { MOB_DROPS } from './content.js';
 import { gm, setMode } from './mode.js';
@@ -98,6 +100,7 @@ function handle(msg, fromConn){
     if(msg.z) mobs.applyRemote(msg.z);
     if(msg.c) mobs.applyCorpses(msg.c);
     if(msg.drops) drops.applyRemote(msg.drops);
+    if(msg.chests) chests.applyRemote(msg.chests);
     if(msg.iq!==undefined){ mobs.setIntel(msg.iq); setHorde(msg.iq); }
     if(msg.gmF!==undefined) setMode(msg.gmF===1);
     if(msg.tod!==undefined) setDayTime(msg.tod);
@@ -115,6 +118,13 @@ function handle(msg, fromConn){
     if(d) relay({t:'drops', list:drops.serialize()}, null);
   } else if(msg.t==='drops'){
     drops.applyRemote(msg.list||[]);
+  } else if(msg.t==='chests'){
+    chests.applyRemote(msg.list||[]);
+  } else if(msg.t==='keg' && mode==='host'){
+    keg.ignite(msg.x,msg.y,msg.z);
+    relay({t:'keg', x:msg.x,y:msg.y,z:msg.z}, fromConn);
+  } else if(msg.t==='keg' && mode==='client'){
+    keg.ignite(msg.x,msg.y,msg.z);
   } else if(msg.t==='pickup' && mode==='host'){
     const got = drops.tryPickup(msg.x, msg.y, msg.z);
     if(got){
@@ -219,6 +229,16 @@ export function dispatchHurts(hurts){
     if(h.id==='me') survival.damage(h.dmg, 'zombie');
     else sendToPeer(h.id, {t:'hurt', dmg:h.dmg, cause:'zombie'});
   }
+}
+export function sendChests(){
+  const msg = {t:'chests', list:chests.serialize()};
+  if(mode==='host') relay(msg, null);
+  else if(mode==='client') safeSendHost(msg);
+}
+export function sendKegLit(x,y,z){
+  if(mode==='solo') return;
+  if(mode==='host') relay({t:'keg', x,y,z}, null);
+  else safeSendHost({t:'keg', x,y,z});
 }
 export function sendDrop(payload){
   if(mode==='solo') return; // already spawned locally
@@ -326,7 +346,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), drops:drops.serialize(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), drops:drops.serialize(), chests:chests.serialize(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
   }
 
   // animate remote avatars

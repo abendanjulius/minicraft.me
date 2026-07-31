@@ -13,6 +13,17 @@ export const sel = { slot:0 };
 export const joy = { x:0, y:0 };
 
 const $ = id=>document.getElementById(id);
+export function getSearchQuery(){
+  const el = $('invSearch');
+  return (el?.value || '').trim().toLowerCase();
+}
+export function matchesSearch(name, ...extra){
+  const q = getSearchQuery();
+  if(!q) return true;
+  const hay = [name, ...extra].join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
 let onHeldChange = null, playerHooks = null;
 const toolInfo = id=>TOOLS.find(t=>t.id===id);
 
@@ -132,18 +143,19 @@ export function renderInv(){
   let any = false;
   for(const tid in inventory){
     if(inventory[tid]<=0) continue;
+    const isFood = +tid>=100;
+    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
+    if(!matchesSearch(String(name))) continue;
     any = true;
     const d = document.createElement('div');
     d.className = 'invItem';
-    const isFood = +tid>=100;
     d.innerHTML = isFood
-      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">${inventory[tid]}</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">${inventory[tid]}</span>`;
+      ? `<span class="ticon">${ITEMS[tid]?.icon||'❓'}</span><span class="cnt">${inventory[tid]}</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon||''})"></div><span class="cnt">${inventory[tid]}</span>`;
     if(!isTouch){
       d.draggable = true;
       d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
     }
-    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
     const blurb = itemBlurb(+tid, TYPES, ITEMS);
     bindItemInfo(d, name, blurb,
       ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
@@ -172,17 +184,19 @@ function renderInvForge(){
   const grid = $('invGrid'); grid.innerHTML = '';
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
   for(const tid of all){
-    if(tid===49||tid===50||tid===51) continue; // door halves — only place Door (48)
+    if(tid>=49 && tid<=55) continue; // door facing variants — only show Door (48)
     const isItem = tid>=100;
+    const name = isItem ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
+    if(!matchesSearch(String(name))) continue;
     const d = document.createElement('div');
     d.className = 'invItem';
-    d.title = isItem ? ITEMS[tid].name : TYPES[tid].name;
+    d.title = name;
     d.innerHTML = isItem
-      ? `<span class="ticon">${ITEMS[tid].icon}</span><span class="cnt">∞</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid].icon})"></div><span class="cnt">∞</span>`;
+      ? `<span class="ticon">${ITEMS[tid]?.icon||'❓'}</span><span class="cnt">∞</span>`
+      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon||''})"></div><span class="cnt">∞</span>`;
     d.addEventListener('pointerdown', ()=>{
       hotbarSlots[sel.slot] = {k: isItem?'f':'b', id:tid};
-      inventory[tid] = 999; // Forge: hand model + place/eat
+      inventory[tid] = 999;
       renderHotbar();
     });
     grid.appendChild(d);
@@ -209,6 +223,19 @@ export function initUI(hooks){
   $('invClear').addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot]=null; renderHotbar(); });
   document.querySelectorAll('.itab').forEach(b=>b.addEventListener('pointerdown', e=>{ e.stopPropagation(); switchTab(b.dataset.tab); }));
   renderHotbar();
+  const se = $('invSearch');
+  if(se){
+    se.addEventListener('input', ()=>{
+      if(invOpen){
+        renderInv();
+        // craft/guide refresh via tab hook
+        const active = document.querySelector('.itab.active')?.dataset?.tab;
+        if(active==='craft' || active==='guide') tabHook?.(active);
+      }
+    });
+    se.addEventListener('keydown', e=>e.stopPropagation());
+    se.addEventListener('pointerdown', e=>e.stopPropagation());
+  }
   if(isTouch) initTouch(hooks);
 }
 

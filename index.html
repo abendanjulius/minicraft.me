@@ -71,6 +71,7 @@
     <button class="itab" data-tab="craft">Craft</button>
     <button class="itab" data-tab="guide">Guide</button>
   </div>
+  <input id="invSearch" type="search" placeholder="Search items, craft, guide…" autocomplete="off" />
   <div id="tab-items">
     <p id="invHelp"></p>
     <div class="invLabel">Tools</div>
@@ -83,6 +84,15 @@
   <div id="tab-guide" style="display:none"><div id="guideList"></div></div>
 </div>
 
+<div id="chestUI" style="display:none">
+  <h3>📦 Crate</h3>
+  <p class="chestHint">Tap crate slot to take · deposit with button</p>
+  <div id="chestGrid"></div>
+  <div class="chestBtns">
+    <button id="chestDeposit" type="button">Deposit held</button>
+    <button id="chestClose" type="button">Close</button>
+  </div>
+</div>
 <div id="touchUI">
   <div id="joyZone"><div id="joyBase"></div><div id="joyStick"></div></div>
   <div class="tbtn" id="btnJump">⬆️</div>
