@@ -173,7 +173,11 @@ function renderRail(){
 function renderDetail(){
   const box = $('invDetail');
   if(invPick == null || !(TYPES[invPick] || ITEMS[invPick])){
-    box.innerHTML = '<p class="dHint">Tap an item to see what it does and how to make it.</p>';
+    box.innerHTML = `<div class="dSlots"><div class="dSlot"></div><div class="dSlot"></div>
+        <div class="dSlot"></div><div class="dSlot"></div></div>
+      <div class="dArrow">▼</div>
+      <div class="dSlot out"></div>
+      <p class="dHint">Pick an item on the left to see its recipe.</p>`;
     return;
   }
   const id = invPick;
@@ -200,11 +204,14 @@ function renderDetail(){
     const ok = craftApi.canCraft(r);
     const ings = r.in.map(([iid,n])=>{
       const h = inventory[iid]||0;
-      return `<span class="dIng ${(gm.forge||h>=n)?'':'miss'}">${iconOf(iid)}${gm.forge?'∞':h+'/'+n}</span>`;
+      const okI = gm.forge || h>=n;
+      return `<div class="dSlot ${okI?'':'miss'}" title="${nameOf(iid)}">${iconOf(iid)}
+                <span class="sCnt">${gm.forge?'∞':h+'/'+n}</span></div>`;
     }).join('');
     html += `<div class="dRecipe">
-       <div class="dRecipeTop">Craft ×${r.out.n}</div>
-       <div class="dIngs">${ings}</div>
+       <div class="dSlots">${ings}</div>
+       <div class="dArrow">▼</div>
+       <div class="dSlot out">${iconOf(r.out.id)}<span class="sCnt">×${r.out.n}</span></div>
        <button class="dCraft" data-r="${i}" ${ok?'':'disabled'} type="button">Craft</button>
        ${r.tip?`<div class="dTip">${r.tip}</div>`:''}</div>`;
   });

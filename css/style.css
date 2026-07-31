@@ -328,3 +328,94 @@ body.inv-open #inv{ display:grid; }
 #invMain{ overflow:hidden; }
 /* keep the panel clear of the hotbar */
 #inv{ top:calc(50% - 26px); }
+
+
+/* ================= v1.7.5 — inventory: flex 3-column, matches the reference =================
+   Grid areas proved fragile across viewports (phantom cell). A flex row cannot do that. */
+#inv{
+  display:none !important;
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(96vw, 900px); height:min(74vh, 560px); max-height:74vh;
+  background:#1b1b1d; border:3px solid #6b6b6b; border-radius:6px;
+  padding:8px; gap:8px; z-index:4; color:#fff; overflow:hidden;
+  grid-template-areas:none; grid-template-columns:none; grid-template-rows:none;
+}
+body.inv-open #inv{ display:flex !important; flex-direction:row; align-items:stretch; }
+
+/* left: category rail */
+#invRail{
+  flex:0 0 52px; display:flex; flex-direction:column; gap:6px;
+  background:transparent; border:none; padding:0; overflow-y:auto; min-height:0;
+}
+.railBtn{
+  flex:0 0 auto; width:48px; height:46px; font-size:20px; line-height:1;
+  background:#2f2f31; border:2px solid #5a5a5c; border-radius:5px; color:#fff; cursor:pointer;
+}
+.railBtn.active{ background:#4c7a35; border-color:#9ede6a; }
+
+/* middle: titled item grid */
+#invMain{
+  flex:1 1 auto; min-width:0; min-height:0;
+  display:flex; flex-direction:column;
+  background:#2a2a2c; border:2px solid #4a4a4c; border-radius:5px; padding:8px;
+}
+#invHead{ display:flex; align-items:center; gap:8px; margin:0 0 8px; flex:0 0 auto; }
+#invTitle{ flex:1; text-align:center; font-size:15px; font-weight:bold; color:#ffd97a; letter-spacing:1px; }
+#invSearch{
+  flex:0 0 130px; font-family:monospace; font-size:12px; padding:5px 8px;
+  background:#1d1d1f; border:1px solid #5a5a5c; border-radius:4px; color:#fff;
+}
+#invGrid{
+  flex:1 1 auto; min-height:0; overflow-y:auto; touch-action:pan-y;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(50px,1fr));
+  gap:5px; align-content:start; background:#212123; border:2px solid #3d3d3f;
+  border-radius:4px; padding:6px;
+}
+
+/* right: crafting / detail column */
+#invSide{
+  flex:0 0 236px; min-width:0; min-height:0; overflow-y:auto; touch-action:pan-y;
+  background:#2a2a2c; border:2px solid #4a4a4c; border-radius:5px; padding:10px;
+  font-size:11px; border-left:2px solid #4a4a4c;
+}
+#invSide::before{
+  content:'Crafting'; display:block; text-align:center; color:#ffd97a;
+  font-size:14px; font-weight:bold; letter-spacing:1px; margin-bottom:8px;
+}
+#invClose{
+  position:absolute; top:10px; right:12px; width:28px; height:28px;
+  background:#2f2f31; border:2px solid #6b6b6b; border-radius:4px; color:#fff;
+  cursor:pointer; z-index:3; font-size:14px; line-height:1;
+}
+
+/* narrow screens: keep all three columns, just tighten them (never stack) */
+@media (max-width:820px){
+  #inv{ width:97vw; height:min(78vh,520px); padding:6px; gap:6px; }
+  #invRail{ flex:0 0 44px; }
+  .railBtn{ width:40px; height:38px; font-size:17px; }
+  #invSide{ flex:0 0 170px; padding:8px; }
+  #invSearch{ flex:0 0 92px; }
+  #invGrid{ grid-template-columns:repeat(auto-fill, minmax(44px,1fr)); }
+  .invItem{ width:44px; height:44px; }
+  .invItem .sw{ width:26px; height:26px; }
+}
+@media (max-width:560px){
+  #invSide{ flex:0 0 140px; }
+  #invTitle{ font-size:12px; }
+  #invSearch{ display:none; }
+}
+
+/* crafting-slot presentation inside the right column */
+.dSlots{ display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin-bottom:4px; }
+.dSlot{
+  position:relative; width:44px; height:44px; border:2px solid #4a4a4c; border-radius:4px;
+  background:#1d1d1f; display:flex; align-items:center; justify-content:center;
+}
+.dSlot.miss{ border-color:#a05050; }
+.dSlot.out{ margin:0 auto 8px; border-color:#7c9c5c; }
+.dSlot .sw{ width:26px; height:26px; image-rendering:pixelated; background-size:cover; border-radius:2px; }
+.dSlot .ticon{ font-size:20px; }
+.dSlot .sCnt{ position:absolute; bottom:-2px; right:2px; font-size:9px; font-weight:bold; text-shadow:1px 1px 2px #000; }
+.dSlot.miss .sCnt{ color:#ff8a80; }
+.dArrow{ text-align:center; opacity:.6; font-size:14px; margin:2px 0 4px; }
+.dRecipe{ border:none; background:none; padding:0; margin:10px 0 14px; }

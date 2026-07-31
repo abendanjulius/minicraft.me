@@ -442,14 +442,48 @@ export function rebuildAt(x,z){
 
 // Only render chunks within view distance (toroidal-aware)
 const VIEW_CHUNKS = Math.ceil(VIEW/CH)+1;
+/** Signed shift (0 or ±WORLD) that puts a world X/Z on the near side of the seam. */
+export function wrapShift(v, ref){
+  const d = v - ref;
+  if(d >  WORLD/2) return -WORLD;
+  if(d < -WORLD/2) return  WORLD;
+  return 0;
+}
+/** True distance across the wrap. */
+export function wrapDist(x, z, px, pz){
+  return Math.hypot(x + wrapShift(x,px) - px, z + wrapShift(z,pz) - pz);
+}
+/** Position a scene object on the near side of the seam, given its logical coords. */
+export function placeWrapped(obj, x, y, z, px, pz){
+  obj.position.set(x + wrapShift(x,px), y, z + wrapShift(z,pz));
+}
+
 export function updateChunkVisibility(px,pz){
   const pcx = wrapC(Math.round(px))>>4, pcz = wrapC(Math.round(pz))>>4;
   for(let cz=0;cz<CHUNKS;cz++)for(let cx=0;cx<CHUNKS;cx++){
-    let dx = Math.abs(cx-pcx); dx = Math.min(dx, CHUNKS-dx);
-    let dz = Math.abs(cz-pcz); dz = Math.min(dz, CHUNKS-dz);
-    const vis = dx<=VIEW_CHUNKS && dz<=VIEW_CHUNKS;
+    // signed chunk delta across the wrap
+    let sx = cx-pcx; if(sx >  CHUNKS/2) sx -= CHUNKS; if(sx < -CHUNKS/2) sx += CHUNKS;
+    let sz = cz-pcz; if(sz >  CHUNKS/2) sz -= CHUNKS; if(sz < -CHUNKS/2) sz += CHUNKS;
+    const vis = Math.abs(sx)<=VIEW_CHUNKS && Math.abs(sz)<=VIEW_CHUNKS;
     const list = chunkMeshes[cIndex(cx,cz)];
-    if(list) for(const m of list) m.visible = vis;
+    if(!list) continue;
+    // Instance matrices hold absolute coords, so shifting the mesh by ±WORLD
+    // renders the chunk on the near side of the seam — no gap, no visible edge.
+    const offX = (pcx + sx - cx) * CH;
+    const offZ = (pcz + sz - cz) * CH;
+    for(const m of list){
+      m.visible = vis;
+      if(m.position.x !== offX || m.position.z !== offZ) m.position.set(offX, 0, offZ);
+    }
+  }
+  // static block meshes (torches, doors) follow the same rule
+  for(const m of torches.values()){
+    const b = m.userData.base;
+    if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
+  }
+  for(const m of doorMeshes.values()){
+    const b = m.userData.base;
+    if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
   }
 }
 
@@ -461,6 +495,7 @@ function makeTorchMesh(x,y,z){
   const tip = new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.13), new THREE.MeshBasicMaterial({color:0xffd77a}));
   tip.position.y = .18; g.add(tip);
   g.position.set(x,y,z);
+  g.userData.base = [x,y,z];
   return g;
 }
 export const lightBlocks = new Map(); // "x,y,z" -> {x,y,z,type}
@@ -479,7 +514,7 @@ const torchLights = Array.from({length:4},()=>{ const l=new THREE.PointLight(0xf
 export function updateTorchLights(px,pz){
   const near = [];
   for(const lb of lightBlocks.values()){
-    const d = Math.hypot(lb.x-px, lb.z-pz);
+    const d = wrapDist(lb.x, lb.z, px, pz);
     if(d<26) near.push([d,lb]);
   }
   near.sort((a,b)=>a[0]-b[0]);
@@ -487,7 +522,7 @@ export function updateTorchLights(px,pz){
     const l = torchLights[i], e = near[i]?.[1];
     if(e){
       const spec = LIGHT_BLOCKS[e.type];
-      l.position.set(e.x, e.y+.4, e.z);
+      placeWrapped(l, e.x, e.y+.4, e.z, px, pz);
       l.color.setHex(spec.c);
       l.intensity = spec.i;
     } else l.intensity = 0;
@@ -496,7 +531,7 @@ export function updateTorchLights(px,pz){
 export function nearestTorchDist(x,z){
   let best = 1e9;
   for(const lb of lightBlocks.values()){
-    const d = Math.hypot(lb.x-x, lb.z-z);
+    const d = wrapDist(lb.x, lb.z, x, z);
     if(d<best) best = d;
   }
   return best;
@@ -531,7 +566,7 @@ function makeDoorMesh(x, y, z, facing, open){
   g.rotation.y = base;
   // open swings ~95°
   panel.rotation.y = open ? -Math.PI/2 : 0;   // swings a clean 90° on the hinge
-  g.userData = {panel, facing, open};
+  g.userData = {panel, facing, open, base:[x, y - 0.5, z]};
   return g;
 }
 export function trackDoor(x,y,z,prev,t){

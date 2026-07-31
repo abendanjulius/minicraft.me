@@ -1,7 +1,7 @@
 // mobs.js — the horde. Host-authoritative zombies with a shared intelligence tier.
 // T0 shamblers · T1 fast + packs · T2 dig soft blocks · T3 hide from the sun (hunt them by day!)
 import { WORLD, WH, topY, getBlock, heightAt, isWalkThrough } from './world.js';
-import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box } from './render.js';
+import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box, wrapShift, wrapDist, placeWrapped } from './render.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
 
@@ -77,7 +77,8 @@ function makeCorpseMesh(x,y,z){
 function create(x,y,z){
   const {c, eyes} = makeZombieMesh();
   c.g.position.set(x,y,z);
-  scene.add(c.g);
+  const holder = new THREE.Group(); holder.add(c.g); scene.add(holder);
+  c.holder = holder;
   const zb = {id:nextId++, c, eyes, yaw:Math.random()*Math.PI*2, hp:6+(intel>=3?2:0),
               atkCd:0, dig:null, dormant:false, phase:Math.random()*9, tgt:null};
   zombies.set(zb.id, zb);
@@ -87,7 +88,7 @@ function remove(id, poof=true){
   const zb = zombies.get(id);
   if(!zb) return;
   if(poof) spawnParticles(zb.c.g.position.x, zb.c.g.position.y+1, zb.c.g.position.z, 0x57a05a, 14);
-  scene.remove(zb.c.g);
+  scene.remove(zb.c.holder || zb.c.g);
   zombies.delete(id);
 }
 export function init(isAuthority){
@@ -323,7 +324,8 @@ export function applyRemote(list){
     if(!zb){
       const {c, eyes} = makeZombieMesh();
       c.g.position.set(x,y,z);
-      scene.add(c.g);
+      const holder = new THREE.Group(); holder.add(c.g); scene.add(holder);
+      c.holder = holder;
       zb = {id, c, eyes, tgt:null, dormant:false, phase:Math.random()*9};
       zombies.set(id, zb);
     }
@@ -349,6 +351,7 @@ export function applyCorpses(list){
 const shortest = d => { if(d > WORLD/2) d -= WORLD; if(d < -WORLD/2) d += WORLD; return d; };
 export function commonTick(dt, time, playerPos){
   groanT -= dt;
+  for(const c of corpses.values()) placeWrapped(c.mesh, c.x, c.y, c.z, playerPos.x, playerPos.z);
   for(const zb of zombies.values()){
     const p = zb.c.g.position;
     if(!authority && zb.tgt){
@@ -357,7 +360,8 @@ export function commonTick(dt, time, playerPos){
       p.z += shortest(zb.tgt.z-p.z)*Math.min(1,dt*8);
       zb.c.g.rotation.y = zb.tgt.ry;
     }
-    const d = Math.hypot(p.x-playerPos.x, p.z-playerPos.z);
+    zb.c.holder.position.set(wrapShift(p.x, playerPos.x), 0, wrapShift(p.z, playerPos.z));
+    const d = wrapDist(p.x, p.z, playerPos.x, playerPos.z);
     zb.c.g.visible = d < VIEW;
     if(zb.dormant){
       // hiders: arms slack, still legs, breadcrumb dust + close-range groans

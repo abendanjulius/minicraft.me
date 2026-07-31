@@ -1,6 +1,6 @@
 // animals.js — blocky wildlife. Host (or solo) runs the AI; clients render what the host says.
 import { WORLD, CENTER, topY, mulberry32 } from './world.js';
-import { scene, box, VIEW, spawnParticles } from './render.js';
+import { scene, box, VIEW, spawnParticles, wrapShift, wrapDist } from './render.js';
 
 const KINDS = ['pig','sheep','chicken'];
 export const animals = [];
@@ -34,8 +34,11 @@ function makeAnimal(kind,x,z){
   }
   const gy = topY(Math.round(x),Math.round(z));
   g.position.set(x, gy+0.5, z);
-  scene.add(g);
-  animals.push({g, legs, kind, yaw:0, speed:kind==='chicken'?1:1.4, mode:'idle',
+  // holder carries the ±WORLD render shift; g.position stays the logical position
+  const holder = new THREE.Group();
+  holder.add(g);
+  scene.add(holder);
+  animals.push({g, holder, legs, kind, yaw:0, speed:kind==='chicken'?1:1.4, mode:'idle',
                 timer:1, phase:Math.random()*10, tgt:null,
                 hp:4, alive:true, respawnT:0, fleeT:0});
 }
@@ -63,7 +66,7 @@ export function hit(idx, dmg, fromPos){
 
 export function init(isAuthority, seed){
   authority = isAuthority;
-  for(const a of animals) scene.remove(a.g);
+  for(const a of animals) scene.remove(a.holder || a.g);
   animals.length = 0;
   const rng = mulberry32(seed ^ 0x9e3779b9); // same seed => same herd on every device
   for(let i=0;i<30;i++){
@@ -88,8 +91,8 @@ export function update(dt, time, playerPos){
       continue;
     }
     if(!a.alive) continue;
-    const ax = a.g.position.x-playerPos.x, az = a.g.position.z-playerPos.z;
-    const far = ax*ax+az*az > VIEW*VIEW;
+    a.holder.position.set(wrapShift(a.g.position.x, playerPos.x), 0, wrapShift(a.g.position.z, playerPos.z));
+    const far = wrapDist(a.g.position.x, a.g.position.z, playerPos.x, playerPos.z) > VIEW;
     a.g.visible = !far;
 
     if(!authority){

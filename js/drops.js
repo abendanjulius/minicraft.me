@@ -1,6 +1,6 @@
 // drops.js — ground item entities: drop with Q, walk over to pick up
 import { WORLD, wrapC, topY, getBlock } from './world.js';
-import { scene, makeBlockCube, makeHeldItemIcon, TYPES, ITEMS, spawnParticles } from './render.js';
+import { scene, makeBlockCube, makeHeldItemIcon, TYPES, ITEMS, spawnParticles, placeWrapped, wrapDist } from './render.js';
 import { inventory, addToInventory, renderHotbar, hotbarSlots, sel, renderInv, invOpen } from './ui.js';
 import { gm } from './mode.js';
 import { sfx } from './audio.js';
@@ -147,11 +147,9 @@ export function commonTick(dt, time, playerPos){
     const fy = floorY(d.x, d.y + 2, d.z);
     const targetY = fy + 0.2;
     d.y += (targetY - d.y) * Math.min(1, dt * 8);
-    d.mesh.position.y = d.y + Math.sin(d.bob * 3) * 0.06;
-    d.mesh.position.x = d.x;
-    d.mesh.position.z = d.z;
+    placeWrapped(d.mesh, d.x, d.y + Math.sin(d.bob * 3) * 0.06, d.z, playerPos.x, playerPos.z);
     d.mesh.rotation.y = time * 1.5;
-    const dist = Math.hypot(d.x - playerPos.x, d.z - playerPos.z);
+    const dist = wrapDist(d.x, d.z, playerPos.x, playerPos.z);
     d.mesh.visible = dist < 80;
   }
 }
