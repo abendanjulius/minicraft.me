@@ -12,6 +12,42 @@ import * as net from './net.js';
 
 const $ = id=>document.getElementById(id);
 
+// ---- Version check ----
+const APP_VERSION = '1.2.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+$('verLabel').textContent = 'v' + APP_VERSION;
+async function forceUpdate(newVer){
+  try{
+    if('caches' in window) for(const k of await caches.keys()) await caches.delete(k);
+    const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+    for(const r of regs) await r.unregister();
+  }catch(e){}
+  location.replace(location.pathname + '?v=' + encodeURIComponent(newVer));
+}
+async function checkVersion(){
+  try{
+    const res = await fetch('./version.json?t=' + Date.now(), {cache:'no-store'});
+    if(!res.ok) return;
+    const {version} = await res.json();
+    if(!version || version === APP_VERSION) return;
+    if(playerMod.state.playing){
+      addChat('⚙ System', `Update v${version} available — quit and reload to get it.`);
+      return;
+    }
+    // guard against reload loops if the CDN is still serving old files
+    const key = 'mc_reloaded_' + version;
+    if(sessionStorage.getItem(key)){
+      $('verLabel').textContent = `v${APP_VERSION} (v${version} available — refresh in a minute)`;
+      return;
+    }
+    sessionStorage.setItem(key, '1');
+    $('menuStatus').textContent = `Updating to v${version}…`;
+    forceUpdate(version);
+  }catch(e){}
+}
+checkVersion();
+setInterval(checkVersion, 5*60*1000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkVersion(); });
+
 // ---- Character picker ----
 function buildSkinRow(){
   const row = $('skinRow');

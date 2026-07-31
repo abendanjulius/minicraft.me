@@ -120,3 +120,7 @@ body:not(.touch) #btnQuit{right:10px}
 #deathScreen{position:fixed;inset:0;background:rgba(110,10,10,.55);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:6;color:#fff;text-align:center;font-family:monospace}
 #deathScreen h2{font-size:28px;text-shadow:2px 2px 0 #400}
 @media (max-width:860px){ #vitals{bottom:52px} .vit{font-size:12px} }
+
+
+/* version label */
+#verLabel{font-size:10px;opacity:.6;margin:2px 0 0;font-family:monospace}

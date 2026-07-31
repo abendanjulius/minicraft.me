@@ -1,5 +1,5 @@
 // sw.js — cache app shell so solo mode works offline / installed
-const CACHE = 'minicraft-v6';
+const CACHE = 'minicraft-v7'  // UPDATE ON EVERY RELEASE (with version.json + APP_VERSION in main.js);
 const CORE = [
   './', './index.html', './css/style.css', './manifest.json',
   './js/main.js', './js/world.js', './js/render.js', './js/player.js',
@@ -19,6 +19,11 @@ self.addEventListener('activate', e=>{
 // Cache-first with network fill-in (also caches the CDN libs after first load)
 self.addEventListener('fetch', e=>{
   if(e.request.method!=='GET') return;
+  // version.json is the update beacon — always network, never cache
+  if(e.request.url.includes('version.json')){
+    e.respondWith(fetch(e.request));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(hit=>{
       if(hit) return hit;
