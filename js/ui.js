@@ -127,6 +127,7 @@ export let invOpen = false;
 const CATS = [
   {id:'inv',    icon:'🎒', label:'Inventory'},
   {id:'can',    icon:'✨', label:'Craftable'},
+  {id:'guide',  icon:'📖', label:'Guide'},
   {id:'build',  icon:'🧱', label:'Construction'},
   {id:'gear',   icon:'⚔️', label:'Equipment'},
   {id:'light',  icon:'💡', label:'Lights'},
@@ -160,6 +161,19 @@ function idsForCat(cat){
     return all.filter(id => (inventory[id]||0) > 0);
   }
   if(cat==='can') return all.filter(id => recipesFor(id).length && (gm.forge || canCraftNow(id)));
+  if(cat==='guide'){
+    const guide = craftApi?.GUIDE || [];
+    // unique ids from guide entries that still exist as items/blocks
+    const seen = new Set();
+    const ids = [];
+    for(const g of guide){
+      if(seen.has(g.id)) continue;
+      if(!(TYPES[g.id] || ITEMS[g.id])) continue;
+      seen.add(g.id);
+      ids.push(g.id);
+    }
+    return ids;
+  }
   return all.filter(id => catOf(id) === cat);
 }
 
@@ -173,11 +187,14 @@ function renderRail(){
 function renderDetail(){
   const box = $('invDetail');
   if(invPick == null || !(TYPES[invPick] || ITEMS[invPick])){
+    const hint = invCat==='guide'
+      ? 'Pick an entry to learn where to find it and what it is for.'
+      : 'Pick an item on the left to see its recipe.';
     box.innerHTML = `<div class="dSlots"><div class="dSlot"></div><div class="dSlot"></div>
         <div class="dSlot"></div><div class="dSlot"></div></div>
       <div class="dArrow">▼</div>
       <div class="dSlot out"></div>
-      <p class="dHint">Pick an item on the left to see its recipe.</p>`;
+      <p class="dHint">${hint}</p>`;
     return;
   }
   const id = invPick;
@@ -199,7 +216,16 @@ function renderDetail(){
   let html = `<div class="dHead">${iconOf(id)}<b>${nameOf(id)}</b></div>
     <div class="dHave">You have: ${gm.forge ? '∞' : have}</div>`;
   if(facts.length) html += facts.map(f=>`<div class="dFact">${f}</div>`).join('');
-  if(g) html += `<div class="dFact">📍 ${g.where}</div><div class="dFact">🛠 ${g.uses}</div>`;
+  if(g){
+    html += `<div class="dGuideBlock">
+      <div class="dGuideLabel">📍 Where</div>
+      <div class="dFact">${g.where}</div>
+      <div class="dGuideLabel">🛠 Uses</div>
+      <div class="dFact">${g.uses}</div>
+    </div>`;
+  } else if(invCat==='guide'){
+    html += `<div class="dFact dHint">No guide notes for this item yet.</div>`;
+  }
   recipes.forEach((r,i)=>{
     const ok = craftApi.canCraft(r);
     const ings = r.in.map(([iid,n])=>{
@@ -232,6 +258,7 @@ function renderDetail(){
 
 export function renderInv(){
   renderRail();
+  document.body.classList.toggle('inv-guide', invCat==='guide');
   $('invTitle').textContent = CATS.find(c=>c.id===invCat)?.label || 'Inventory';
   const q = getSearchQuery();
   const grid = $('invGrid');
@@ -257,7 +284,10 @@ export function renderInv(){
 
   let shown = 0;
   for(const id of idsForCat(invCat)){
-    if(q && !matchesSearch(nameOf(id))) continue;
+    if(q){
+      const g = (craftApi?.GUIDE || []).find(x => x.id === id);
+      if(!matchesSearch(nameOf(id), g?.where || '', g?.uses || '')) continue;
+    }
     const have = inventory[id]||0;
     const craftable = recipesFor(id).length > 0;
     const d = document.createElement('div');
@@ -282,7 +312,9 @@ export function renderInv(){
   if(!shown && !grid.childElementCount){
     grid.innerHTML = invCat==='inv'
       ? '<span class="empty-note">Your pack is empty — go mine some blocks.</span>'
-      : '<span class="empty-note">Nothing here yet.</span>';
+      : invCat==='guide'
+        ? '<span class="empty-note">No guide entries match your search.</span>'
+        : '<span class="empty-note">Nothing here yet.</span>';
   }
   renderDetail();
 }
@@ -291,15 +323,17 @@ export function setInvCat(cat){ invCat = cat; renderInv(); }
 
 export function setTabHook(fn){ tabHook = fn; }
 export function switchTab(tab){
-  // legacy entry point: 'craft' opens the Craftable rail category
-  setInvCat(tab==='craft' ? 'can' : 'inv');
+  // legacy entry points from hotkeys / menu
+  if(tab==='craft') setInvCat('can');
+  else if(tab==='guide') setInvCat('guide');
+  else setInvCat('inv');
 }
 export function toggleInv(open, tab){
   invOpen = open ?? !invOpen;
   $('inv').style.display = invOpen ? 'block' : 'none';
   document.body.classList.toggle('inv-open', invOpen);
   if(invOpen){ invPick = null; switchTab(tab||'items'); document.exitPointerLock?.(); }
-  else playerHooks?.relock?.();
+  else { document.body.classList.remove('inv-guide'); playerHooks?.relock?.(); }
 }
 
 export function initUI(hooks){

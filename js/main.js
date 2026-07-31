@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.7.5'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.7.8'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -160,7 +160,8 @@ function buildWorlds(){
     const card = document.createElement('div');
     card.className = 'worldCard' + (d?'':' empty');
     if(!d){
-      card.innerHTML = `<button class="wNew">＋ New World<br><small>starts in ${MODE_ICON(localStorage.getItem('mc_mode')==='forge'?'forge':'night')} ${localStorage.getItem('mc_mode')==='forge'?'Forge':'Nightfall'}</small></button>`;
+      const m = localStorage.getItem('mc_mode')==='forge' ? 'forge' : 'night';
+      card.innerHTML = `<button class="wNew">＋<br>New World<br><small>${MODE_ICON(m)} ${m==='forge'?'Forge':'Nightfall'}</small></button>`;
       card.querySelector('.wNew').addEventListener('click', ()=>{
         const name = prompt('Name your world:', 'World '+(i+1));
         if(name===null) return;
@@ -171,7 +172,8 @@ function buildWorlds(){
     } else {
       card.innerHTML = `
         <div class="wInfo"><b>${MODE_ICON(d.mode)} ${d.name}</b>
-        <small>${(d.edits||[]).length} edits · saved ${timeAgo(d.savedAt||Date.now())}</small></div>
+        <small>${(d.edits||[]).length} edits</small>
+        <small>${timeAgo(d.savedAt||Date.now())}</small></div>
         <div class="wBtns">
           <button class="wPlay" title="Play solo">▶</button>
           <button class="wHost" title="Host for friends">🌐</button>
