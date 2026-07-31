@@ -1,10 +1,10 @@
-html,body{margin:0;height:100%;overflow:hidden;background:#87ceeb;font-family:monospace;touch-action:none;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#87ceeb;font-family:monospace;-webkit-user-select:none;user-select:none}
 body.playing{cursor:none}
 body.inv-open{cursor:default}
 #game{position:fixed;inset:0}
 
 /* Menu */
-#menu{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px}
+#menu{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 #menu h1{margin:0;font-size:42px;text-shadow:2px 2px 0 #365}
 .tagline{margin:0 0 8px;opacity:.85;font-size:13px}
 #menu input{font-family:monospace;font-size:16px;padding:10px 12px;border:2px solid #365;border-radius:6px;background:rgba(255,255,255,.92);width:220px;text-align:center;text-transform:uppercase}
@@ -185,3 +185,22 @@ body:not(.touch) #btnMode{right:64px}
 .wBtns .wDel{background:#f6e2e2;border-color:#a66}
 .linkBtn{background:none;border:none;color:#eaf6e2;font-family:monospace;font-size:11px;text-decoration:underline;cursor:pointer;margin-top:4px}
 @media (max-height:760px){ #menu{gap:6px} #menu h1{font-size:30px} }
+
+
+/* v1.5.6 — mobile menu scrolling & responsiveness */
+#game,#touchUI,#joyZone,.tbtn{touch-action:none}
+#inv{touch-action:pan-y}
+#menu{padding:max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom))}
+@media (max-height:820px), (orientation:landscape) and (max-width:1000px){
+  #menu{justify-content:flex-start}
+}
+@media (max-width:520px){
+  #menu h1{font-size:30px}
+  #menu{gap:7px}
+  #worlds{width:min(92vw,300px)}
+  .skinBtn{width:44px;height:64px}
+  .skFace{width:22px;height:22px}
+  .modeBtn{width:110px;font-size:12px;padding:6px 3px}
+  #menu input{width:min(70vw,220px)}
+  .joinRow input{width:120px}
+}
