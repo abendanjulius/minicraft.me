@@ -205,6 +205,51 @@ function texFrom(desc){
       gc.fillStyle=rgb(200,60,40); gc.fillRect(7,0,2,2); // warning
     });
   }
+  if(kind==='bed'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(12);
+        const isPillow = y>=12;
+        const isFrame = y<=2 || x<=1 || x>=14;
+        if(isFrame) gc.fillStyle=rgb(110+d,70+d,40+d);
+        else if(isPillow) gc.fillStyle=rgb(230+d,220+d,210+d);
+        else gc.fillStyle=rgb(r+d,g+d,bl+d);
+        gc.fillRect(x,y,1,1);
+      }
+    });
+  }
+  if(kind==='stairs'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(12);
+        // stepped silhouette
+        const step = Math.floor(y/4);
+        const solid = x >= 16 - (step+1)*4;
+        gc.fillStyle = solid ? rgb(r+d,g+d,bl+d) : rgb(r-40,g-40,bl-40);
+        gc.fillRect(x,y,1,1);
+      }
+    });
+  }
+  if(kind==='slab'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(12);
+        const solid = y >= 8;
+        gc.fillStyle = solid ? rgb(r+d,g+d,bl+d) : rgb(40,40,45);
+        gc.fillRect(x,y,1,1);
+      }
+    });
+  }
+  if(kind==='trapdoor'){
+    return canvasTex(gc=>{
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const d=jit(12), seam=(x%4===0)?-20:0;
+        gc.fillStyle=rgb(r+seam+d,g+seam+d,bl+seam+d);
+        gc.fillRect(x,y,1,1);
+      }
+      gc.fillStyle=rgb(200,180,60); gc.fillRect(7,7,2,2);
+    });
+  }
   if(kind==='door' || kind==='doortop' || kind==='dooropen' || kind==='doortopopen'){
     const open = kind.includes('open');
     const top = kind.includes('top');

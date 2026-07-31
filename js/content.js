@@ -49,7 +49,14 @@ export const EXTRA_BLOCKS = {
   55:{name:'Door', tex:['door',0x8b6914], hard:1.5, pc:0x8b6914, tool:'axe', transparent:1},
   56:{name:'Crate',          tex:['chest',0x9a6b3a],           hard:2,  pc:0x9a6b3a, tool:'axe'},
   57:{name:'Powder Keg',     tex:['keg',0x5a3a2a],             hard:1.2,pc:0x5a3a2a, tool:'axe'},
+  58:{name:'Bed',            tex:['bed',0xc0392b],              hard:.8, pc:0xc0392b, tool:'axe'},
+  59:{name:'Wood Stairs',    tex:['stairs',0xb8894a],           hard:1.2,pc:0xb8894a, tool:'axe'},
+  60:{name:'Stone Stairs',   tex:['stairs',0x9a9a9a],           hard:2.5,pc:0x9a9a9a, tool:'pick'},
+  61:{name:'Wood Slab',      tex:['slab',0xb8894a],             hard:1.0,pc:0xb8894a, tool:'axe'},
+  62:{name:'Trapdoor',       tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe'},
+  63:{name:'Trapdoor Open',  tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe', transparent:1},
 };
+
 
 
 
@@ -108,7 +115,11 @@ export const EXTRA_ITEMS = {
   172:{name:'Zombie Tonic',   icon:'🧉', food:2, heal:8},
   165:{name:"Miner's Stew",   icon:'🥘', food:10, heal:3},
   180:{name:'Spark Striker', icon:'🔥'},
+  181:{name:'Leather Cap',   icon:'🧢', armor:1},
+  182:{name:'Leather Tunic', icon:'🦺', armor:3},
+  183:{name:'Leather Boots', icon:'🥾', armor:1},
 };
+
 
 // bonus rolls when a block is mined (in addition to the block itself)
 export const BLOCK_DROPS = {
@@ -236,6 +247,14 @@ R(48,1,[[7,6]],'block','Wooden door — place, click to open/close, mine to pick
 R(56,1,[[7,8]],'block','Stash items — click to open'),
 R(57,1,[[120,4],[7,4]],'block','Unstable powder keg — ignite with a Spark Striker'),
 R(180,1,[[119,1],[126,1]],'mat','Ignites Powder Kegs — MiniCraft firestarter'),
+R(58,1,[[7,3],[12,3]],'block','Set your respawn point — click a placed bed'),
+R(59,4,[[7,6]],'block','Wooden stairs for roofs and steps'),
+R(60,4,[[3,6]],'block','Stone stairs'),
+R(61,6,[[7,3]],'block','Half-height wood slab'),
+R(62,2,[[7,6]],'block','Click to open/close — floor hatch'),
+R(181,1,[[125,5]],'mat','Leather armor — reduces damage'),
+R(182,1,[[125,8]],'mat','Leather armor — reduces damage'),
+R(183,1,[[125,4]],'mat','Leather armor — reduces damage'),
 R(165,1,[[116,2],[120,1]],'food','Hot fuel for long digs — heals 3 (10)'),
 ];
 
@@ -270,6 +289,15 @@ export const EXTRA_GUIDE = [
   {id:56, where:'Craft from 8 Planks.', uses:'Store items. Click to open. Survives in your world save.'},
   {id:57, where:'Craft from Coal + Planks.', uses:'Place, then ignite with a Spark Striker. BOOM.'},
   {id:180,where:'Craft from Flint + Iron Ingot.', uses:'Click a Powder Keg to light the fuse.'},
+  {id:58, where:'Craft from Planks + Wool.', uses:'Click to set respawn. Sleep at night to skip to dawn.'},
+  {id:59, where:'Craft from Planks.', uses:'Stairs and roofs.'},
+  {id:60, where:'Craft from Stone.', uses:'Sturdy stairs.'},
+  {id:61, where:'Craft from Planks.', uses:'Half slabs for detail.'},
+  {id:62, where:'Craft from Planks.', uses:'Floor hatch — click to open/close.'},
+  {id:181,where:'Craft from Leather.', uses:'Wear in inventory — reduces damage taken.'},
+  {id:182,where:'Craft from Leather.', uses:'Wear in inventory — reduces damage taken.'},
+  {id:183,where:'Craft from Leather.', uses:'Wear in inventory — reduces damage taken.'},
+
 ];
 
 /** Short blurb for inventory popups. */

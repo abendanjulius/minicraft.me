@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.7.8'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.8.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -53,7 +53,7 @@ async function checkVersion(){
     if(!res.ok) return;
     const {version} = await res.json();
     if(!version || version === APP_VERSION) return;
-    if(playerMod.state.playing){
+    if(playerMod.state.playing && !playerMod.state.paused){
       addChat('⚙ System', `Update v${version} available — quit and reload to get it.`);
       return;
     }
@@ -123,6 +123,9 @@ function quitGame(){
   location.reload();
 }
 $('btnQuit').addEventListener('click', quitGame);
+$('pauseResume')?.addEventListener('click', ()=>playerMod.setPaused(false));
+$('pauseInv')?.addEventListener('click', ()=>{ playerMod.setPaused(false); toggleInv(true); });
+$('pauseQuit')?.addEventListener('click', ()=>{ playerMod.setPaused(false); quitGame(); });
 $('btnQuit').addEventListener('touchstart', e=>{ e.preventDefault(); quitGame(); });
 
 // ---- PWA ----
@@ -300,6 +303,7 @@ initUI({
   mine: b=>playerMod.setMine(b),
   place: ()=>playerMod.placeAction(),
   drop: ()=>playerMod.dropHeld(),
+  sprint: (on)=>{ playerMod.keys.sprint = !!on; },
   relock: ()=>playerMod.relock(),
 });
 setCraftApi(craftMod);
@@ -395,7 +399,7 @@ function loop(now){
   }
 
   playerMod.update(dt, elapsed);
-  if(playerMod.state.playing){
+  if(playerMod.state.playing && !playerMod.state.paused){
     const dl = updateDayNight(dt, playerMod.player.pos);
     animals.update(dt, elapsed, playerMod.player.pos);
     if(isAuthority){

@@ -403,6 +403,11 @@ function initTouch(hooks){
   $('btnMine').addEventListener('touchend', ()=>hooks.mine(false));
   $('btnPlace').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.place(); });
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
+  const sp = $('btnSprint');
+  if(sp){
+    sp.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.sprint?.(true); });
+    sp.addEventListener('touchend', ()=>hooks.sprint?.(false));
+  }
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
 }
 

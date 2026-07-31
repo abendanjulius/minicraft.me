@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat } from './ui.js';
@@ -40,8 +40,8 @@ function pickEntity(){
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
-export const state = { playing:false, mineHeld:false, mining:null };
-const keys = {};
+export const state = { playing:false, mineHeld:false, mining:null, paused:false, flying:false };
+export const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
 let shake = 0, wasGround = true, fallV = 0, stepTimer = 0;
@@ -131,8 +131,14 @@ export function setPosYaw(x,y,z,yaw){
   view.yaw = yaw||0;
 }
 export function spawn(){
-  player.pos.set(CENTER, heightAt(CENTER,CENTER)+3, CENTER);
+  const bed = survival.getBedSpawn?.();
+  if(bed){
+    player.pos.set(bed.x + 0.5, bed.y + 1.2, bed.z + 0.5);
+  } else {
+    player.pos.set(CENTER, heightAt(CENTER,CENTER)+3, CENTER);
+  }
   player.vel.set(0,0,0);
+  state.flying = false;
   buildBody();
   bodyG.visible = true;
 }
@@ -163,6 +169,21 @@ export function relock(){
   }
 }
 
+export function onModeMaybeChanged(){
+  if(!gm.forge) state.flying = false;
+}
+export function setPaused(on){
+  state.paused = !!on;
+  const el = document.getElementById('pauseMenu');
+  if(el) el.style.display = state.paused ? 'flex' : 'none';
+  document.body.classList.toggle('paused', state.paused);
+  if(state.paused){
+    document.exitPointerLock?.();
+    for(const k in keys) keys[k]=false;
+  } else if(state.playing && !isTouch){
+    relock();
+  }
+}
 export function dropHeld(){
   if(survival.sv.dead) return;
   const payload = drops.tryDropFromHotbar(player.pos, view.yaw);
@@ -172,14 +193,29 @@ export function initControls(){
 
   document.addEventListener('pointerlockchange', ()=>{ usingLock = !!document.pointerLockElement; });
   document.addEventListener('mousemove', e=>{
-    if(isTouch || !state.playing || invOpen) return;
-    if(usingLock || (mouseDown !== null)){
+    if(isTouch || !state.playing || invOpen || state.paused) return;
+    // Pointer lock is the reliable path. Without it, only look while dragging.
+    // Always re-request lock on any movement if we lost it (fixes "can strafe but can't turn").
+    if(!usingLock && !mouseDown){
+      // lost lock silently (Alt-Tab, browser UI) — try reclaim on next intent
+      return;
+    }
+    if(usingLock || mouseDown !== null){
       if(mouseDown !== null && (Math.abs(e.clientX-mouseDown.x)>6 || Math.abs(e.clientY-mouseDown.y)>6)){ dragging = true; state.mineHeld = false; }
-      look(e.movementX*.002, e.movementY*.002);
+      const sens = 0.0025;
+      look(e.movementX*sens, e.movementY*sens);
     }
   });
   document.addEventListener('keydown', e=>{
     if(chat.open) return;
+    // Pause / unpause
+    if(e.code==='Escape' && state.playing){
+      e.preventDefault();
+      if(invOpen){ toggleInv(false); return; }
+      setPaused(!state.paused);
+      return;
+    }
+    if(state.paused) return;
     if(e.code==='Enter' && state.playing){ for(const k in keys) keys[k]=false; openChat(); return; }
     keys[e.code]=true;
     if(e.code.startsWith('Digit')){
@@ -192,6 +228,11 @@ export function initControls(){
     if(e.code==='KeyQ' && state.playing && !invOpen){ e.preventDefault(); dropHeld(); }
     if(e.code==='KeyT' && state.playing) nextToolSlot();
     if(e.code==='KeyM') toggleMusic();
+    // Forge fly toggle
+    if(e.code==='KeyF' && state.playing && gm.forge){
+      state.flying = !state.flying;
+      player.vel.y = 0;
+    }
   });
   document.addEventListener('keyup', e=>keys[e.code]=false);
   addEventListener('wheel', e=>{
@@ -275,6 +316,24 @@ export function placeAction(){
       placeAnim = 1;
       return;
     }
+    if(hit===58){ // Bed — set spawn / sleep
+      survival.setBedSpawn(hx, hy, hz);
+      placeAnim = 1;
+      sfx.place();
+      // Nightfall: skip night if dark enough
+      if(!gm.forge && dayIsNight()){
+        survival.sleepTillDawn();
+      }
+      return;
+    }
+    if(hit===62 || hit===63){ // Trapdoor toggle
+      const nt = hit===62 ? 63 : 62;
+      applyEdit(hx,hy,hz,nt,false);
+      net.sendEdit(hx,hy,hz,nt);
+      placeAnim = 1;
+      sfx.place();
+      return;
+    }
     // Spark Striker on Powder Keg
     const held = hotbarSlots[sel.slot];
     if(hit===57 && held?.k==='f' && held.id===180){
@@ -348,6 +407,8 @@ function updateMining(dt){
       const ORE_YIELD = {45:120, 46:121, 47:122};
       if(old>=48 && old<=55){
         addToInventory(48);
+      } else if(old===62 || old===63){
+        addToInventory(62);
       } else if(old===56){
         for(const [id,n] of chests.removeAt(bx,by,bz)){
           const p = drops.spill(id, n, bx + (Math.random()-.5)*.6, by + .35, bz + (Math.random()-.5)*.6);
@@ -380,8 +441,12 @@ function collide(pos){
 
 export function update(dt, elapsed){
   if(!state.playing) return;
+  if(state.paused) return;
   if(!invOpen && !survival.sv.dead){
-    const speed = 5;
+    // Sprint: hold Shift (or mobile sprint flag) while moving
+    const sprinting = !!(keys.ShiftLeft || keys.ShiftRight || keys.sprint);
+    let speed = sprinting ? 8.2 : 5;
+    if(state.flying && gm.forge) speed = sprinting ? 14 : 9;
     const fwd = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
     const right = new THREE.Vector3(-fwd.z,0,fwd.x);
     const f = (keys.KeyW?1:0)-(keys.KeyS?1:0) - joy.y;
@@ -394,7 +459,14 @@ export function update(dt, elapsed){
     const px0 = Math.round(player.pos.x), pz0 = Math.round(player.pos.z);
     const onLadder = getBlock(px0, Math.round(player.pos.y), pz0)===44 ||
                      getBlock(px0, Math.round(player.pos.y+1), pz0)===44;
-    if(onLadder){
+    if(state.flying && gm.forge){
+      // Creative flight: Space up, Shift down, no gravity
+      let vy = 0;
+      if(keys.Space) vy += sprinting ? 10 : 6;
+      if(keys.ShiftLeft || keys.ShiftRight) vy -= sprinting ? 10 : 6;
+      player.vel.y = vy;
+      player.onGround = false;
+    } else if(onLadder){
       player.vel.y = keys.Space ? 3.2 : -1.4;
       player.onGround = false;
     } else {
@@ -414,7 +486,7 @@ export function update(dt, elapsed){
     if(player.onGround && !wasGround && fallV < -8){
       sfx.land();
       addShake(Math.min(.22, -fallV*.015));
-      if(fallV < -12) survival.damage(Math.round((-fallV-12)*1.2), 'fall');
+      if(fallV < -12 && !(state.flying && gm.forge)) survival.damage(Math.round((-fallV-12)*1.2), 'fall');
     }
     wasGround = player.onGround;
 

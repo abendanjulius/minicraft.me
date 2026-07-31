@@ -28,9 +28,9 @@ export function setBlock(x,y,z,t){
   chunks[cIndex(x>>4, z>>4)][bIndex(x&15, y, z&15)] = t;
 }
 // glass (9) doesn't hide its neighbours
-export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && !(b>=48&&b<=55); };
+export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && !(b>=48&&b<=55) && b!==63; };
 // walk-through: air, torch, ladder, open doors (52-55)
-export const isWalkThrough = b => !b || b===10 || b===44 || (b>=52 && b<=55);
+export const isWalkThrough = b => !b || b===10 || b===44 || (b>=52 && b<=55) || b===63;
 export const isDoor = b => b>=48 && b<=55;
 export const doorFacing = b => (b>=48 && b<=55) ? (b-48)%4 : 0;
 export const doorOpen = b => b>=52 && b<=55;

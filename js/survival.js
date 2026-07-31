@@ -3,9 +3,30 @@ import { ITEMS, TYPES } from './render.js';
 import { inventory, renderHotbar, renderInv, invOpen, addChat } from './ui.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
+function armorPoints(){
+  let a = 0;
+  if((inventory[181]||0)>0) a += 1;
+  if((inventory[182]||0)>0) a += 3;
+  if((inventory[183]||0)>0) a += 1;
+  return a;
+}
+
 
 const $ = id=>document.getElementById(id);
 export const sv = { hp:20, hunger:20, dead:false };
+let bedSpawn = null; // {x,y,z}
+export function getBedSpawn(){ return bedSpawn; }
+export function setBedSpawn(x,y,z){
+  bedSpawn = {x, y, z};
+  note('bed');
+}
+export function sleepTillDawn(){
+  import('./render.js').then(r=>{ try{ r.setDayTime(0.25); }catch(e){} });
+  sv.hp = Math.min(20, sv.hp + 4);
+  renderVitals();
+  note('sleep');
+}
+
 let onRespawn = null, onDeath = null, eatCd = 0, starveT = 0, regenT = 0, nightWasDark = false;
 
 // ---- Achievements ----
@@ -18,6 +39,8 @@ const ACH = [
   {id:'craft1', name:'Craftsman',      goal:'Craft something (press C)'},
   {id:'torch1', name:'Let There Be Light', goal:'Place a torch'},
   {id:'night1', name:'Sunrise',        goal:'Survive a night'},
+  {id:'bed',   name:'Home Sweet Home', goal:'Set a bed as your respawn'},
+  {id:'sleep', name:'Good Night',     goal:'Sleep through the night'},
   {id:'zkill1', name:'Back to Sleep',  goal:'Defeat a zombie'},
   {id:'recover1',name:'Leave No One Behind', goal:'Recover a fallen body before the horde feeds'},
   {id:'dayhunt1',name:'Daywalker Hunter',    goal:'Slay a hiding zombie in daylight'},
@@ -81,6 +104,8 @@ function renderVitals(){
 
 export function damage(n, cause){
   if(gm.forge || sv.dead || n<=0) return;
+  const ar = armorPoints();
+  if(ar>0) n = Math.max(1, Math.round(n * (1 - Math.min(0.55, ar * 0.09))));
   sv.hp = Math.max(0, sv.hp - n);
   renderVitals();
   sfx.hurt();
