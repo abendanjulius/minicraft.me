@@ -2,7 +2,7 @@
 import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
-         setEditRecorder, setDayTime } from './render.js';
+         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook, setHorde as setHordeHud, restoreInv } from './ui.js';
 import { renderCraft, renderGuide } from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
@@ -16,11 +16,23 @@ import * as animals from './animals.js';
 import * as mobs from './mobs.js';
 import * as survival from './survival.js';
 import * as net from './net.js';
+import * as physics from './physics.js';
+import * as drops from './drops.js';
 
 const $ = id=>document.getElementById(id);
 
+// Block physics: sand/gravel settle + leaf decay triggers
+physics.setPhysicsFx((x,y,z,tid)=>spawnParticles(x,y,z, TYPES[tid]?.pc ?? 0xdacc96, 3));
+setEditPhysicsHook((x,y,z,old,t)=>{
+  if(old===4 && t===0) physics.notifyLogBroken(x,y,z);
+  if(t===0 || physics.GRAVITY.has(t) || physics.GRAVITY.has(old)){
+    if(physics.afterEdit(x,y,z)) rebuildAt(x,z);
+  }
+});
+
+
 // ---- Version check ----
-const APP_VERSION = '1.5.11'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.6.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -232,6 +244,7 @@ function begin(seed, edits, authority, saved){
     buildAllChunks();
     animals.init(authority, seed);
     mobs.init(authority);
+    drops.init(authority);
     isAuthority = authority;
     survival.initSurvival({
       onRespawn: ()=>playerMod.spawn(),
@@ -277,6 +290,7 @@ initUI({
   jump: b=>playerMod.jump(b),
   mine: b=>playerMod.setMine(b),
   place: ()=>playerMod.placeAction(),
+  drop: ()=>playerMod.dropHeld(),
   relock: ()=>playerMod.relock(),
 });
 setTabHook(tab=>{ if(tab==='craft') renderCraft(); if(tab==='guide') renderGuide(); });
@@ -287,10 +301,77 @@ initChat(text=>{
   net.sendChat(text);
 });
 
+function updateCompassMap(pos, yaw){
+  const cv = document.getElementById('compassMap');
+  if(!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2, R = W/2 - 2;
+  ctx.clearRect(0,0,W,H);
+  // soft disc (CSS already frames it)
+  ctx.fillStyle = 'rgba(10,18,28,.15)';
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+  // range rings
+  ctx.strokeStyle = 'rgba(255,255,255,.14)';
+  ctx.lineWidth = 1.5;
+  for(const f of [.45,.8]){
+    ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.stroke();
+  }
+
+  const RANGE = 48; // blocks to rim
+  const shortest = d => { if(d>WORLD/2) d-=WORLD; if(d<-WORLD/2) d+=WORLD; return d; };
+  const plot = (wx, wz, color, size, edgeOnly=false)=>{
+    let dx = shortest(wx - pos.x), dz = shortest(wz - pos.z);
+    const dist = Math.hypot(dx, dz);
+    // rotate so "up" on the map is the direction the player faces
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const rx =  dx * c - dz * s;
+    const rz =  dx * s + dz * c;
+    const scale = (R - 6) / RANGE;
+    let px = cx + rx * scale;
+    let py = cy + rz * scale;
+    const pr = Math.hypot(px - cx, py - cy);
+    if(dist > RANGE || pr > R - 5){
+      // pin to rim so far targets still show as edge pips
+      const k = (R - 5) / Math.max(pr, 0.001);
+      px = cx + (px - cx) * k;
+      py = cy + (py - cy) * k;
+      size = Math.max(2, size * 0.85);
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(px, py, size, 0, Math.PI*2); ctx.fill();
+  };
+
+  // Home / spawn (amber ring-dot) — same role as old compass arrow
+  plot(CENTER, CENTER, '#ff6b5a', 3.5);
+
+  // Zombies
+  for(const zb of mobs.zombies.values()){
+    const p = zb.c.g.position;
+    plot(p.x, p.z, zb.dormant ? '#e0b84a' : '#ff3b3b', zb.dormant ? 2.8 : 3.4);
+  }
+  // Other players
+  for(const r of net.getRemotes()){
+    plot(r.g.position.x, r.g.position.z, '#4fd2ff', 3.6);
+  }
+  // You at center + facing notch
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 5);
+  ctx.lineTo(cx - 3.5, cy + 2);
+  ctx.lineTo(cx + 3.5, cy + 2);
+  ctx.closePath();
+  ctx.stroke();
+}
+
 // ---- Main loop ----
-let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30, dripT=5, wasUnderground=false;
+let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30, dripT=5, wasUnderground=false, pickupCd=0;
+
+
+
 function loop(now){
-  requestAnimationFrame(loop);
   const dt = Math.min((now-last)/1000,.05); last=now; elapsed+=dt;
 
   frames++; fpsTime+=dt;
@@ -309,6 +390,23 @@ function loop(now){
       for(const d of digs) net.hostWorldEdit(d.x, d.y, d.z, 0);
     }
     mobs.commonTick(dt, elapsed, playerMod.player.pos);
+    drops.commonTick(dt, elapsed, playerMod.player.pos);
+    // auto-pickup when close
+    pickupCd = (pickupCd||0) - dt;
+    if(pickupCd<=0 && !gm.forge){
+      pickupCd = 0.2;
+      net.sendPickup(playerMod.player.pos.x, playerMod.player.pos.y, playerMod.player.pos.z);
+    }
+    if(isAuthority){
+      for(const [lx,ly,lz] of physics.tickDecay(dt)){
+        if(net.mode==='host') net.hostWorldEdit(lx, ly, lz, 0);
+        else {
+          setBlock(lx,ly,lz,0);
+          spawnParticles(lx,ly,lz, TYPES[5]?.pc ?? 0x3a7d28, 5);
+          rebuildAt(lx,lz);
+        }
+      }
+    }
     const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;
     survival.tick(dt, movingH, dl);
     net.update(dt, elapsed);
@@ -318,22 +416,21 @@ function loop(now){
       updateTorchLights(playerMod.player.pos.x, playerMod.player.pos.z);
       cullTimer=.3;
     }
-    // cave ambience + Spelunker
     const ug = playerMod.player.pos.y < heightAt(Math.round(playerMod.player.pos.x), Math.round(playerMod.player.pos.z)) - 2;
     if(ug){
       if(!wasUnderground){ wasUnderground = true; survival.note('cave'); }
       dripT -= dt;
       if(dripT<=0){ dripT = 4 + Math.random()*5; sfx.drip(); }
     } else wasUnderground = false;
-    // autosave every 30s (solo & host — clients don't own the world)
     saveT -= dt;
     if(saveT<=0){ saveT = 30; saveWorldNow(); }
-    // Compass points home to spawn
     const dx = CENTER - playerMod.player.pos.x, dz = CENTER - playerMod.player.pos.z;
     const angle = Math.atan2(dx, dz) - playerMod.view.yaw;
     setCompass(-angle * 180/Math.PI);
+    updateCompassMap(playerMod.player.pos, playerMod.view.yaw);
   }
   updateParticles(dt);
   renderer.render(scene, camera);
+  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

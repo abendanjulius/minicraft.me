@@ -466,8 +466,13 @@ export function applyEdit(x,y,z,t,burst=true){
     const color = TYPES[old||t]?.pc ?? 0xffffff;
     spawnParticles(x,y,z,color, old? 22 : 8);
   }
+  // Optional physics hook (sand/gravel + leaf decay) — set from main to avoid cycles
+  editPhysicsHook?.(x, y, z, old, t);
   return old;
 }
+let editPhysicsHook = null;
+export function setEditPhysicsHook(fn){ editPhysicsHook = fn; }
+
 
 // ---- Particles ----
 const pGeo = new THREE.BoxGeometry(.18,.18,.18);

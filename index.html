@@ -52,7 +52,7 @@
   <button id="respawnBtn" class="mbtn">Respawn</button>
 </div>
 <div id="hud" style="display:none">FPS: <span id="fps">0</span> &nbsp; XYZ: <span id="pos"></span> &nbsp; Tool: <span id="toolName">Hand</span> &nbsp; <span id="players"></span> &nbsp; <span id="horde" style="display:none"></span></div>
-<div id="compass"><span id="compassArrow">▲</span></div>
+<div id="compass"><canvas id="compassMap" width="120" height="120"></canvas></div>
 <div id="banner" style="display:none"></div>
 <div id="chatLog"></div>
 <div id="chatRow" style="display:none">
@@ -88,6 +88,7 @@
   <div class="tbtn" id="btnJump">⬆️</div>
   <div class="tbtn" id="btnMine">⛏️</div>
   <div class="tbtn" id="btnPlace">🧱</div>
+  <div class="tbtn" id="btnDrop">📤</div>
   <div id="btnInv">🎒</div>
   <div id="btnChat">💬</div>
 </div>

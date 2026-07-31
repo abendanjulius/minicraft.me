@@ -61,6 +61,7 @@ body.inv-open{cursor:default}
 #btnJump{right:20px;bottom:150px}
 #btnMine{right:96px;bottom:80px}
 #btnPlace{right:20px;bottom:80px}
+#btnDrop{right:96px;bottom:150px}
 #btnInv{position:fixed;top:10px;right:10px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;z-index:3}
 
 /* Rotate prompt (touch portrait only) */
@@ -68,8 +69,10 @@ body.inv-open{cursor:default}
 @media (orientation:portrait){ body.touch #rotate{display:flex} }
 
 /* v1.1 — compass, chat */
-#compass{position:fixed;top:10px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
-#compassArrow{color:#ff6b5a;font-size:16px;display:block;transition:transform .1s linear}
+#compass{position:fixed;top:8px;left:50%;transform:translateX(-50%);width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#compassMap{width:72px;height:72px;display:block;border-radius:50%}
+@media (max-width:860px){#compass{width:64px;height:64px}#compassMap{width:64px;height:64px}}
+
 #chatLog{position:fixed;left:10px;bottom:130px;z-index:2;pointer-events:none;max-width:46vw}
 .chatMsg{background:rgba(0,0,0,.45);color:#fff;font-size:12px;padding:3px 8px;border-radius:4px;margin-top:3px;transition:opacity 1s;font-family:monospace;word-break:break-word}
 .chatMsg.fade{opacity:0}
@@ -112,7 +115,7 @@ body:not(.touch) #btnQuit{right:10px}
 .vit{font-size:14px;text-shadow:1px 1px 1px #000}
 .vit.half{opacity:.55}
 .vit.off{opacity:.18;filter:grayscale(1)}
-#goal{position:fixed;top:52px;left:50%;transform:translateX(-50%);color:#fff;text-shadow:1px 1px 2px #000;font-size:11px;font-family:monospace;z-index:2;pointer-events:none;display:none;background:rgba(0,0,0,.25);padding:3px 10px;border-radius:4px}
+#goal{position:fixed;top:88px;left:50%;transform:translateX(-50%);color:#fff;text-shadow:1px 1px 2px #000;font-size:11px;font-family:monospace;z-index:2;pointer-events:none;display:none;background:rgba(0,0,0,.25);padding:3px 10px;border-radius:4px}
 #vignette{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center, transparent 45%, rgba(180,20,20,.65) 100%)}
 #toasts{position:fixed;top:80px;right:12px;z-index:4;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .toast{background:rgba(20,20,20,.85);border:1px solid #666;color:#ffd97a;font-family:monospace;font-size:12px;padding:8px 14px;border-radius:6px;transform:translateX(120%);transition:transform .35s}

@@ -257,6 +257,7 @@ function initTouch(hooks){
   $('btnMine').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.mine(true); });
   $('btnMine').addEventListener('touchend', ()=>hooks.mine(false));
   $('btnPlace').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.place(); });
+  $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
 }
 
@@ -296,9 +297,7 @@ export function initChat(onSend){
   $('btnChat').addEventListener('touchstart', e=>{ e.preventDefault(); openChat(); });
 }
 
-export function setCompass(deg){
-  $('compassArrow').style.transform = `rotate(${deg}deg)`;
-}
+export function setCompass(deg){ /* compass is now a canvas map; angle handled in main */ }
 export function restoreInv(inv, slots){
   for(const k of Object.keys(inventory)) delete inventory[k];
   Object.assign(inventory, inv||{});

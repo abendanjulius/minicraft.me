@@ -12,6 +12,7 @@ import * as survival from './survival.js';
 import { BLOCK_DROPS } from './content.js';
 import { animals } from './animals.js';
 import { zombies, corpses } from './mobs.js';
+import * as drops from './drops.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
@@ -152,7 +153,13 @@ export function relock(){
   }
 }
 
+export function dropHeld(){
+  if(survival.sv.dead) return;
+  const payload = drops.tryDropFromHotbar(player.pos, view.yaw);
+  if(payload) net.sendDrop(payload);
+}
 export function initControls(){
+
   document.addEventListener('pointerlockchange', ()=>{ usingLock = !!document.pointerLockElement; });
   document.addEventListener('mousemove', e=>{
     if(isTouch || !state.playing || invOpen) return;
@@ -172,7 +179,8 @@ export function initControls(){
     }
     if(e.code==='KeyE' && state.playing) toggleInv();
     if(e.code==='KeyC' && state.playing) toggleInv(true,'craft');
-    if(e.code==='KeyQ') nextToolSlot();
+    if(e.code==='KeyQ' && state.playing && !invOpen){ e.preventDefault(); dropHeld(); }
+    if(e.code==='KeyT' && state.playing) nextToolSlot();
     if(e.code==='KeyM') toggleMusic();
   });
   document.addEventListener('keyup', e=>keys[e.code]=false);

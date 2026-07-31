@@ -7,6 +7,7 @@ import { sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as mobs from './mobs.js';
+import * as drops from './drops.js';
 import * as survival from './survival.js';
 import { MOB_DROPS } from './content.js';
 import { gm, setMode } from './mode.js';
@@ -71,6 +72,7 @@ function removeRemote(id){
 function refreshPlayerList(){
   setPlayers([...remotes.values()].map(r=>r.name));
 }
+export function getRemotes(){ return [...remotes.values()]; }
 
 // ---- Message handling ----
 function handle(msg, fromConn){
@@ -95,6 +97,7 @@ function handle(msg, fromConn){
     animals.applyRemote(msg.d);
     if(msg.z) mobs.applyRemote(msg.z);
     if(msg.c) mobs.applyCorpses(msg.c);
+    if(msg.drops) drops.applyRemote(msg.drops);
     if(msg.iq!==undefined){ mobs.setIntel(msg.iq); setHorde(msg.iq); }
     if(msg.gmF!==undefined) setMode(msg.gmF===1);
     if(msg.tod!==undefined) setDayTime(msg.tod);
@@ -106,6 +109,20 @@ function handle(msg, fromConn){
     survival.damage(msg.dmg, msg.cause||'zombie');
   } else if(msg.t==='give'){
     addToInventory(msg.item);
+  } else if(msg.t==='drop' && mode==='host'){
+    // Client dropped an item — spawn and relay state
+    const d = drops.spawn(msg.item, msg.n||1, msg.x, msg.y, msg.z, msg.id);
+    if(d) relay({t:'drops', list:drops.serialize()}, null);
+  } else if(msg.t==='drops'){
+    drops.applyRemote(msg.list||[]);
+  } else if(msg.t==='pickup' && mode==='host'){
+    const got = drops.tryPickup(msg.x, msg.y, msg.z);
+    if(got){
+      sendToPeer(msg.id0, {t:'give', item:got.item});
+      // if stack n>1, give rest
+      for(let i=1;i<(got.n||1);i++) sendToPeer(msg.id0, {t:'give', item:got.item});
+      relay({t:'drops', list:drops.serialize()}, null);
+    }
   } else if(msg.t==='kudos'){
     survival.note(msg.what);
   } else if(msg.t==='chat'){
@@ -203,6 +220,33 @@ export function dispatchHurts(hurts){
     else sendToPeer(h.id, {t:'hurt', dmg:h.dmg, cause:'zombie'});
   }
 }
+export function sendDrop(payload){
+  if(mode==='solo') return; // already spawned locally
+  if(mode==='host'){
+    relay({t:'drops', list:drops.serialize()}, null);
+  } else {
+    safeSendHost({t:'drop', id0:peer?.id, ...payload});
+  }
+}
+export function sendPickup(x,y,z){
+  if(mode==='solo'){
+    const got = drops.tryPickup(x,y,z);
+    if(got){
+      for(let i=0;i<(got.n||1);i++) addToInventory(got.item);
+      sfx.place();
+    }
+    return;
+  }
+  if(mode==='host'){
+    const got = drops.tryPickup(x,y,z);
+    if(got){
+      for(let i=0;i<(got.n||1);i++) addToInventory(got.item);
+      relay({t:'drops', list:drops.serialize()}, null);
+    }
+  } else {
+    safeSendHost({t:'pickup', id0:peer?.id, x, y, z});
+  }
+}
 export function sendEdit(x,y,z,v){
   if(mode==='solo') return;
   const msg = {t:'edit', x,y,z, v, id:peer?.id};
@@ -282,7 +326,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), drops:drops.serialize(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
   }
 
   // animate remote avatars
