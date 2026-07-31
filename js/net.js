@@ -1,7 +1,7 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
 import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, makeHeldItemIcon, makeWeaponModel,
-         applyEdit, spawnParticles, TYPES, ITEMS, SKINS, day, setDayTime } from './render.js';
+         applyEdit, applyEditsBatch, spawnParticles, TYPES, ITEMS, SKINS, day, setDayTime } from './render.js';
 import { setBanner, setPlayers, addChat, setHorde } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';
@@ -95,6 +95,12 @@ function handle(msg, fromConn){
   } else if(msg.t==='edit'){
     applyEdit(msg.x, msg.y, msg.z, msg.v, true);
     if(mode==='host'){ editLog.push([msg.x,msg.y,msg.z,msg.v]); relay(msg, fromConn); }
+  } else if(msg.t==='edits'){
+    applyEditsBatch(msg.list||[]);
+    if(mode==='host'){
+      for(const e of (msg.list||[])) editLog.push(e);
+      relay(msg, fromConn);
+    }
   } else if(msg.t==='anim'){
     animals.applyRemote(msg.d);
     if(msg.z) mobs.applyRemote(msg.z);
@@ -213,6 +219,15 @@ export function systemMsg(text){
     else safeSendHost(msg);
   }
 }
+/** Apply a batch of world edits (physics, explosions, decay): records for saving, syncs to peers. */
+export function syncEdits(list){
+  if(!list || !list.length) return;
+  applyEditsBatch(list);
+  if(mode==='host'){
+    for(const e of list) editLog.push(e);
+    relay({t:'edits', list}, null);
+  }
+}
 // The host pushes horde-made block edits into the same pipeline as player edits
 export function hostWorldEdit(x,y,z,t){
   applyEdit(x,y,z,t,true);
@@ -292,6 +307,7 @@ export function startHost(name, newSeed, onReady, onError){
       const hostPos = {t:'pos', id:peer.id, name:myName, ...playerMod.netState()};
       conn.send({
         t:'init', seed:newSeed, edits:editLog, tod:day.t, gmF:gm.forge?1:0,
+        chests: chests.serialize(),
         host: hostPos,
       });
       // Also push every other already-connected player so late joiners see them
@@ -317,6 +333,7 @@ export function startJoin(name, code, onInit, onError){
     conn.on('data', d=>{
       if(d.t==='init' && !gotInit){
         gotInit = true;
+        if(d.chests) chests.applyRemote(d.chests);
         if(d.tod!==undefined) setDayTime(d.tod);
         setMode(d.gmF===1);
         onInit(d.seed, d.edits);
@@ -346,7 +363,7 @@ export function update(dt, elapsed){
   // host broadcasts animals 5x/s
   if(mode==='host'){
     animTimer -= dt;
-    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), drops:drops.serialize(), chests:chests.serialize(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
+    if(animTimer<=0){ animTimer = .2; relay({t:'anim', d:animals.serialize(), z:mobs.serialize(), c:mobs.serializeCorpses(), drops:drops.serialize(), iq:mobs.getIntel(), tod:day.t, gmF:gm.forge?1:0}, null); }
   }
 
   // animate remote avatars

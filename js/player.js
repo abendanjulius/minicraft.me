@@ -51,10 +51,14 @@ export const skinIdx = ()=>Math.min(SKINS.length-1, Math.max(0, +(localStorage.g
 // ---- First-person hand & held item ----
 const handGroup = new THREE.Group();
 camera.add(handGroup);
-handGroup.position.set(.5,-.45,-.8);
-handGroup.rotation.set(-.2,.15,0);
-const armMesh = box(.16,.16,.5,0xdba97c,0,0,.05);
-handGroup.add(armMesh);
+handGroup.position.set(.52,-.5,-.72);
+handGroup.rotation.set(-.15,.1,0);
+// Arm enters diagonally from the lower-right corner, like Minecraft's
+const armPivot = new THREE.Group();
+armPivot.rotation.set(.35, -.12, -.55);
+const armMesh = box(.19,.19,.62,0xdba97c,0,0,.1);
+armPivot.add(armMesh);
+handGroup.add(armPivot);
 const toolModels = {};
 for(const t of TOOLS) if(t.id!=='hand'){
   const m = makeToolModel(t.id);
@@ -70,6 +74,9 @@ function updateHeld(){
   const held = hotbarSlots[sel.slot];
   for(const id in toolModels) toolModels[id].visible = (tool===id);
   clearHeldExtra();
+  // bare arm shows on its own; with a block/tool it tucks back so the item reads clearly
+  const empty = !held || (held.k!=='t' && !(gm.forge || inventory[held.id]>0));
+  armPivot.position.set(0, empty?0:-.06, empty?0:.06);
   if(!held) return;
 
   // Mining tools already use toolModels
@@ -80,8 +87,9 @@ function updateHeld(){
     const id = held.id;
     if(!TYPES[id]) return;
     if(!gm.forge && !(inventory[id]>0)) return;
-    heldExtra = makeBlockCube(id, .36);
-    heldExtra.position.set(0,.06,-.32);
+    heldExtra = makeBlockCube(id, .46);
+    heldExtra.position.set(.02,-.02,-.36);
+    heldExtra.rotation.set(.2,-.72,.08); // show top + two sides
     handGroup.add(heldExtra);
     return;
   }
@@ -341,7 +349,10 @@ function updateMining(dt){
       if(old>=48 && old<=55){
         addToInventory(48);
       } else if(old===56){
-        chests.removeAt(bx,by,bz);
+        for(const [id,n] of chests.removeAt(bx,by,bz)){
+          const p = drops.spill(id, n, bx + (Math.random()-.5)*.6, by + .35, bz + (Math.random()-.5)*.6);
+          if(p) net.sendDrop(p);
+        }
         addToInventory(56);
       } else if(ORE_YIELD[old]){
         const n = 1 + (Math.random()<.45 ? 1 : 0);

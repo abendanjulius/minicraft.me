@@ -511,24 +511,26 @@ function makeDoorMesh(x, y, z, facing, open){
   const panel = new THREE.Group();
   // door leaf: thin, 2 blocks tall
   const wood = 0x8b6914, dark = 0x5c4010, handle = 0xd4b84a;
-  const leaf = box(.12, 1.95, .9, wood, 0, 0.975, 0);
+  // Everything is modelled AHEAD of the hinge (local +Z), so the panel group's
+  // origin IS the hinge line — rotating it swings the door like a real one.
+  const leaf = box(.12, 1.95, .9, wood, 0, 0.975, .45);
   panel.add(leaf);
   // frame lines (decorative)
-  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, -.42));
-  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .42));
-  panel.add(box(.13, .06, .9, dark, 0, 1.92, 0));
-  panel.add(box(.13, .06, .9, dark, 0, .05, 0));
-  // handle
-  panel.add(box(.08, .08, .08, handle, .1, 0.95, .28));
-  // pivot: hinge on -Z edge of panel, offset so it sits in doorway
-  panel.position.set(0, 0, 0.45); // panel extends toward +Z from hinge
+  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .03));
+  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .87));
+  panel.add(box(.13, .06, .9, dark, 0, 1.92, .45));
+  panel.add(box(.13, .06, .9, dark, 0, .05, .45));
+  // handle sits near the free edge, far from the hinge
+  panel.add(box(.08, .08, .08, handle, .1, 0.95, .74));
+  // hinge line on the -Z edge of the cell
+  panel.position.set(0, 0, -0.45);
   g.add(panel);
   g.position.set(x, y - 0.5, z);
   // base rotation by facing: 0=+Z wall, 1=+X, 2=-Z, 3=-X
   const base = facing * Math.PI/2;
   g.rotation.y = base;
   // open swings ~95°
-  panel.rotation.y = open ? -Math.PI * 0.55 : 0;
+  panel.rotation.y = open ? -Math.PI/2 : 0;   // swings a clean 90° on the hinge
   g.userData = {panel, facing, open};
   return g;
 }
@@ -577,6 +579,31 @@ export function applyEdit(x,y,z,t,burst=true){
   // Optional physics hook (sand/gravel + leaf decay) — set from main to avoid cycles
   editPhysicsHook?.(x, y, z, old, t);
   return old;
+}
+
+/** Apply many edits at once: records them for saving, rebuilds each affected chunk ONCE.
+ *  Deliberately does NOT run the physics hook (callers are physics/explosions themselves). */
+export function applyEditsBatch(list){
+  if(!list || !list.length) return;
+  const dirty = new Set();
+  const mark = (x,z)=>{
+    const cx = x>>4, cz = z>>4;
+    dirty.add(cx+','+cz);
+    if((x&15)===0)  dirty.add(((cx+CHUNKS-1)%CHUNKS)+','+cz);
+    if((x&15)===15) dirty.add(((cx+1)%CHUNKS)+','+cz);
+    if((z&15)===0)  dirty.add(cx+','+((cz+CHUNKS-1)%CHUNKS));
+    if((z&15)===15) dirty.add(cx+','+((cz+1)%CHUNKS));
+  };
+  for(const [rx,y,rz,t] of list){
+    const x = wrapC(rx), z = wrapC(rz);
+    const old = getBlock(x,y,z);
+    setBlock(x,y,z,t);
+    trackTorch(x,y,z,old,t);
+    trackDoor(x,y,z,old,t);
+    editRecorder?.(x, y, z, t);
+    mark(x,z);
+  }
+  for(const k of dirty){ const [cx,cz] = k.split(',').map(Number); buildChunk(cx,cz); }
 }
 let editPhysicsHook = null;
 export function setEditPhysicsHook(fn){ editPhysicsHook = fn; }

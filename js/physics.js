@@ -11,7 +11,7 @@ const DECAY_SCAN = 5;
 let onFx = null; // (x,y,z, typeId) => void  optional particles
 export function setPhysicsFx(fn){ onFx = fn; }
 
-function settleColumn(x, z){
+function settleColumn(x, z, out){
   x = wrapC(x); z = wrapC(z);
   let moved = false;
   for(let y = 1; y < WH; y++){
@@ -25,21 +25,21 @@ function settleColumn(x, z){
     if(dest === y) continue;
     setBlock(x, y, z, 0);
     setBlock(x, dest, z, t);
+    out.push([x, y, z, 0], [x, dest, z, t]);
     onFx?.(x, y, z, t);
     moved = true;
   }
   return moved;
 }
 
-/** Settle gravity in column. Returns true if blocks moved. */
+/** Settle gravity in a column. Returns [[x,y,z,t],...] so the caller can record + sync. */
 export function afterEdit(x, y, z){
   x = wrapC(x); z = wrapC(z);
-  let any = false;
+  const out = [];
   for(let i = 0; i < WH; i++){
-    if(!settleColumn(x, z)) break;
-    any = true;
+    if(!settleColumn(x, z, out)) break;
   }
-  return any;
+  return out;
 }
 
 const decayQ = [];

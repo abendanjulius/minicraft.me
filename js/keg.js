@@ -1,6 +1,6 @@
 // keg.js — Powder Keg (explosive) + Spark Striker ignition
-import { getBlock, setBlock, wrapC, WORLD, WH } from './world.js';
-import { applyEdit, spawnParticles, TYPES, rebuildAt } from './render.js';
+import { getBlock, wrapC, WORLD, WH } from './world.js';
+import { spawnParticles, TYPES } from './render.js';
 import { sfx } from './audio.js';
 import * as survival from './survival.js';
 
@@ -46,14 +46,10 @@ function explode(cx, cy, cz, playerPos, onBlast){
         if(!t || t===57) continue; // bedrock-ish: keep y=0; remove keg
         // don't erase very hard blocks as much — still clear most
         if(t===23 && Math.random()<0.5) continue; // iron sometimes survives
-        edits.push([wrapC(x),y,wrapC(z)]);
+        edits.push([wrapC(x),y,wrapC(z),0]);
       }
   // always clear keg cell
-  edits.push([cx,cy,cz]);
-  for(const [x,y,z] of edits){
-    setBlock(x,y,z,0);
-    rebuildAt(x,z);
-  }
+  edits.push([wrapC(cx),cy,wrapC(cz),0]);
   // damage player if close
   if(playerPos){
     let dx = playerPos.x-cx, dz = playerPos.z-cz;

@@ -66,22 +66,17 @@
 <div id="btnMode" style="display:none" title="Switch mode">🌙</div>
 
 <div id="inv">
-  <div id="invTabs">
-    <button class="itab active" data-tab="items">Items</button>
-    <button class="itab" data-tab="craft">Craft</button>
-    <button class="itab" data-tab="guide">Guide</button>
-  </div>
-  <input id="invSearch" type="search" placeholder="Search items, craft, guide…" autocomplete="off" />
-  <div id="tab-items">
-    <p id="invHelp"></p>
-    <div class="invLabel">Tools</div>
-    <div id="invTools"></div>
-    <div class="invLabel">Blocks &amp; Items</div>
+  <div id="invRail"></div>
+  <div id="invMain">
+    <div id="invHead">
+      <span id="invTitle">Inventory</span>
+      <input id="invSearch" type="search" placeholder="Search…" autocomplete="off">
+    </div>
     <div id="invGrid"></div>
-    <button id="invClear">Clear selected slot</button>
   </div>
-  <div id="tab-craft" style="display:none"><div id="craftCats"></div><div id="craftList"></div></div>
-  <div id="tab-guide" style="display:none"><div id="guideList"></div></div>
+  <div id="invSide"><div id="invDetail"></div></div>
+  <button id="invClose" type="button">✕</button>
+</div>
 </div>
 
 <div id="chestUI" style="display:none">

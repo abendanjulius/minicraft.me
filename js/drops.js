@@ -48,6 +48,14 @@ export function spawn(itemId, n, x, y, z, id){
   return d;
 }
 
+/** Spawn a loose stack in the world (e.g. spilled from a broken crate). Returns a sync payload. */
+export function spill(itemId, n, x, y, z){
+  const d = spawn(itemId, n, x, y, z);
+  if(!d) return null;
+  spawnParticles(x, y, z, TYPES[itemId]?.pc ?? 0xffffff, 4);
+  return {id: d.id, item: d.item, n: d.n, x: d.x, y: d.y, z: d.z};
+}
+
 function remove(id, poof=true){
   const d = drops.get(id);
   if(!d) return;

@@ -3,8 +3,8 @@ import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor } from './render.js';
-import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setTabHook, setHorde as setHordeHud, restoreInv } from './ui.js';
-import { renderCraft, renderGuide } from './craft.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv } from './ui.js';
+import * as craftMod from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
 import * as persist from './persist.js';
 import { inventory, hotbarSlots, sel } from './ui.js';
@@ -30,13 +30,14 @@ physics.setPhysicsFx((x,y,z,tid)=>spawnParticles(x,y,z, TYPES[tid]?.pc ?? 0xdacc
 setEditPhysicsHook((x,y,z,old,t)=>{
   if(old===4 && t===0) physics.notifyLogBroken(x,y,z);
   if(t===0 || physics.GRAVITY.has(t) || physics.GRAVITY.has(old)){
-    if(physics.afterEdit(x,y,z)) rebuildAt(x,z);
+    // falling sand/gravel must go through net so it is saved AND seen by everyone
+    net.syncEdits(physics.afterEdit(x,y,z));
   }
 });
 
 
 // ---- Version check ----
-const APP_VERSION = '1.7.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.7.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -233,6 +234,7 @@ function saveWorldNow(){
     tod: day.t,
     intel: mobs.getIntel(),
     hp: sv.hp, hunger: sv.hunger,
+    chests: chests.serialize(),
   });
 }
 addEventListener('beforeunload', saveWorldNow);
@@ -265,6 +267,7 @@ function begin(seed, edits, authority, saved){
       restoreInv(saved.inv, saved.slots);
       setDayTime(saved.tod ?? .28);
       mobs.setIntel(saved.intel||0);
+      if(saved.chests) chests.applyRemote(saved.chests);
       setHordeHud(saved.intel||0);
       survival.restore(saved.hp, saved.hunger);
     }
@@ -297,7 +300,7 @@ initUI({
   drop: ()=>playerMod.dropHeld(),
   relock: ()=>playerMod.relock(),
 });
-setTabHook(tab=>{ if(tab==='craft') renderCraft(); if(tab==='guide') renderGuide(); });
+setCraftApi(craftMod);
 $('chestClose')?.addEventListener('pointerdown', ()=>chests.close());
 $('chestDeposit')?.addEventListener('pointerdown', ()=>{
   chests.depositSelected(hotbarSlots, sel);
@@ -380,6 +383,7 @@ let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAut
 
 
 function loop(now){
+  requestAnimationFrame(loop); // scheduled first so one bad frame can't kill the game
   const dt = Math.min((now-last)/1000,.05); last=now; elapsed+=dt;
 
   frames++; fpsTime+=dt;
@@ -399,13 +403,7 @@ function loop(now){
     }
     mobs.commonTick(dt, elapsed, playerMod.player.pos);
     drops.commonTick(dt, elapsed, playerMod.player.pos);
-    keg.tick(dt, playerMod.player.pos, (edits)=>{
-      if(net.mode==='host'){
-        for(const [x,y,z] of edits) net.hostWorldEdit(x,y,z,0);
-      } else if(net.mode==='solo'){
-        /* already applied in keg.explode */
-      }
-    });
+    if(isAuthority) keg.tick(dt, playerMod.player.pos, (edits)=>net.syncEdits(edits));
     // auto-pickup when close
     pickupCd = (pickupCd||0) - dt;
     if(pickupCd<=0 && !gm.forge){
@@ -413,13 +411,10 @@ function loop(now){
       net.sendPickup(playerMod.player.pos.x, playerMod.player.pos.y, playerMod.player.pos.z);
     }
     if(isAuthority){
-      for(const [lx,ly,lz] of physics.tickDecay(dt)){
-        if(net.mode==='host') net.hostWorldEdit(lx, ly, lz, 0);
-        else {
-          setBlock(lx,ly,lz,0);
-          spawnParticles(lx,ly,lz, TYPES[5]?.pc ?? 0x3a7d28, 5);
-          rebuildAt(lx,lz);
-        }
+      const gone = physics.tickDecay(dt);
+      if(gone.length){
+        for(const [lx,ly,lz] of gone) spawnParticles(lx,ly,lz, TYPES[5]?.pc ?? 0x3a7d28, 5);
+        net.syncEdits(gone.map(([lx,ly,lz])=>[lx,ly,lz,0]));
       }
     }
     const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;
@@ -446,6 +441,5 @@ function loop(now){
   }
   updateParticles(dt);
   renderer.render(scene, camera);
-  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

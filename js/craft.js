@@ -45,12 +45,12 @@ export function craft(r){
   sfx.craft();
   note('craft');
   renderHotbar();
-  renderCraft();
   if(invOpen) renderInv();
   return true;
 }
 
 export function renderCraft(){
+  if(!$('craftList')) return; // legacy panel removed in the v1.7.2 inventory redesign
   const bar = $('craftCats');
   if(!bar.childElementCount){
     for(const [id,label] of CATS){
@@ -87,6 +87,7 @@ export function renderCraft(){
 }
 
 export function renderGuide(){
+  if(!$('guideList')) return; // legacy panel removed in the v1.7.2 inventory redesign
   const list = $('guideList');
   list.innerHTML = '';
   for(const g of GUIDE){

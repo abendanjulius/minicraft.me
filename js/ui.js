@@ -49,6 +49,10 @@ export function addToInventory(t){
 }
 export function setHeldChangeHook(fn){ onHeldChange = fn; }
 
+// craft.js is injected from main.js so the two modules don't import each other
+let craftApi = null;
+export function setCraftApi(api){ craftApi = api; }
+
 export function renderHotbar(){
   const hb = $('hotbar'); hb.innerHTML = '';
   hotbarSlots.forEach((s,i)=>{
@@ -120,122 +124,194 @@ function bindItemInfo(el, name, blurb, onPick){
 }
 
 export let invOpen = false;
-export function renderInv(){
-  if(gm.forge){ renderInvForge(); return; }
-  // Tools row — always available so a swapped-out tool is never lost
-  const tr = $('invTools'); tr.innerHTML = '';
-  for(const t of TOOLS){
-    if(t.id==='hand') continue;
-    const d = document.createElement('div');
-    d.className = 'invItem';
-    d.innerHTML = `<span class="ticon">${t.icon}</span>`;
-    d.title = t.name;
-    if(!isTouch){
-      d.draggable = true;
-      d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invt:'+t.id));
-    }
-    bindItemInfo(d, t.name, 'Mining tool — equip to the selected hotbar slot',
-      ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
-    tr.appendChild(d);
+const CATS = [
+  {id:'inv',    icon:'🎒', label:'Inventory'},
+  {id:'can',    icon:'✨', label:'Craftable'},
+  {id:'build',  icon:'🧱', label:'Construction'},
+  {id:'gear',   icon:'⚔️', label:'Equipment'},
+  {id:'light',  icon:'💡', label:'Lights'},
+  {id:'food',   icon:'🍖', label:'Food & Meds'},
+  {id:'nature', icon:'🌿', label:'Materials'},
+];
+let invCat = 'inv', invPick = null;
+
+function catOf(id){
+  if(id < 100){
+    if(TYPES[id]?.light || id===10) return 'light';
+    return 'build';
   }
-  // Blocks
-  const grid = $('invGrid'); grid.innerHTML = '';
-  let any = false;
-  for(const tid in inventory){
-    if(inventory[tid]<=0) continue;
-    const isFood = +tid>=100;
-    const name = isFood ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
-    if(!matchesSearch(String(name))) continue;
-    any = true;
-    const d = document.createElement('div');
-    d.className = 'invItem';
-    d.innerHTML = isFood
-      ? `<span class="ticon">${ITEMS[tid]?.icon||'❓'}</span><span class="cnt">${inventory[tid]}</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon||''})"></div><span class="cnt">${inventory[tid]}</span>`;
-    if(!isTouch){
-      d.draggable = true;
-      d.addEventListener('dragstart', e=>e.dataTransfer.setData('text/plain','invb:'+tid));
-    }
-    const blurb = itemBlurb(+tid, TYPES, ITEMS);
-    bindItemInfo(d, name, blurb,
-      ()=>{ hotbarSlots[sel.slot] = {k:isFood?'f':'b', id:+tid}; renderHotbar(); });
-    grid.appendChild(d);
-  }
-  if(!any) grid.innerHTML = '<span class="empty-note">Nothing yet — go mine some blocks.</span>';
+  const it = ITEMS[id];
+  if(!it) return 'nature';
+  if(it.dmg) return 'gear';
+  if(it.food || it.heal) return 'food';
+  return 'nature';
 }
-let tabHook = null;
-export function setTabHook(fn){ tabHook = fn; }
-export function switchTab(tab){
-  document.querySelectorAll('.itab').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
-  for(const t of ['items','craft','guide']) $('tab-'+t).style.display = (t===tab)?'block':'none';
-  tabHook?.(tab);
-}
-function renderInvForge(){
-  // Full catalog, everything infinite
-  const tr = $('invTools'); tr.innerHTML = '';
-  for(const t of TOOLS){
-    if(t.id==='hand') continue;
-    const d = document.createElement('div');
-    d.className = 'invItem';
-    d.innerHTML = `<span class="ticon">${t.icon}</span>`;
-    d.addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot] = {k:'t', id:t.id}; renderHotbar(); });
-    tr.appendChild(d);
-  }
-  const grid = $('invGrid'); grid.innerHTML = '';
+const recipesFor = id => (craftApi?.RECIPES || []).filter(r => r.out.id === id);
+const canCraftNow = id => recipesFor(id).some(r => craftApi.canCraft(r));
+const iconOf = id => id>=100
+  ? `<span class="ticon">${ITEMS[id]?.icon || '?'}</span>`
+  : `<div class="sw" style="background-image:url(${TYPES[id]?.icon})"></div>`;
+const nameOf = id => (id>=100 ? ITEMS[id]?.name : TYPES[id]?.name) || 'Unknown';
+
+function idsForCat(cat){
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
-  for(const tid of all){
-    if(tid>=49 && tid<=55) continue; // door facing variants — only show Door (48)
-    const isItem = tid>=100;
-    const name = isItem ? (ITEMS[tid]?.name || tid) : (TYPES[tid]?.name || tid);
-    if(!matchesSearch(String(name))) continue;
+  if(cat==='inv'){
+    if(gm.forge) return all;
+    return all.filter(id => (inventory[id]||0) > 0);
+  }
+  if(cat==='can') return all.filter(id => recipesFor(id).length && (gm.forge || canCraftNow(id)));
+  return all.filter(id => catOf(id) === cat);
+}
+
+function renderRail(){
+  const rail = $('invRail');
+  rail.innerHTML = CATS.map(c =>
+    `<button class="railBtn${c.id===invCat?' active':''}" data-cat="${c.id}" title="${c.label}" type="button">${c.icon}</button>`
+  ).join('');
+}
+
+function renderDetail(){
+  const box = $('invDetail');
+  if(invPick == null || !(TYPES[invPick] || ITEMS[invPick])){
+    box.innerHTML = '<p class="dHint">Tap an item to see what it does and how to make it.</p>';
+    return;
+  }
+  const id = invPick;
+  const have = inventory[id] || 0;
+  const it = id>=100 ? ITEMS[id] : null;
+  const facts = [];
+  if(it?.dmg)  facts.push(`⚔ ${it.dmg} damage`);
+  if(it?.food) facts.push(`🍗 +${it.food} hunger`);
+  if(it?.heal) facts.push(`❤ +${it.heal} health`);
+  if(id<100){
+    if(TYPES[id].light || id===10) facts.push('💡 Light source — blocks zombie spawns nearby');
+    else if(id===44) facts.push('🪜 Climbable');
+    else if(id>=45 && id<=47) facts.push('⛏ Ore');
+    const t = TOOLS.find(t => t.good.includes(id));
+    if(t) facts.push(`${t.icon} Fastest with ${t.name}`);
+  }
+  const g = (craftApi?.GUIDE || []).find(x => x.id === id);
+  const recipes = recipesFor(id);
+  let html = `<div class="dHead">${iconOf(id)}<b>${nameOf(id)}</b></div>
+    <div class="dHave">You have: ${gm.forge ? '∞' : have}</div>`;
+  if(facts.length) html += facts.map(f=>`<div class="dFact">${f}</div>`).join('');
+  if(g) html += `<div class="dFact">📍 ${g.where}</div><div class="dFact">🛠 ${g.uses}</div>`;
+  recipes.forEach((r,i)=>{
+    const ok = craftApi.canCraft(r);
+    const ings = r.in.map(([iid,n])=>{
+      const h = inventory[iid]||0;
+      return `<span class="dIng ${(gm.forge||h>=n)?'':'miss'}">${iconOf(iid)}${gm.forge?'∞':h+'/'+n}</span>`;
+    }).join('');
+    html += `<div class="dRecipe">
+       <div class="dRecipeTop">Craft ×${r.out.n}</div>
+       <div class="dIngs">${ings}</div>
+       <button class="dCraft" data-r="${i}" ${ok?'':'disabled'} type="button">Craft</button>
+       ${r.tip?`<div class="dTip">${r.tip}</div>`:''}</div>`;
+  });
+  html += `<button class="dAssign" type="button">Put in slot ${(sel.slot+1)%10}</button>`;
+  box.innerHTML = html;
+  box.querySelectorAll('.dCraft').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    craftApi.craft(recipes[+b.dataset.r]);
+    renderInv();
+  }));
+  box.querySelector('.dAssign').addEventListener('click', e=>{
+    e.stopPropagation();
+    hotbarSlots[sel.slot] = {k: id>=100 ? 'f' : 'b', id};
+    if(gm.forge && id>=100) inventory[id] = 999;
+    renderHotbar();
+  });
+}
+
+export function renderInv(){
+  renderRail();
+  $('invTitle').textContent = CATS.find(c=>c.id===invCat)?.label || 'Inventory';
+  const q = getSearchQuery();
+  const grid = $('invGrid');
+  grid.innerHTML = '';
+
+  // tools always live in the Equipment tab and in Inventory
+  if(invCat==='gear' || invCat==='inv'){
+    for(const t of TOOLS){
+      if(t.id==='hand') continue;
+      if(q && !matchesSearch(t.name)) continue;
+      const d = document.createElement('div');
+      d.className = 'invItem tool' + (hotbarSlots[sel.slot]?.k==='t' && hotbarSlots[sel.slot].id===t.id ? ' sel':'');
+      d.innerHTML = `<span class="ticon">${t.icon}</span>`;
+      d.title = t.name;
+      d.addEventListener('pointerdown', e=>{
+        e.stopPropagation();
+        hotbarSlots[sel.slot] = {k:'t', id:t.id};
+        renderHotbar();
+      });
+      grid.appendChild(d);
+    }
+  }
+
+  let shown = 0;
+  for(const id of idsForCat(invCat)){
+    if(q && !matchesSearch(nameOf(id))) continue;
+    const have = inventory[id]||0;
+    const craftable = recipesFor(id).length > 0;
     const d = document.createElement('div');
-    d.className = 'invItem';
-    d.title = name;
-    d.innerHTML = isItem
-      ? `<span class="ticon">${ITEMS[tid]?.icon||'❓'}</span><span class="cnt">∞</span>`
-      : `<div class="sw" style="background-image:url(${TYPES[tid]?.icon||''})"></div><span class="cnt">∞</span>`;
-    d.addEventListener('pointerdown', ()=>{
-      hotbarSlots[sel.slot] = {k: isItem?'f':'b', id:tid};
-      inventory[tid] = 999;
-      renderHotbar();
+    d.className = 'invItem' + (invPick===id?' sel':'') + (!gm.forge && !have && invCat!=='inv' ? ' ghost':'');
+    d.title = nameOf(id);
+    d.innerHTML = iconOf(id)
+      + (gm.forge ? '<span class="cnt">∞</span>' : (have ? `<span class="cnt">${have}</span>` : ''))
+      + (craftable && (gm.forge || canCraftNow(id)) ? '<span class="plus">+</span>' : '');
+    d.addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      invPick = id;
+      if(have>0 || gm.forge){
+        hotbarSlots[sel.slot] = {k: id>=100 ? 'f' : 'b', id};
+        if(gm.forge && id>=100) inventory[id] = 999;
+        renderHotbar();
+      }
+      renderInv();
     });
     grid.appendChild(d);
+    shown++;
   }
+  if(!shown && !grid.childElementCount){
+    grid.innerHTML = invCat==='inv'
+      ? '<span class="empty-note">Your pack is empty — go mine some blocks.</span>'
+      : '<span class="empty-note">Nothing here yet.</span>';
+  }
+  renderDetail();
+}
+
+export function setInvCat(cat){ invCat = cat; renderInv(); }
+
+export function setTabHook(fn){ tabHook = fn; }
+export function switchTab(tab){
+  // legacy entry point: 'craft' opens the Craftable rail category
+  setInvCat(tab==='craft' ? 'can' : 'inv');
 }
 export function toggleInv(open, tab){
   invOpen = open ?? !invOpen;
   $('inv').style.display = invOpen ? 'block' : 'none';
   document.body.classList.toggle('inv-open', invOpen);
-  if(invOpen){ renderInv(); switchTab(tab||'items'); document.exitPointerLock?.(); }
+  if(invOpen){ invPick = null; switchTab(tab||'items'); document.exitPointerLock?.(); }
   else playerHooks?.relock?.();
 }
 
 export function initUI(hooks){
   playerHooks = hooks;
-  $('invHelp').textContent = isTouch
-    ? 'Tap a tool or block to put it in the selected hotbar slot. (🎒 to close)'
-    : 'Drag items onto hotbar slots, or tap to fill the selected slot. Drop a slot here to clear it. (E to close)';
-  $('inv').addEventListener('dragover', e=>e.preventDefault());
-  $('inv').addEventListener('drop', e=>{
-    const data = e.dataTransfer.getData('text/plain');
-    if(data.startsWith('slot:')){ hotbarSlots[+data.slice(5)] = null; renderHotbar(); }
+  const rail = $('invRail');
+  rail.addEventListener('pointerdown', e=>{
+    const b = e.target.closest('[data-cat]');
+    if(!b) return;
+    e.stopPropagation();
+    setInvCat(b.dataset.cat);
   });
-  $('invClear').addEventListener('pointerdown', ()=>{ hotbarSlots[sel.slot]=null; renderHotbar(); });
-  document.querySelectorAll('.itab').forEach(b=>b.addEventListener('pointerdown', e=>{ e.stopPropagation(); switchTab(b.dataset.tab); }));
-  renderHotbar();
-  const se = $('invSearch');
-  if(se){
-    se.addEventListener('input', ()=>{
-      if(invOpen){
-        renderInv();
-        // craft/guide refresh via tab hook
-        const active = document.querySelector('.itab.active')?.dataset?.tab;
-        if(active==='craft' || active==='guide') tabHook?.(active);
-      }
-    });
-    se.addEventListener('keydown', e=>e.stopPropagation());
-    se.addEventListener('pointerdown', e=>e.stopPropagation());
+  $('invClose').addEventListener('pointerdown', e=>{ e.stopPropagation(); toggleInv(false); });
+  const search = $('invSearch');
+  if(search){
+    search.addEventListener('input', ()=>renderInv());
+    search.addEventListener('keydown', e=>e.stopPropagation());
+    search.addEventListener('pointerdown', e=>e.stopPropagation());
   }
+  renderHotbar();
   if(isTouch) initTouch(hooks);
 }
 

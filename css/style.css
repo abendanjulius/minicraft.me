@@ -228,3 +228,84 @@ body:not(.touch) #btnMode{right:64px}
 .chestBtns button{flex:1;font-family:monospace;padding:8px;border-radius:5px;border:1px solid #666;
   background:#5cab3c;color:#fff;cursor:pointer}
 #chestClose{background:#444!important}
+
+
+/* ===== v1.7.2 — Minecraft-style 3-pane inventory ===== */
+#inv{
+  display:none;
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(94vw, 860px); max-height:82vh;
+  background:rgba(24,24,26,.95); border:2px solid #6b6b6b; border-radius:8px;
+  padding:0; z-index:4; color:#fff;
+  grid-template-columns:56px 1fr 220px; gap:0; overflow:hidden;
+}
+body.inv-open #inv{ display:grid; }
+#invRail{
+  display:flex; flex-direction:column; gap:6px; padding:10px 6px;
+  background:rgba(0,0,0,.35); border-right:1px solid #4a4a4a; overflow-y:auto;
+}
+.railBtn{
+  width:42px; height:42px; font-size:19px; line-height:1;
+  background:#3a3a3c; border:2px solid #5a5a5c; border-radius:6px; color:#fff; cursor:pointer;
+}
+.railBtn.active{ background:#5cab3c; border-color:#8ede6a; }
+#invMain{ display:flex; flex-direction:column; min-width:0; padding:10px 12px; }
+#invHead{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+#invTitle{ font-size:14px; font-weight:bold; color:#ffd97a; flex:1; }
+#invSearch{
+  font-family:monospace; font-size:12px; padding:5px 8px; width:140px;
+  background:rgba(255,255,255,.08); border:1px solid #666; border-radius:5px; color:#fff;
+}
+#invGrid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(48px,1fr)); gap:6px;
+  overflow-y:auto; align-content:start; padding-right:4px; flex:1; min-height:120px;
+  touch-action:pan-y;
+}
+.invItem{
+  position:relative; width:48px; height:48px; border:2px solid #4a4a4a; border-radius:5px;
+  background:rgba(255,255,255,.07); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.invItem.sel{ border-color:#fff; background:rgba(255,255,255,.2); }
+.invItem.ghost{ opacity:.42; }
+.invItem.tool{ background:rgba(120,160,255,.12); }
+.invItem .sw{ width:28px; height:28px; image-rendering:pixelated; background-size:cover; border-radius:2px; }
+.invItem .ticon{ font-size:22px; }
+.invItem .cnt{ position:absolute; bottom:0; right:3px; font-size:10px; font-weight:bold; text-shadow:1px 1px 2px #000; }
+.invItem .plus{ position:absolute; top:-1px; right:2px; font-size:12px; color:#8ede6a; font-weight:bold; text-shadow:1px 1px 2px #000; }
+#invSide{
+  background:rgba(0,0,0,.3); border-left:1px solid #4a4a4a; padding:10px;
+  overflow-y:auto; font-size:11px; touch-action:pan-y;
+}
+.dHint{ opacity:.5; font-size:11px; }
+.dHead{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.dHead b{ color:#ffd97a; font-size:13px; }
+.dHead .sw{ width:26px; height:26px; image-rendering:pixelated; background-size:cover; border-radius:3px; }
+.dHead .ticon{ font-size:20px; }
+.dHave{ opacity:.75; margin-bottom:6px; }
+.dFact{ opacity:.85; margin:3px 0; line-height:1.4; }
+.dRecipe{ border:1px solid #555; border-radius:6px; padding:7px; margin:8px 0; background:rgba(255,255,255,.04); }
+.dRecipeTop{ font-size:11px; color:#9ccc65; margin-bottom:5px; }
+.dIngs{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.dIng{ display:flex; align-items:center; gap:3px; font-size:10px; color:#9ccc65; }
+.dIng.miss{ color:#ff8a80; }
+.dIng .sw{ width:16px; height:16px; image-rendering:pixelated; background-size:cover; border-radius:2px; }
+.dIng .ticon{ font-size:13px; }
+.dCraft{ width:100%; font-family:monospace; padding:6px; background:#5cab3c; border:1px solid #7c4; color:#fff; border-radius:5px; cursor:pointer; }
+.dCraft:disabled{ background:#3f3f3f; border-color:#555; color:#888; cursor:default; }
+.dTip{ font-size:9px; opacity:.6; margin-top:5px; }
+.dAssign{ width:100%; margin-top:8px; font-family:monospace; padding:6px; background:#3c6f8b; border:1px solid #58a; color:#fff; border-radius:5px; cursor:pointer; }
+#invClose{
+  position:absolute; top:6px; right:8px; width:26px; height:26px;
+  background:rgba(0,0,0,.4); border:1px solid #666; border-radius:5px; color:#fff; cursor:pointer; z-index:2;
+}
+/* phones / short landscape: detail panel drops under the grid */
+@media (max-width:760px), (max-height:520px){
+  #inv{ grid-template-columns:46px 1fr; grid-template-rows:1fr auto; max-height:86vh; width:96vw; }
+  #invRail{ grid-row:1 / span 2; }
+  #invSide{ grid-column:2; border-left:none; border-top:1px solid #4a4a4a; max-height:32vh; }
+  .railBtn{ width:34px; height:34px; font-size:16px; }
+  .invItem{ width:42px; height:42px; }
+  .invItem .sw{ width:24px; height:24px; }
+  #invGrid{ grid-template-columns:repeat(auto-fill, minmax(42px,1fr)); }
+  #invSearch{ width:100px; }
+}

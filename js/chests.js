@@ -21,14 +21,18 @@ export function ensure(x,y,z){
   return chests.get(k);
 }
 
+/** Removes a crate and RETURNS its contents as [[itemId, n], ...] so the caller can spill them. */
 export function removeAt(x,y,z){
   const k = keyOf(x,y,z);
   const c = chests.get(k);
+  const left = [];
   if(c){
-    // spill contents into player inv if local? leave on ground ideally — for now grant to no one, drop lost
+    for(const s of c.slots) if(s && s.n > 0) left.push([s.id, s.n]);
     chests.delete(k);
   }
   if(openKey===k) close();
+  onChange?.();
+  return left;
 }
 
 export function serialize(){
