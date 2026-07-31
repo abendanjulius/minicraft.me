@@ -150,6 +150,28 @@ function texFrom(desc){
       const band = (y>>2)%2===1, d=jit(12);
       return band ? rgb(br+d,bg+d,bb+d) : rgb(r+d,g+d,bl+d);}));
   }
+  if(kind==='ladder'){
+    const [r,g2,bl] = cr(a);
+    return canvasTex(gc=>{gc.clearRect(0,0,16,16);pix(gc,(x,y)=>{
+      const rail = x===2||x===3||x===12||x===13;
+      const rung = (y===2||y===6||y===10||y===14) && x>=2 && x<=13;
+      if(rail||rung){const d=jit(14);return rgb(r+d,g2+d,bl+d);}
+      return null;});});
+  }
+  if(kind==='ore'){
+    const [r,g2,bl] = cr(a);
+    const [fr,fg,fb] = cr(b);
+    return canvasTex(gc=>{
+      pix(gc,()=>{const d=jit(22);return rgb(r+d,g2+d,bl+d)});
+      for(let i=0;i<5;i++){
+        const x=1+Math.floor(Math.random()*13), y=1+Math.floor(Math.random()*13);
+        gc.fillStyle = rgb(fr+jit(20),fg+jit(20),fb+jit(20));
+        gc.fillRect(x,y,2,2);
+        gc.fillStyle = rgb(fr+40,fg+40,fb+40);
+        gc.fillRect(x,y,1,1);
+      }
+    });
+  }
   if(kind==='checker'){
     const [br,bg,bb] = cr(b);
     return canvasTex(gc=>pix(gc,(x,y)=>{

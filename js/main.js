@@ -10,7 +10,7 @@ import * as persist from './persist.js';
 import { inventory, hotbarSlots } from './ui.js';
 import { day } from './render.js';
 import { sv } from './survival.js';
-import { initAudio, startMusic } from './audio.js';
+import { initAudio, startMusic, sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as mobs from './mobs.js';
@@ -20,7 +20,7 @@ import * as net from './net.js';
 const $ = id=>document.getElementById(id);
 
 // ---- Version check ----
-const APP_VERSION = '1.5.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.5.5'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -288,7 +288,7 @@ initChat(text=>{
 });
 
 // ---- Main loop ----
-let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30;
+let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30, dripT=5, wasUnderground=false;
 function loop(now){
   requestAnimationFrame(loop);
   const dt = Math.min((now-last)/1000,.05); last=now; elapsed+=dt;
@@ -318,6 +318,13 @@ function loop(now){
       updateTorchLights(playerMod.player.pos.x, playerMod.player.pos.z);
       cullTimer=.3;
     }
+    // cave ambience + Spelunker
+    const ug = playerMod.player.pos.y < heightAt(Math.round(playerMod.player.pos.x), Math.round(playerMod.player.pos.z)) - 2;
+    if(ug){
+      if(!wasUnderground){ wasUnderground = true; survival.note('cave'); }
+      dripT -= dt;
+      if(dripT<=0){ dripT = 4 + Math.random()*5; sfx.drip(); }
+    } else wasUnderground = false;
     // autosave every 30s (solo & host — clients don't own the world)
     saveT -= dt;
     if(saveT<=0){ saveT = 30; saveWorldNow(); }

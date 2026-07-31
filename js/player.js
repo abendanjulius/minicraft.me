@@ -245,7 +245,14 @@ function updateMining(dt){
   if(m.progress >= m.total){
     const old = applyEdit(bx,by,bz,0,true);
     if(old){
-      addToInventory(old); sfx.break(old); addShake(.16); survival.note('mine', old);
+      const ORE_YIELD = {45:120, 46:121, 47:122};
+      if(ORE_YIELD[old]){
+        const n = 1 + (Math.random()<.45 ? 1 : 0);
+        for(let i=0;i<n;i++) addToInventory(ORE_YIELD[old]);
+      } else {
+        addToInventory(old);
+      }
+      sfx.break(old); addShake(.16); survival.note('mine', old);
       const rolls = BLOCK_DROPS[old];
       if(rolls) for(const [item,p] of rolls) if(Math.random()<p) addToInventory(item);
     }
@@ -258,7 +265,7 @@ function collide(pos){
   const r=.3;
   for(const ox of [-r,r]) for(const oz of [-r,r]) for(const oy of [0,.9,1.7]){
     const b = getBlock(Math.round(pos.x+ox), Math.round(pos.y+oy), Math.round(pos.z+oz));
-    if(b && b!==10) return true; // torches are walk-through
+    if(b && b!==10 && b!==44) return true; // torches & ladders are walk-through
   }
   return false;
 }
@@ -275,8 +282,17 @@ export function update(dt, elapsed){
     if(move.lengthSq()>1) move.normalize();
     move.multiplyScalar(speed);
     player.vel.x = move.x; player.vel.z = move.z;
-    player.vel.y -= 20*dt;
-    if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; sfx.jump(); survival.jumpCost(); }
+    // ladder: gravity off — hold Jump to climb, release to slide gently
+    const px0 = Math.round(player.pos.x), pz0 = Math.round(player.pos.z);
+    const onLadder = getBlock(px0, Math.round(player.pos.y), pz0)===44 ||
+                     getBlock(px0, Math.round(player.pos.y+1), pz0)===44;
+    if(onLadder){
+      player.vel.y = keys.Space ? 3.2 : -1.4;
+      player.onGround = false;
+    } else {
+      player.vel.y -= 20*dt;
+      if(keys.Space && player.onGround){ player.vel.y = 7.5; player.onGround=false; sfx.jump(); survival.jumpCost(); }
+    }
     fallV = player.vel.y;
 
     for(const axis of ['x','z','y']){

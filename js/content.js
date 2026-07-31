@@ -34,6 +34,10 @@ export const EXTRA_BLOCKS = {
   40:{name:'Lantern',        tex:['checker',0x6a6f76,0xffd77a],hard:1.5,pc:0xffd77a, tool:'pick', light:{c:0xffc978,i:1.0}},
   41:{name:'Crystal Lamp',   tex:['glassy',0xbfe9ff],          hard:1.5,pc:0xbfe9ff, tool:'pick', transparent:1, light:{c:0x9fd8ff,i:1.15}},
   42:{name:'Campfire',       tex:['speckle',0x5d4023,0xff8c3a],hard:1,  pc:0xff8c3a, tool:'axe', light:{c:0xff9c50,i:1.25}},
+  44:{name:'Ladder',         tex:['ladder',0x9c6b3a],          hard:.8, pc:0x9c6b3a, tool:'axe', transparent:1},
+  45:{name:'Coal Ore',       tex:['ore',0x808083,0x232326],    hard:3,  pc:0x55565a, tool:'pick'},
+  46:{name:'Iron Ore',       tex:['ore',0x808083,0xd8a878],    hard:3.5,pc:0xb08a68, tool:'pick'},
+  47:{name:'Crystal Ore',    tex:['ore',0x76787c,0x7fd4ff],    hard:4,  pc:0x7fd4ff, tool:'pick'},
 };
 
 export const EXTRA_ITEMS = {
@@ -89,6 +93,7 @@ export const EXTRA_ITEMS = {
   170:{name:'Bandage',        icon:'🩹', heal:6},
   171:{name:'Medkit',         icon:'💊', heal:20},
   172:{name:'Zombie Tonic',   icon:'🧉', food:2, heal:8},
+  165:{name:"Miner's Stew",   icon:'🥘', food:10, heal:3},
 };
 
 // bonus rolls when a block is mined (in addition to the block itself)
@@ -212,6 +217,8 @@ R(159,2,[[114,4],[130,1]],'med','Essence-boosted glow jam'),
 R(156,2,[[116,3],[114,3],[42,1]],'med','Campfire stew, double batch'),
 R(170,1,[[123,3],[115,1]],'med','Feather-soft bandage'),
 R(172,1,[[131,1],[130,1],[114,1]],'med','Bone-steeped tonic'),
+R(44,4,[[110,3],[7,2]],'block','Climb up and down cave shafts'),
+R(165,1,[[116,2],[120,1]],'food','Hot fuel for long digs — heals 3 (10)'),
 ];
 
 export const EXTRA_GUIDE = [
@@ -224,9 +231,13 @@ export const EXTRA_GUIDE = [
   {id:117,where:'Dig sand.', uses:'Shell tiles, soup, white dye.'},
   {id:118,where:'Dig sand — rarer than shells.', uses:'Quartz blocks.'},
   {id:119,where:'Mine stone, or sift gravel.', uses:'Fire-starting, flint weapons.'},
-  {id:120,where:'Mine stone.', uses:'Searing food, black dye, coal blocks.'},
-  {id:121,where:'Mine stone — uncommon.', uses:'Smelt 3 into an Iron Ingot.'},
-  {id:122,where:'Mine stone — rare and precious.', uses:'Crystal blocks, lamps, the best sword.'},
+  {id:120,where:'Coal Ore in caves (shallow, common) or rarely from stone.', uses:'Searing food, black dye, coal blocks.'},
+  {id:121,where:'Iron Ore in mid-depth caves, or rarely from stone.', uses:'Smelt 3 into an Iron Ingot.'},
+  {id:122,where:'Crystal Ore glinting in the deepest caves, or very rarely from stone.', uses:'Crystal blocks, lamps, the best sword.'},
+  {id:45, where:'Cave walls, y 10–22. Bring a pickaxe and torches.', uses:'Yields 1–2 Coal per block.'},
+  {id:46, where:'Deeper caves, y 4–15.', uses:'Yields 1–2 Iron Chunks per block.'},
+  {id:47, where:'The deepest dark, y 2–9. It glints faintly.', uses:'Yields 1–2 Crystal Shards per block.'},
+  {id:44, where:'Craft it (Sticks + Planks).', uses:'Place on cave walls — hold Jump to climb, release to slide down.'},
   {id:123,where:'Chickens drop them.', uses:'Feather cake, soft bandages.'},
   {id:124,where:'Pigs drop hide.', uses:'Cure into leather.'},
   {id:130,where:'Defeat zombies.', uses:'Tonics and strange jams.'},

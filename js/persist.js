@@ -25,7 +25,7 @@ export function listWorlds(){
   return out;
 }
 export function create(i, name, mode){
-  const d = {v:1, name, mode, seed:(Math.random()*2**31)|0,
+  const d = {v:2, name, mode, seed:(Math.random()*2**31)|0,
              edits:[], inv:{}, slots:null, pos:null, yaw:0,
              tod:.28, intel:0, hp:20, hunger:20, savedAt:Date.now()};
   try{ localStorage.setItem(KEY(i), JSON.stringify(d)); }catch(e){ return null; }
@@ -34,6 +34,13 @@ export function create(i, name, mode){
 export function open(i){
   const d = peek(i);
   if(!d) return null;
+  if((d.v||1) < 2){
+    // v1.5.5 raised the surface by 16 — shift old edits & position up to match
+    d.edits = (d.edits||[]).map(([x,y,z,t])=>[x, y+16, z, t]);
+    if(d.pos) d.pos[1] += 16;
+    d.v = 2;
+    try{ localStorage.setItem(KEY(i), JSON.stringify(d)); }catch(e){}
+  }
   activeSlot = i;
   editMap.clear();
   for(const [x,y,z,t] of (d.edits||[])) editMap.set(x+','+y+','+z, t);
@@ -69,6 +76,11 @@ export function importWorld(file, cb){
     try{
       const d = JSON.parse(r.result);
       if(typeof d.seed!=='number' || !Array.isArray(d.edits)) throw 0;
+      if((d.v||1) < 2){
+        d.edits = d.edits.map(([x,y,z,t])=>[x, y+16, z, t]);
+        if(d.pos) d.pos[1] += 16;
+        d.v = 2;
+      }
       let slot = -1;
       for(let i=0;i<SLOTS;i++) if(!peek(i)){ slot = i; break; }
       if(slot===-1){ cb(false, 'All world slots are full — delete one first.'); return; }

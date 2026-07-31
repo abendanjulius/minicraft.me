@@ -21,6 +21,8 @@ const ACH = [
   {id:'zkill1', name:'Back to Sleep',  goal:'Defeat a zombie'},
   {id:'recover1',name:'Leave No One Behind', goal:'Recover a fallen body before the horde feeds'},
   {id:'dayhunt1',name:'Daywalker Hunter',    goal:'Slay a hiding zombie in daylight'},
+  {id:'cave1',  name:'Spelunker',      goal:'Descend into a cave'},
+  {id:'ore1',   name:'Motherlode',     goal:'Mine Crystal Ore in the deep dark'},
 ];
 const unlocked = new Set(JSON.parse(localStorage.getItem('mc_ach')||'[]'));
 let placedCount = +(localStorage.getItem('mc_placed')||0);
@@ -50,7 +52,9 @@ export function note(what, arg){
     unlock('mine1');
     if(arg===4) unlock('log1');
     if(arg===7||arg===8||arg===9) unlock('ruin1');
+    if(arg===47) unlock('ore1');
   }
+  if(what==='cave') unlock('cave1');
   if(what==='place'){
     placedCount++;
     localStorage.setItem('mc_placed', placedCount);

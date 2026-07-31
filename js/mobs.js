@@ -1,6 +1,6 @@
 // mobs.js — the horde. Host-authoritative zombies with a shared intelligence tier.
 // T0 shamblers · T1 fast + packs · T2 dig soft blocks · T3 hide from the sun (hunt them by day!)
-import { WORLD, topY, getBlock } from './world.js';
+import { WORLD, WH, topY, getBlock, heightAt } from './world.js';
 import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box } from './render.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
@@ -13,6 +13,13 @@ let announcer = null; // (text, newIntel) => void
 const EYE_COLORS = [0x3a3a3a, 0xd8c33a, 0xe07b2a, 0xd23434];
 const SOFT = new Set([1,2,5,6,12,19,28,29,30,31,32]); // what T2 can dig through
 const maxZombies = ()=>8 + intel*2;
+let caveSpawnT = 5;
+// floor beneath a point (works on the surface AND on cave floors)
+function floorAt(x, yFrom, z){
+  for(let y=Math.min(WH-1, Math.floor(yFrom)); y>=0; y--) if(getBlock(x,y,z)) return y;
+  return -1;
+}
+const exposedToSky = (x,y,z)=>topY(Math.round(x), Math.round(z)) <= Math.round(y+.5);
 
 export const getIntel = ()=>intel;
 export function setAnnouncer(fn){ announcer = fn; }
@@ -92,7 +99,7 @@ export function init(isAuthority){
 
 // ---- corpses: fallen players feed the horde ----
 export function addCorpse(x,y,z){
-  const gy = topY(Math.round(x), Math.round(z));
+  const gy = floorAt(Math.round(x), y+1, Math.round(z));
   const cy = gy>0 ? gy+.5 : y;
   const mesh = makeCorpseMesh(x, cy, z);
   scene.add(mesh);
@@ -159,22 +166,39 @@ export function hostTick(dt, dl, targets){
     }
   }
 
-  // daylight: burn — unless the horde has learned to hide (T3)
+  // underground is always night: zombies spawn in cave darkness at any hour
+  if(zombies.size < maxZombies() && targets.length){
+    caveSpawnT -= dt;
+    if(caveSpawnT<=0){
+      caveSpawnT = 5;
+      const underground = targets.filter(t=>t.y < heightAt(Math.round(t.x), Math.round(t.z)) - 2);
+      if(underground.length){
+        const t = underground[Math.floor(Math.random()*underground.length)];
+        const a = Math.random()*Math.PI*2, r = 9+Math.random()*10;
+        const x = t.x+Math.cos(a)*r, z = t.z+Math.sin(a)*r;
+        const bx = Math.round(x), bz = Math.round(z);
+        const gy = floorAt(bx, t.y+4, bz);
+        if(gy>1 && !getBlock(bx,gy+1,bz) && !getBlock(bx,gy+2,bz) && nearestTorchDist(x,z)>10)
+          create(x, gy+.5, z);
+      }
+    }
+  }
+
+  // daylight: burn the sky-exposed — unless the horde hides (T3). Cave-dwellers never burn.
   if(!night && zombies.size){
-    if(intel>=3){
-      for(const zb of zombies.values()){
+    for(const [id,zb] of [...zombies.entries()]){
+      const p = zb.c.g.position;
+      if(!exposedToSky(p.x, p.y-.5, p.z)) continue; // underground: keep hunting
+      if(intel>=3){
         if(!zb.dormant){
           zb.dormant = true;
           zb.dig = null;
-          const p = zb.c.g.position;
           const gy = topY(Math.round(p.x), Math.round(p.z));
           if(gy>0) p.y = gy+.5-.55; // half-buried
         }
-      }
-    } else {
-      for(const id of [...zombies.keys()]) remove(id);
-      return {hurts, digs};
+      } else remove(id);
     }
+    if(!zombies.size) return {hurts, digs};
   }
 
   const speed = intel>=1 ? 2.1 : 1.7;
@@ -236,10 +260,12 @@ export function hostTick(dt, dl, targets){
       zb.yaw += (Math.random()-.5)*2;
     }
 
-    // move with step-up; T2 digs what blocks it
+    // move with step-up (cave-floor aware); T2 digs what blocks it
     const nx = p.x + Math.cos(zb.yaw)*sp*dt;
     const nz = p.z + Math.sin(zb.yaw)*sp*dt;
-    const gy = topY(Math.round(nx), Math.round(nz));
+    const bnx = Math.round(nx), bnz = Math.round(nz);
+    let gy = floorAt(bnx, p.y+1.6, bnz);
+    if(gy>=0 && (getBlock(bnx,gy+1,bnz) || getBlock(bnx,gy+2,bnz))) gy = -2; // no headroom
     const cy = Math.round(p.y-.5);
     if(gy<0 || gy-cy>1){
       if(intel>=2 && best && !isCorpse && bestD<14){

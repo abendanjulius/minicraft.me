@@ -49,6 +49,7 @@ export const sfx = {
   eat:   ()=>{ noise({dur:.08,vol:.14,freq:900,q:1.2}); osc({freq:500,end:300,type:'triangle',dur:.12,vol:.09}); },
   zgroan:()=>{ osc({freq:120+Math.random()*40,end:70,type:'sawtooth',dur:.5,vol:.07}); },
   craft: ()=>{ noise({dur:.06,vol:.16,freq:700,q:1.5}); osc({freq:520,end:780,type:'sine',dur:.14,vol:.1}); },
+  drip:  ()=>{ osc({freq:1400,end:900,type:'sine',dur:.06,vol:.07}); setTimeout(()=>osc({freq:1100,end:700,type:'sine',dur:.09,vol:.04}),110); },
   ach:   ()=>{ osc({freq:660,end:660,type:'sine',dur:.09,vol:.1}); setTimeout(()=>osc({freq:880,end:880,type:'sine',dur:.16,vol:.1}),90); },
 };
 

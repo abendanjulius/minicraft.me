@@ -1,5 +1,5 @@
 // world.js — chunked block storage + seeded, deterministic generation
-export const WORLD = 512, WH = 32, CH = 16, CHUNKS = WORLD/CH, CENTER = WORLD/2;
+export const WORLD = 512, WH = 48, CH = 16, CHUNKS = WORLD/CH, CENTER = WORLD/2;
 export const chunks = new Array(CHUNKS*CHUNKS);
 export let seed = 0;
 
@@ -28,12 +28,13 @@ export function setBlock(x,y,z,t){
   chunks[cIndex(x>>4, z>>4)][bIndex(x&15, y, z&15)] = t;
 }
 // glass (9) doesn't hide its neighbours
-export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10; };
+export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44; };
 
 // Frequencies are exact multiples of 2π/WORLD so terrain tiles seamlessly at the wrap seam
 const F = n => Math.PI*2*n/WORLD;
 export function heightAt(x,z){
-  return Math.floor(8 + 3*Math.sin(x*F(16))*Math.cos(z*F(15)) + 1.5*Math.sin((x-z)*F(9)) + Math.cos((x+z)*F(6)));
+  // surface raised to ~24 in v1.5.5 — old (v1) saves are migrated by shifting edits +16
+  return Math.floor(24 + 3*Math.sin(x*F(16))*Math.cos(z*F(15)) + 1.5*Math.sin((x-z)*F(9)) + Math.cos((x+z)*F(6)));
 }
 export const sandy = (x,z)=>Math.sin(x*F(4)+3)*Math.cos(z*F(4)) > .55;
 
@@ -47,12 +48,41 @@ export function generateWorld(s){
   const rng = mulberry32(s);
   for(let i=0;i<CHUNKS*CHUNKS;i++) chunks[i] = new Uint8Array(CH*CH*WH);
 
-  // Terrain
+  // Terrain + cave carving (deterministic trig-noise worms & pockets)
+  const co = []; const cr = mulberry32(s ^ 0x51ab);
+  for(let i=0;i<9;i++) co.push(cr()*Math.PI*2);
   for(let x=0;x<WORLD;x++)for(let z=0;z<WORLD;z++){
     const h = heightAt(x,z), sd = sandy(x,z);
     const chunk = chunks[cIndex(x>>4, z>>4)], lx = x&15, lz = z&15;
     for(let y=0;y<=h;y++){
       chunk[bIndex(lx,y,lz)] = sd ? (y>h-3?6:3) : (y===h?1 : y>h-3?2 : 3);
+    }
+    // carve: two intersecting worm fields + occasional pockets; mouths breach the surface
+    const mouth = Math.sin(x*.021+co[7])*Math.sin(z*.019+co[8]) > .60;
+    const yCap = mouth ? h : h-4;
+    for(let y=2;y<=yCap;y++){
+      const w1 = Math.sin(x*.07 + y*.115 + co[0]) + Math.sin(z*.083 - y*.056 + co[1]);
+      const w2 = Math.sin(x*.052 - z*.064 + co[2]) + Math.sin(y*.142 + x*.031 + co[3]);
+      const tunnel = Math.abs(w1)<.45 && Math.abs(w2)<.5;
+      const pocket = Math.sin(x*.043+co[4])*Math.sin(y*.087+co[5])*Math.sin(z*.048+co[6]) > .72;
+      if(tunnel || pocket) chunk[bIndex(lx,y,lz)] = 0;
+    }
+  }
+  // Ore veins (separate rng stream so tree/ruin layouts stay stable across versions)
+  const orng = mulberry32(s ^ 0x08e5);
+  const veins = [[45, 2600, 10, 22], [46, 1500, 4, 15], [47, 550, 2, 9]]; // id, count, yMin, yMax
+  for(const [oid, count, y0, y1] of veins){
+    for(let i=0;i<count;i++){
+      let x = Math.floor(orng()*WORLD), z = Math.floor(orng()*WORLD);
+      let y = y0 + Math.floor(orng()*(y1-y0+1));
+      const size = 2 + Math.floor(orng()*3);
+      for(let b=0;b<size;b++){
+        if(getBlock(x,y,z)===3) setBlock(x,y,z,oid);
+        const d = Math.floor(orng()*6);
+        x += d===0?1:d===1?-1:0; y += d===2?1:d===3?-1:0; z += d===4?1:d===5?-1:0;
+        x = wrapC(x); z = wrapC(z);
+        if(y<1||y>=WH) break;
+      }
     }
   }
   // Trees — seeded so all players get identical forests
