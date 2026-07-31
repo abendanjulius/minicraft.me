@@ -297,7 +297,7 @@ export function makeToolModel(id){
   }
   return g;
 }
-export function makeBlockCube(tid, size=.25){
+export function makeBlockCube(tid, size=.34){
   const mats = TYPES[tid]?.mats;
   if(!mats){
     // fallback plain cube so missing TYPES never blank the hand
@@ -308,24 +308,23 @@ export function makeBlockCube(tid, size=.25){
 }
 
 /** First-person held icon for non-block items (food, materials, etc.). */
-export function makeHeldItemIcon(itemId, size=.28){
+export function makeHeldItemIcon(itemId, size=.45){
   const it = ITEMS[itemId];
   const icon = it?.icon || '❓';
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');
-  g.clearRect(0,0,64,64);
-  // soft backing so emoji reads on any sky
-  g.fillStyle = 'rgba(20,20,24,.55)';
-  g.beginPath(); g.roundRect?.(8,8,48,48,8);
-  if(!g.roundRect) g.fillRect(8,8,48,48); else g.fill();
-  g.font = '42px serif';
+  g.clearRect(0,0,64,64); // fully transparent — no dark backing plate
+  g.font = '52px serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(icon, 32, 34);
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
-  const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, depthTest:true, side:THREE.DoubleSide});
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthTest: true, side: THREE.DoubleSide,
+    alphaTest: 0.1, // drop near-empty pixels so no dark fringe remains
+  });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
   return mesh;
 }

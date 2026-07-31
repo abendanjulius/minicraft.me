@@ -77,8 +77,8 @@ function updateHeld(){
     const id = held.id;
     if(!TYPES[id]) return;
     if(!gm.forge && !(inventory[id]>0)) return;
-    heldExtra = makeBlockCube(id);
-    heldExtra.position.set(0,.05,-.3);
+    heldExtra = makeBlockCube(id, .36);
+    heldExtra.position.set(0,.06,-.32);
     handGroup.add(heldExtra);
     return;
   }
@@ -90,11 +90,12 @@ function updateHeld(){
     if(!gm.forge && !(inventory[id]>0)) return;
     if(ITEMS[id].dmg){
       heldExtra = makeWeaponModel(id);
-      heldExtra.position.set(0,.06,-.22);
+      heldExtra.scale.set(1.25, 1.25, 1.25);
+      heldExtra.position.set(0,.08,-.24);
       heldExtra.rotation.x = -.5;
     } else {
-      heldExtra = makeHeldItemIcon(id);
-      heldExtra.position.set(0,.08,-.28);
+      heldExtra = makeHeldItemIcon(id, .48);
+      heldExtra.position.set(0,.1,-.32);
       heldExtra.rotation.y = .15;
     }
     handGroup.add(heldExtra);

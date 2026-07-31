@@ -55,12 +55,12 @@ function setHeldItem(r, tool, blk, item){
   if(key.startsWith('t:')){
     const m = makeToolModel(tool); m.rotation.x = -.6; r.held.add(m);
   } else if(key.startsWith('b:') && TYPES[blk]){
-    r.held.add(makeBlockCube(blk, .3));
+    r.held.add(makeBlockCube(blk, .38));
   } else if(key.startsWith('i:') && ITEMS[item]){
     if(ITEMS[item].dmg){
       const m = makeWeaponModel(item); m.rotation.x = -.6; r.held.add(m);
     } else {
-      r.held.add(makeHeldItemIcon(item, .32));
+      r.held.add(makeHeldItemIcon(item, .42));
     }
   }
 }
