@@ -183,6 +183,33 @@ function texFrom(desc){
       const alt = ((x>>2)+(y>>2))%2===1, d=jit(10);
       return alt ? rgb(br+d,bg+d,bb+d) : rgb(r+d,g+d,bl+d);}));
   }
+  if(kind==='door' || kind==='doortop' || kind==='dooropen' || kind==='doortopopen'){
+    const open = kind.includes('open');
+    const top = kind.includes('top');
+    return canvasTex(gc=>{
+      gc.fillStyle = rgb(r, g, bl);
+      gc.fillRect(0,0,16,16);
+      // wood planks grain
+      for(let y=0;y<16;y++) for(let x=0;x<16;x++){
+        const d=jit(14), seam=(x%4===0)?-25:0;
+        gc.fillStyle = rgb(r+seam+d, g+seam+d, bl+seam+d);
+        gc.fillRect(x,y,1,1);
+      }
+      // frame
+      gc.fillStyle = rgb(r-30,g-30,bl-30);
+      gc.fillRect(0,0,16,1); gc.fillRect(0,15,16,1); gc.fillRect(0,0,1,16); gc.fillRect(15,0,1,16);
+      if(!top){
+        // handle
+        gc.fillStyle = rgb(200,180,60);
+        gc.fillRect(open ? 3 : 12, 7, 2, 3);
+      }
+      if(open){
+        // suggest ajar — dark strip
+        gc.fillStyle = rgb(30,30,40,0.55);
+        gc.fillRect(0,0,5,16);
+      }
+    });
+  }
 }
 for(const id in EXTRA_BLOCKS){
   const d = EXTRA_BLOCKS[id];

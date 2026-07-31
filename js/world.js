@@ -28,7 +28,9 @@ export function setBlock(x,y,z,t){
   chunks[cIndex(x>>4, z>>4)][bIndex(x&15, y, z&15)] = t;
 }
 // glass (9) doesn't hide its neighbours
-export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44; };
+export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && b!==49 && b!==51; };
+// blocks players/zombies can walk through
+export const isWalkThrough = b => !b || b===10 || b===44 || b===49 || b===51;
 
 // Frequencies are exact multiples of 2π/WORLD so terrain tiles seamlessly at the wrap seam
 const F = n => Math.PI*2*n/WORLD;

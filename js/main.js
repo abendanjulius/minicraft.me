@@ -32,7 +32,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.6.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.6.3'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{

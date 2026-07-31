@@ -172,6 +172,7 @@ function renderInvForge(){
   const grid = $('invGrid'); grid.innerHTML = '';
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
   for(const tid of all){
+    if(tid===49||tid===50||tid===51) continue; // door halves — only place Door (48)
     const isItem = tid>=100;
     const d = document.createElement('div');
     d.className = 'invItem';

@@ -38,7 +38,13 @@ export const EXTRA_BLOCKS = {
   45:{name:'Coal Ore',       tex:['ore',0x808083,0x232326],    hard:3,  pc:0x55565a, tool:'pick'},
   46:{name:'Iron Ore',       tex:['ore',0x808083,0xd8a878],    hard:3.5,pc:0xb08a68, tool:'pick'},
   47:{name:'Crystal Ore',    tex:['ore',0x76787c,0x7fd4ff],    hard:4,  pc:0x7fd4ff, tool:'pick'},
+  // Doors: closed solid / open walk-through (bottom + top halves)
+  48:{name:'Door',           tex:['door',0x8b6914],            hard:1.5,pc:0x8b6914, tool:'axe'},
+  49:{name:'Door (Open)',    tex:['dooropen',0x8b6914],        hard:1.5,pc:0x8b6914, tool:'axe', transparent:1},
+  50:{name:'Door Top',       tex:['doortop',0x8b6914],         hard:1.5,pc:0x8b6914, tool:'axe'},
+  51:{name:'Door Top Open',  tex:['doortopopen',0x8b6914],     hard:1.5,pc:0x8b6914, tool:'axe', transparent:1},
 };
+
 
 export const EXTRA_ITEMS = {
   111:{name:'Fiber',        icon:'🌾'},
@@ -218,6 +224,7 @@ R(156,2,[[116,3],[114,3],[42,1]],'med','Campfire stew, double batch'),
 R(170,1,[[123,3],[115,1]],'med','Feather-soft bandage'),
 R(172,1,[[131,1],[130,1],[114,1]],'med','Bone-steeped tonic'),
 R(44,4,[[110,3],[7,2]],'block','Climb up and down cave shafts'),
+R(48,1,[[7,6]],'block','Wooden door — place, then click to open/close'),
 R(165,1,[[116,2],[120,1]],'food','Hot fuel for long digs — heals 3 (10)'),
 ];
 
@@ -248,6 +255,7 @@ export const EXTRA_GUIDE = [
   {id:42, where:'Craft from Logs + Coal + Stone.', uses:'Cozy campfire light.'},
   {id:11, where:'Craft from Sticks + Planks.', uses:'Fence for pens and yards.'},
   {id:12, where:'Sheep drop wool, or craft from cloth.', uses:'Soft building block; dye it.'},
+  {id:48, where:'Craft from 6 Planks.', uses:'Place in a 2-tall gap. Click to open/close. Blocks zombies when shut.'},
 ];
 
 /** Short blurb for inventory popups. */

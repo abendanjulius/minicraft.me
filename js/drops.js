@@ -43,7 +43,7 @@ export function spawn(itemId, n, x, y, z, id){
   const yy = Math.max(fy, y - 0.2);
   mesh.position.set(x, yy + 0.2, z);
   scene.add(mesh);
-  const d = {id: did, item: itemId, n: n|0, mesh, x, y: yy + 0.2, z, bob: Math.random() * 10, age: 0};
+  const d = {id: did, item: itemId, n: n|0, mesh, x, y: yy + 0.2, z, bob: Math.random() * 10, age: 0, grace: 1.6};
   drops.set(did, d);
   return d;
 }
@@ -74,9 +74,9 @@ export function tryDropFromHotbar(playerPos, yaw){
   sfx.place();
 
   const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  const x = playerPos.x + fwd.x * 1.1;
-  const z = playerPos.z + fwd.z * 1.1;
-  const y = playerPos.y + 0.9;
+  const x = playerPos.x + fwd.x * 2.4;
+  const z = playerPos.z + fwd.z * 2.4;
+  const y = playerPos.y + 1.0;
   const d = spawn(itemId, 1, x, y, z);
   spawnParticles(x, y, z, TYPES[itemId]?.pc ?? 0xffffff, 4);
   return d ? {id: d.id, item: d.item, n: d.n, x: d.x, y: d.y, z: d.z} : null;
@@ -109,6 +109,7 @@ export function applyRemote(list){
 export function tryPickup(px, py, pz){
   let best = null, bestD = 1.35;
   for(const d of drops.values()){
+    if((d.grace||0) > 0) continue; // just dropped — don't instant re-pickup
     const dx = d.x - px, dy = d.y - py, dz = d.z - pz;
     // wrap xz lightly not needed for short range
     let wx = dx, wz = dz;
@@ -132,6 +133,7 @@ export function removeById(id){
 export function commonTick(dt, time, playerPos){
   for(const d of drops.values()){
     d.age += dt;
+    if(d.grace > 0) d.grace -= dt;
     d.bob += dt;
     // settle onto floor if support changed
     const fy = floorY(d.x, d.y + 2, d.z);

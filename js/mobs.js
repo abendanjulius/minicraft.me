@@ -1,6 +1,6 @@
 // mobs.js — the horde. Host-authoritative zombies with a shared intelligence tier.
 // T0 shamblers · T1 fast + packs · T2 dig soft blocks · T3 hide from the sun (hunt them by day!)
-import { WORLD, WH, topY, getBlock, heightAt } from './world.js';
+import { WORLD, WH, topY, getBlock, heightAt, isWalkThrough } from './world.js';
 import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box } from './render.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
@@ -282,7 +282,7 @@ export function hostTick(dt, dl, targets){
     const nz = p.z + Math.sin(zb.yaw)*sp*dt;
     const bnx = Math.round(nx), bnz = Math.round(nz);
     let gy = floorAt(bnx, p.y+1.6, bnz);
-    if(gy>=0 && (getBlock(bnx,gy+1,bnz) || getBlock(bnx,gy+2,bnz))) gy = -2; // no headroom
+    if(gy>=0 && ((getBlock(bnx,gy+1,bnz) && !isWalkThrough(getBlock(bnx,gy+1,bnz))) || (getBlock(bnx,gy+2,bnz) && !isWalkThrough(getBlock(bnx,gy+2,bnz))))) gy = -2; // no headroom
     const cy = Math.round(p.y-.5);
     if(gy<0 || gy-cy>1){
       if(intel>=2 && best && !isCorpse && bestD<14){
