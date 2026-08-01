@@ -1,5 +1,5 @@
 // villagers.js — MiniCraft-unique village folk (not Minecraft clones)
-import { villageSites, topY, WORLD, wrapC } from './world.js';
+import { villageSites, topY, surfaceY, feetY, WORLD, wrapC } from './world.js';
 import { scene, box, VIEW, wrapShift, wrapDist } from './render.js';
 import { addChat } from './ui.js';
 import { addToInventory } from './ui.js';
@@ -105,11 +105,11 @@ function makeVillagerMesh(role){
 }
 
 function groundY(x, z){
-  // Prefer the highest solid among nearby cells (helps stilt platforms / pads)
+  // Highest solid among nearby cells (stilts/pads); ignores plants & water
   let best = -1;
   const ix = Math.round(x), iz = Math.round(z);
   for(let dx = -1; dx <= 1; dx++) for(let dz = -1; dz <= 1; dz++){
-    const ty = topY(ix + dx, iz + dz);
+    const ty = surfaceY(ix + dx, iz + dz);
     if(ty > best) best = ty;
   }
   return (best < 0 ? 20 : best) + 0.5;
@@ -183,6 +183,7 @@ export function update(dt, time, playerPos){
     const far = wrapDist(v.g.position.x, v.g.position.z, playerPos.x, playerPos.z) > VIEW;
     v.g.visible = !far;
     if(far) continue;
+    v.g.position.y = groundY(v.g.position.x, v.g.position.z);
 
     // Simple home-radius wander (not Minecraft pathing)
     v.timer -= dt;
@@ -202,7 +203,7 @@ export function update(dt, time, playerPos){
       if(Math.hypot(nx - v.homeX, nz - v.homeZ) < 4.5){
         v.g.position.x = nx;
         v.g.position.z = nz;
-        v.g.position.y += (groundY(nx, nz) - v.g.position.y) * Math.min(1, dt * 12);
+        v.g.position.y = groundY(nx, nz);
         v.g.rotation.y = -v.yaw + Math.PI / 2;
         const sw = Math.sin(time * 7 + v.phase) * 0.4;
         v.legL.rotation.x = sw;
@@ -214,7 +215,7 @@ export function update(dt, time, playerPos){
     } else {
       v.legL.rotation.x *= 0.85;
       v.legR.rotation.x *= 0.85;
-      v.g.position.y += (groundY(v.g.position.x, v.g.position.z) - v.g.position.y) * Math.min(1, dt * 12);
+      v.g.position.y = groundY(v.g.position.x, v.g.position.z);
       // face player when close
       const d = wrapDist(v.g.position.x, v.g.position.z, playerPos.x, playerPos.z);
       if(d < 4){

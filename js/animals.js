@@ -1,5 +1,5 @@
 // animals.js — blocky wildlife. Host (or solo) runs the AI; clients render what the host says.
-import { WORLD, CENTER, topY, mulberry32 } from './world.js';
+import { WORLD, CENTER, topY, surfaceY, feetY, mulberry32 } from './world.js';
 import { scene, box, VIEW, spawnParticles, wrapShift, wrapDist } from './render.js';
 
 const KINDS = ['pig','sheep','chicken'];
@@ -32,8 +32,7 @@ function makeAnimal(kind,x,z){
     }
     g.scale.setScalar(.6);
   }
-  const gy = topY(Math.round(x),Math.round(z));
-  g.position.set(x, gy+0.5, z);
+  g.position.set(x, feetY(x, z), z);
   // holder carries the ±WORLD render shift; g.position stays the logical position
   const holder = new THREE.Group();
   holder.add(g);
@@ -84,8 +83,8 @@ export function update(dt, time, playerPos){
       a.respawnT -= dt;
       if(a.respawnT<=0){
         const gx = Math.round(CENTER+(Math.random()-.5)*160), gz = Math.round(CENTER+(Math.random()-.5)*160);
-        const gy = topY(gx,gz);
-        if(gy>0){ a.g.position.set(gx, gy+.5, gz); a.alive = true; a.hp = 4; a.g.visible = true; }
+        const fy = feetY(gx, gz);
+        if(surfaceY(gx,gz) > 0){ a.g.position.set(gx, fy, gz); a.alive = true; a.hp = 4; a.g.visible = true; }
         else a.respawnT = 5;
       }
       continue;
@@ -94,6 +93,8 @@ export function update(dt, time, playerPos){
     a.holder.position.set(wrapShift(a.g.position.x, playerPos.x), 0, wrapShift(a.g.position.z, playerPos.z));
     const far = wrapDist(a.g.position.x, a.g.position.z, playerPos.x, playerPos.z) > VIEW;
     a.g.visible = !far;
+    // Always pin feet to solid surface (fixes floating on grass/flowers)
+    if(!far) a.g.position.y = feetY(a.g.position.x, a.g.position.z);
 
     if(!authority){
       // Client mode: glide toward the host's reported state
@@ -124,15 +125,16 @@ export function update(dt, time, playerPos){
       const sp = a.speed * (a.fleeT>0 ? 2.2 : 1);
       const nx = a.g.position.x + Math.cos(a.yaw)*sp*dt;
       const nz = a.g.position.z + Math.sin(a.yaw)*sp*dt;
-      const gy = topY(Math.round(nx), Math.round(nz));
-      const cy = Math.round(a.g.position.y-0.5);
-      if(gy<0 || gy-cy>1){ a.yaw += Math.PI/2 + Math.random(); continue; }
+      const sy = surfaceY(nx, nz);
+      const cy = Math.round(a.g.position.y - 0.5);
+      if(sy < 0 || sy - cy > 1){ a.yaw += Math.PI/2 + Math.random(); continue; }
       a.g.position.x = nx; a.g.position.z = nz;
       if(a.g.position.x < -0.5)       a.g.position.x += WORLD;
       if(a.g.position.x >= WORLD-0.5) a.g.position.x -= WORLD;
       if(a.g.position.z < -0.5)       a.g.position.z += WORLD;
       if(a.g.position.z >= WORLD-0.5) a.g.position.z -= WORLD;
-      a.g.position.y += ((gy+0.5) - a.g.position.y)*Math.min(1,dt*10);
+      // Snap to ground (plants/water ignored via surfaceY)
+      a.g.position.y = feetY(nx, nz);
       a.g.rotation.y = -a.yaw;
       const sw = Math.sin(time*8 + a.phase)*.5;
       a.legs.forEach((l,i)=>l.rotation.z = i%2? sw : -sw);

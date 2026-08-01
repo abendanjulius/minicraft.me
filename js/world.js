@@ -99,6 +99,20 @@ export function topY(x,z){
   for(let y=WH-1;y>=0;y--) if(getBlock(x,y,z)) return y;
   return -1;
 }
+/** Highest solid (non–walk-through) block — use for feet on ground (ignores grass, flowers, water, torches). */
+export function surfaceY(x,z){
+  x = Math.round(x); z = Math.round(z);
+  for(let y = WH - 1; y >= 0; y--){
+    const b = getBlock(x, y, z);
+    if(b && !isWalkThrough(b)) return y;
+  }
+  return -1;
+}
+/** World Y for an entity whose model feet are at local y ≈ 0. */
+export function feetY(x, z){
+  const s = surfaceY(x, z);
+  return s < 0 ? 24.5 : s + 0.5; // top face of solid block
+}
 
 export function generateWorld(s){
   seed = s;
