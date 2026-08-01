@@ -39,7 +39,25 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.11.10'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.11.11'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+// FORCE_SW_BUST — drop old caches when version changes
+(async () => {
+  try {
+    const prev = localStorage.getItem('mc_app_ver');
+    if (prev && prev !== APP_VERSION) {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+      await Promise.all([...regs].map(r => r.unregister()));
+      localStorage.setItem('mc_app_ver', APP_VERSION);
+      location.reload();
+      return;
+    }
+    localStorage.setItem('mc_app_ver', APP_VERSION);
+  } catch (e) {}
+})();
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{

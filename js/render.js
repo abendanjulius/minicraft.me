@@ -604,25 +604,25 @@ export function buildChunk(cx,cz){
     if(faces.length){
       if(!waterFaceMat){
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x0d47a1,
+          color: 0x0a3d7a,
           transparent: false,
           depthWrite: true,
           side: THREE.FrontSide,
         });
       } else {
-        waterFaceMat.color.setHex(0x0d47a1);
+        waterFaceMat.color.setHex(0x0a3d7a);
         waterFaceMat.transparent = false;
         waterFaceMat.opacity = 1;
       }
       if(!waterSideMat){
         waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x0a3a7a,
+          color: 0x062f5c,
           transparent: false,
           depthWrite: true,
           side: THREE.FrontSide,
         });
       } else {
-        waterSideMat.color.setHex(0x0a3a7a);
+        waterSideMat.color.setHex(0x062f5c);
         waterSideMat.transparent = false;
         waterSideMat.opacity = 1;
       }

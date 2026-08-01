@@ -113,7 +113,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=1.11.10"></script>
+<script type="module" src="./js/main.js?v=1.11.11"></script>
 <script>
 (function(){
   function showRecover(msg){
@@ -144,9 +144,7 @@
   }
   document.getElementById('btnClearCache')?.addEventListener('click', clearAndReload);
   window.addEventListener('error', function(e){
-    // only show for our game modules, not CDN noise
-    var f = (e && e.filename) || '';
-    if(f.indexOf('/js/') >= 0 || f.indexOf('main.js') >= 0) showRecover('Script error');
+    try { console.error('[minicraft]', e && e.message, e && e.filename); } catch(_){}
   });
   window.addEventListener('unhandledrejection', function(){ showRecover('Load error'); });
   // Only show recovery if the world list never appeared (real load failure)
