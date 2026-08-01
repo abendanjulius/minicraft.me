@@ -1,5 +1,5 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk } from './world.js';
+import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
 
