@@ -1,3 +1,5 @@
+export let peaceMode = false;
+export function setPeaceMode(v){ peaceMode = !!v; }
 // mobs.js — the horde. Host-authoritative zombies with a shared intelligence tier.
 // T0 shamblers · T1 fast + packs · T2 dig soft blocks · T3 hide from the sun (hunt them by day!)
 import { WORLD, WH, topY, getBlock, heightAt, isWalkThrough } from './world.js';
@@ -142,6 +144,8 @@ export function hit(id, dmg){
 
 // ---- host simulation ----
 export function hostTick(dt, dl, targets){
+  if(peaceMode) return {hurts:[], digs:[]};
+
   const hurts = [], digs = [];
   if(!authority) return {hurts, digs};
   if(gm.forge){

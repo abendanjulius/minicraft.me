@@ -106,7 +106,11 @@ export function renderVitals(){
   h.innerHTML = hs; f.innerHTML = fs;
 }
 
+export let godMode = false;
+export function setGodMode(v){ godMode = !!v; }
 export function damage(n, cause){
+  if(godMode) return;
+
   if(gm.forge || sv.dead || n<=0) return;
   const ar = armorPoints();
   if(ar>0) n = Math.max(1, Math.round(n * (1 - Math.min(0.55, ar * 0.09))));

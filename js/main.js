@@ -20,6 +20,7 @@ import * as physics from './physics.js';
 import * as drops from './drops.js';
 import * as chests from './chests.js';
 import * as keg from './keg.js';
+import { tryCommand, setCommandContext } from './commands.js';
 
 const $ = id=>document.getElementById(id);
 chests.setChestChangeHook(()=>net.sendChests?.());
@@ -37,7 +38,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.9.10'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.10.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -251,7 +252,9 @@ addEventListener('beforeunload', saveWorldNow);
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveWorldNow(); });
 
 // ---- Boot the world ----
+let worldSeed = 0;
 function begin(seed, edits, authority, saved){
+  worldSeed = seed;
   $('menu').style.display = 'none';
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
@@ -338,7 +341,17 @@ $('chestDeposit')?.addEventListener('pointerdown', ()=>{
 });
 // clicking the canvas re-acquires pointer lock after Esc
 $('game').addEventListener('click', ()=>{ if(playerMod.state.playing) playerMod.relock(); });
+setCommandContext(()=>({
+  player: playerMod.player,
+  view: playerMod.view,
+  state: playerMod.state,
+  spawn: ()=>playerMod.spawn(),
+  setPosYaw: (x,y,z,yaw)=>playerMod.setPosYaw(x,y,z,yaw),
+  toggleFly: ()=>playerMod.toggleFly(),
+  seed: worldSeed,
+}));
 initChat(text=>{
+  if(tryCommand(text)) return; // handled as slash-command
   addChat(localStorage.getItem('mc_name')||'Me', text);
   net.sendChat(text);
 });

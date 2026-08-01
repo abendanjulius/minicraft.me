@@ -391,9 +391,14 @@ export function castBlock(){
 
 
 function yawToFacing(yaw){
-  // 0 = +Z, 1 = +X, 2 = -Z, 3 = -X (door sits in the face you look at)
-  let f = Math.round(-yaw / (Math.PI/2));
-  return ((f % 4) + 4) % 4;
+  // Door FRONT faces the player (0=+Z, 1=+X, 2=-Z, 3=-X).
+  // Player look dir at yaw=0 is -Z; face-toward-player is opposite of look.
+  const lookX = -Math.sin(yaw);
+  const lookZ = -Math.cos(yaw);
+  const faceX = -lookX; // toward player
+  const faceZ = -lookZ;
+  if(Math.abs(faceZ) >= Math.abs(faceX)) return faceZ >= 0 ? 0 : 2;
+  return faceX >= 0 ? 1 : 3;
 }
 function toggleDoorAt(bx,by,bz){
   const t = getBlock(bx,by,bz);

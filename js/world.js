@@ -277,6 +277,149 @@ function fillChunk(cx, cz, chunk){
     else if(r < grassP + flowerP) chunk[bIndex(lx, h + 1, lz)] = 69
   }
 
+
+  // ---- MiniCraft villages (biome-unique, deterministic) ----
+  // Chance per chunk; builds a small settlement that fits in this chunk.
+  {
+    const vrng = mulberry32((seed ^ 0x71a9e) + cx * 374761 + cz * 668265);
+    const bio = biomeAt(x0 + 8, z0 + 8);
+    // Mountains: no full villages (too steep). Others: rare.
+    const chance = bio === 3 ? 0 : bio === 1 ? 0.035 : bio === 2 ? 0.04 : bio === 4 ? 0.03 : 0.045;
+    if(vrng() < chance){
+      const put = (lx, y, lz, t) => {
+        if(lx < 1 || lx >= CH-1 || lz < 1 || lz >= CH-1 || y < 0 || y >= WH) return;
+        chunk[bIndex(lx, y, lz)] = t;
+      };
+      const surfaceY = (lx, lz) => {
+        for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]) return y;
+        return 20;
+      };
+      // Flatten a small pad for the village
+      const ox = 4, oz = 4, pad = 8; // 8×8 footprint starting at (4,4)
+      let sum = 0, cnt = 0;
+      for(let lx = ox; lx < ox + pad; lx++) for(let lz = oz; lz < oz + pad; lz++){
+        sum += surfaceY(lx, lz); cnt++;
+      }
+      const base = Math.max(6, Math.min(WH - 10, Math.round(sum / cnt)));
+      for(let lx = ox; lx < ox + pad; lx++) for(let lz = oz; lz < oz + pad; lz++){
+        for(let y = 0; y < WH; y++){
+          if(y < base - 2) put(lx, y, lz, 3);
+          else if(y < base) put(lx, y, lz, 2);
+          else if(y === base) put(lx, y, lz, bio === 2 ? 15 : 21); // sandstone path or path
+          else put(lx, y, lz, 0);
+        }
+      }
+
+      // Helper: simple box house
+      const house = (hx, hz, w, d, wall, floor, roof, doorFacing) => {
+        // floor
+        for(let lx = hx; lx < hx + w; lx++) for(let lz = hz; lz < hz + d; lz++) put(lx, base, lz, floor);
+        // walls 2 high + roof
+        for(let lx = hx; lx < hx + w; lx++) for(let lz = hz; lz < hz + d; lz++){
+          const edge = lx === hx || lx === hx+w-1 || lz === hz || lz === hz+d-1;
+          if(!edge) continue;
+          put(lx, base+1, lz, wall);
+          put(lx, base+2, lz, wall);
+        }
+        // doorway on chosen side
+        if(doorFacing === 0){ put(hx + (w>>1), base+1, hz, 0); put(hx + (w>>1), base+2, hz, 0); }
+        if(doorFacing === 2){ put(hx + (w>>1), base+1, hz+d-1, 0); put(hx + (w>>1), base+2, hz+d-1, 0); }
+        if(doorFacing === 1){ put(hx, base+1, hz + (d>>1), 0); put(hx, base+2, hz + (d>>1), 0); }
+        if(doorFacing === 3){ put(hx+w-1, base+1, hz + (d>>1), 0); put(hx+w-1, base+2, hz + (d>>1), 0); }
+        // roof slab layer
+        for(let lx = hx; lx < hx + w; lx++) for(let lz = hz; lz < hz + d; lz++)
+          put(lx, base+3, lz, roof);
+        // torch on front
+        if(doorFacing === 0) put(hx + (w>>1), base+2, hz - 0, 10);
+      };
+
+      if(bio === 0){
+        // PLAINS — "Coin Market": stalls + well + banner posts
+        // Market square path already set
+        // Central well
+        put(ox+3, base, oz+3, 13); put(ox+4, base, oz+3, 13);
+        put(ox+3, base, oz+4, 13); put(ox+4, base, oz+4, 13);
+        put(ox+3, base+1, oz+3, 0); put(ox+4, base+1, oz+3, 0);
+        put(ox+3, base+1, oz+4, 0); put(ox+4, base+1, oz+4, 0);
+        // Four market stalls (plank counters + wool awnings)
+        const stalls = [[ox,oz],[ox+5,oz],[ox,oz+5],[ox+5,oz+5]];
+        for(const [sx,sz] of stalls){
+          for(let i=0;i<3;i++) for(let j=0;j<2;j++){
+            put(sx+i, base+1, sz+j, 7); // counter
+            put(sx+i, base+2, sz+j, 28 + (vrng()*4|0)); // colored wool awning
+          }
+          put(sx+1, base+3, sz, 10); // torch
+        }
+        // Banner poles
+        put(ox+2, base+1, oz+7, 4); put(ox+2, base+2, oz+7, 4); put(ox+2, base+3, oz+7, 32);
+        put(ox+6, base+1, oz+7, 4); put(ox+6, base+2, oz+7, 4); put(ox+6, base+3, oz+7, 29);
+      } else if(bio === 2){
+        // DESERT — "Dune Outpost": sandstone keep + courtyard
+        house(ox+1, oz+1, 5, 5, 15, 15, 15, 0); // sandstone
+        // Courtyard wall ring
+        for(let i = 0; i < pad; i++){
+          put(ox+i, base+1, oz, 15);
+          put(ox+i, base+1, oz+pad-1, 15);
+          put(ox, base+1, oz+i, 15);
+          put(ox+pad-1, base+1, oz+i, 15);
+        }
+        // Gate gap
+        put(ox+3, base+1, oz, 0); put(ox+4, base+1, oz, 0);
+        // Torch pillars
+        put(ox+1, base+1, oz+6, 15); put(ox+1, base+2, oz+6, 10);
+        put(ox+6, base+1, oz+6, 15); put(ox+6, base+2, oz+6, 10);
+        // Storage crates
+        put(ox+5, base+1, oz+2, 56); put(ox+5, base+1, oz+3, 56);
+      } else if(bio === 1){
+        // FOREST — "Log Haven": twin cabins + fence + firepit
+        house(ox, oz+1, 4, 4, 4, 7, 5, 1); // log walls, plank floor, leaf roof
+        house(ox+5, oz+1, 4, 4, 4, 7, 5, 3);
+        // Fence ring
+        for(let i = 0; i < pad; i++){
+          if(i !== 3 && i !== 4){
+            put(ox+i, base+1, oz, 11);
+            put(ox+i, base+1, oz+pad-1, 11);
+          }
+        }
+        // Firepit
+        put(ox+3, base, oz+5, 8); put(ox+4, base, oz+5, 8);
+        put(ox+3, base, oz+6, 8); put(ox+4, base, oz+6, 8);
+        put(ox+3, base+1, oz+5, 10); put(ox+4, base+1, oz+6, 10);
+        // Log benches
+        put(ox+2, base+1, oz+5, 4); put(ox+5, base+1, oz+5, 4);
+      } else if(bio === 4){
+        // SWAMP — "Stilt Rest": raised plank platform + stilts
+        for(let lx = ox+1; lx < ox+pad-1; lx++) for(let lz = oz+1; lz < oz+pad-1; lz++){
+          put(lx, base+2, lz, 7); // raised floor
+        }
+        // Stilts
+        for(const [sx,sz] of [[ox+1,oz+1],[ox+6,oz+1],[ox+1,oz+6],[ox+6,oz+6],[ox+3,oz+3]]){
+          put(sx, base+1, sz, 4);
+          put(sx, base, sz, 4);
+        }
+        // Hut on stilts
+        house(ox+2, oz+2, 4, 4, 18, 7, 19, 0); // dark planks + thatch
+        // Fix house to sit on raised floor: walls from base+3
+        for(let lx = ox+2; lx < ox+6; lx++) for(let lz = oz+2; lz < oz+6; lz++){
+          const edge = lx===ox+2||lx===ox+5||lz===oz+2||lz===oz+5;
+          if(edge){
+            put(lx, base+3, lz, 18);
+            put(lx, base+4, lz, 18);
+          }
+          put(lx, base+5, lz, 19); // thatch roof
+        }
+        put(ox+3, base+3, oz+2, 0); put(ox+3, base+4, oz+2, 0); // door
+        put(ox+4, base+3, oz+5, 10); // torch
+        // Dock plank
+        for(let i=0;i<3;i++) put(ox+3+i, base+2, oz+7, 7);
+      } else {
+        // Fallback plains-ish cabin
+        house(ox+2, oz+2, 4, 4, 7, 7, 7, 0);
+      }
+    }
+  }
+
+
   // Ruins — rare, deterministic per chunk (~14 per 512² → similar density)
   const rrng = mulberry32((seed ^ 0x5a1d) + cx * 48271 + cz * 11909);
   if(rrng() < 0.0018){
