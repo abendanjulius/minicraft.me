@@ -312,9 +312,16 @@ export function placeDebugMarkers(){
     if(labelAxis === 'x') setBlock(wrapC(x + 1), h + 6, z, 46);
     else setBlock(x, h + 6, wrapC(z + 1), 47);
   };
-  for(const x of marks) buildPillar(x, CENTER, 'x');
-  for(const z of marks) buildPillar(CENTER, z, 'z');
-  const ox = CENTER, oz = CENTER;
+  for(const x of marks){
+    if(x === CENTER) continue; // leave spawn column empty
+    buildPillar(x, CENTER, 'x');
+  }
+  for(const z of marks){
+    if(z === CENTER) continue;
+    buildPillar(CENTER, z, 'z');
+  }
+  // Origin marker offset so player is not buried inside it
+  const ox = wrapC(CENTER + 3), oz = wrapC(CENTER + 3);
   const h = heightAt(ox, oz);
   for(let y = 1; y <= 18; y++){
     const yy = h + y;
@@ -322,5 +329,12 @@ export function placeDebugMarkers(){
     setBlock(ox, yy, oz, y < 14 ? 45 : 9);
   }
   setBlock(ox, Math.min(h + 19, WH - 1), oz, 10);
+
+  // Clear a small spawn pad at true center
+  const sh = heightAt(CENTER, CENTER);
+  for(let dx = -1; dx <= 1; dx++) for(let dz = -1; dz <= 1; dz++){
+    const sx = wrapC(CENTER + dx), sz = wrapC(CENTER + dz);
+    for(let y = sh + 1; y <= sh + 4; y++) if(y < WH) setBlock(sx, y, sz, 0);
+  }
 }
 

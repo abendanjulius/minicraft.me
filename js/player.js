@@ -204,7 +204,35 @@ export function spawn(){
   if(bed){
     player.pos.set(bed.x + 0.5, bed.y + 1.2, bed.z + 0.5);
   } else {
-    player.pos.set(CENTER, heightAt(CENTER,CENTER)+3, CENTER);
+    // Find open air near center (avoid debug pillars / trees)
+    let sx = CENTER + 0.5, sz = CENTER + 0.5;
+    let sy = heightAt(CENTER, CENTER) + 2;
+    const clearAt = (x, z) => {
+      const h = heightAt(Math.floor(x), Math.floor(z));
+      for(let y = h + 1; y <= h + 3; y++){
+        if(getBlock(Math.floor(x), y, Math.floor(z))) return false;
+      }
+      return true;
+    };
+    if(!clearAt(sx, sz)){
+      for(const [dx, dz] of [[2,0],[-2,0],[0,2],[0,-2],[3,3],[-3,3],[4,0],[-4,0],[0,4]]){
+        if(clearAt(CENTER + dx, CENTER + dz)){
+          sx = CENTER + dx + 0.5;
+          sz = CENTER + dz + 0.5;
+          sy = heightAt(CENTER + dx, CENTER + dz) + 2;
+          break;
+        }
+      }
+    } else {
+      sy = heightAt(CENTER, CENTER) + 2;
+    }
+    // Final safety: push up until head is free
+    for(let i = 0; i < 16; i++){
+      if(!getBlock(Math.floor(sx), Math.floor(sy), Math.floor(sz))
+        && !getBlock(Math.floor(sx), Math.floor(sy + 1), Math.floor(sz))) break;
+      sy += 1;
+    }
+    player.pos.set(sx, sy, sz);
   }
   player.vel.set(0,0,0);
   state.flying = false;
