@@ -286,8 +286,8 @@ function fillChunk(cx, cz, chunk){
     const bio = biomeAt(x0 + lx, z0 + lz);
     if(bio === 2) continue; // barren desert
     const r = prng();
-    const grassP = bio === 0 ? 0.18 : bio === 1 ? 0.1 : bio === 4 ? 0.2 : 0.06;
-    const flowerP = bio === 0 ? 0.08 : 0.03;
+    const grassP = bio === 0 ? 0.26 : bio === 1 ? 0.1 : bio === 4 ? 0.2 : 0.06;
+    const flowerP = bio === 0 ? 0.14 : 0.03;
     if(r < grassP) chunk[bIndex(lx, h + 1, lz)] = 66;
     else if(r < grassP + flowerP * 0.35) chunk[bIndex(lx, h + 1, lz)] = 67;
     else if(r < grassP + flowerP * 0.7) chunk[bIndex(lx, h + 1, lz)] = 68;
@@ -353,26 +353,40 @@ function fillChunk(cx, cz, chunk){
       let vKind = 'market';
       if(bio === 0){
         vKind = 'market';
-        // PLAINS — "Coin Market": stalls + well + banner posts
-        // Market square path already set
-        // Central well
+        // PLAINS — Coin Market: crossroads, well, 5 stalls, entrance, sign post
+        // Cross paths through center
+        for(let i = 0; i < pad; i++){
+          put(ox + i, base, oz + 3, 21);
+          put(ox + i, base, oz + 4, 21);
+          put(ox + 3, base, oz + i, 21);
+          put(ox + 4, base, oz + i, 21);
+        }
+        // Central well (stone ring)
         put(ox+3, base, oz+3, 13); put(ox+4, base, oz+3, 13);
         put(ox+3, base, oz+4, 13); put(ox+4, base, oz+4, 13);
-        put(ox+3, base+1, oz+3, 0); put(ox+4, base+1, oz+3, 0);
-        put(ox+3, base+1, oz+4, 0); put(ox+4, base+1, oz+4, 0);
-        // Four market stalls (plank counters + wool awnings)
-        const stalls = [[ox,oz],[ox+5,oz],[ox,oz+5],[ox+5,oz+5]];
+        put(ox+3, base+1, oz+3, 13); put(ox+4, base+1, oz+4, 13);
+        // Five stalls: corners + one north mid
+        const stalls = [[ox,oz],[ox+5,oz],[ox,oz+5],[ox+5,oz+5],[ox+2,oz]];
         for(const [sx,sz] of stalls){
           for(let i=0;i<3;i++) for(let j=0;j<2;j++){
-            put(sx+i, base+1, sz+j, 7); // counter
-            put(sx+i, base+2, sz+j, 28 + (vrng()*4|0)); // colored wool awning
+            put(sx+i, base+1, sz+j, 7);
+            put(sx+i, base+2, sz+j, 28 + (vrng()*4|0));
           }
-          put(sx+1, base+3, sz, 10); // torch
+          put(sx+1, base+3, sz, 10);
         }
-        // Banner poles
-        put(ox+2, base+1, oz+7, 4); put(ox+2, base+2, oz+7, 4); put(ox+2, base+3, oz+7, 32);
-        put(ox+6, base+1, oz+7, 4); put(ox+6, base+2, oz+7, 4); put(ox+6, base+3, oz+7, 29);
-      } else if(bio === 2){
+        // Entrance arch south
+        put(ox+2, base+1, oz+7, 7); put(ox+5, base+1, oz+7, 7);
+        put(ox+2, base+2, oz+7, 7); put(ox+5, base+2, oz+7, 7);
+        put(ox+3, base+3, oz+7, 28); put(ox+4, base+3, oz+7, 28);
+        // Sign post (gold wool "flag" + plank post) — name also as sprite at runtime
+        put(ox+1, base+1, oz+6, 4);
+        put(ox+1, base+2, oz+6, 4);
+        put(ox+1, base+3, oz+6, 32); // gold wool as market sign board
+        put(ox+1, base+4, oz+6, 10);
+        // Bench + lamp near well
+        put(ox+2, base+1, oz+5, 7); put(ox+5, base+1, oz+5, 7);
+        put(ox+6, base+1, oz+3, 4); put(ox+6, base+2, oz+3, 10);
+      }      } else if(bio === 2){
         vKind = 'outpost';
         // DESERT — "Dune Outpost": sandstone keep + courtyard
         house(ox+1, oz+1, 5, 5, 15, 15, 15, 0); // sandstone

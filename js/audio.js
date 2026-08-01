@@ -36,10 +36,10 @@ function noise({dur=.12,vol=.2,freq=800,q=1}){
 // Characteristic pitch per block type (higher = harder/glassier)
 const PITCH = {1:700,2:600,3:1400,4:900,5:1800,6:500,7:950,8:1350,9:2400};
 let stepAlt=false;
-let ambT = 0, birdT = 2, waterT = 0;
-export function ambientTick(dt, { nearWater = false, biome = 0 } = {}){
+let ambT = 0, birdT = 2, waterT = 0, marketT = 0;
+export function ambientTick(dt, { nearWater = false, biome = 0, nearMarket = false } = {}){
   if(!ctx) return;
-  ambT += dt; birdT -= dt; waterT -= dt;
+  ambT += dt; birdT -= dt; waterT -= dt; marketT -= dt;
   // birds in plains/forest
   if(birdT <= 0 && (biome === 0 || biome === 1)){
     birdT = 4 + Math.random() * 8;
@@ -57,6 +57,11 @@ export const sfx = {
     setTimeout(()=>osc({freq:base*1.15, end:base*.9, type:'sine', dur:.1, vol:.035}), 90);
   },
   water: ()=> noise({dur:.35, vol:.06, freq:400 + Math.random()*200, q:0.6}),
+  // Soft market bed — muted chatter-ish blips
+  marketMurmur: ()=>{
+    noise({dur:.4, vol:.03, freq:500 + Math.random()*400, q:0.5});
+    setTimeout(()=>osc({freq:180+Math.random()*40, end:140, type:'sine', dur:.15, vol:.025}), 40);
+  },
 
   break: t=>{ noise({dur:.18,vol:.38,freq:(PITCH[t]||800)*.7,q:.8}); osc({freq:(PITCH[t]||800)*.35,end:60,type:'triangle',dur:.15,vol:.15}); },
   tick:  t=>noise({dur:.05,vol:.15,freq:PITCH[t]||900,q:2}),

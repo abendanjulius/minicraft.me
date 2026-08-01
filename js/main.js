@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.10.8'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.11.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -557,7 +557,7 @@ function loop(now){
       for(let dy=0;dy<=2&&!nearWater;dy++) for(let dx=-2;dx<=2&&!nearWater;dx++) for(let dz=-2;dz<=2;dz++){
         if(getBlock(Math.round(px)+dx, Math.round(playerMod.player.pos.y)+dy, Math.round(pz)+dz)===64){ nearWater=true; break; }
       }
-      ambientTick?.(dt, { nearWater, biome: bio });
+      ambientTick?.(dt, { nearWater, biome: bio, nearMarket: villagers.nearMarket(px, pz) });
     }
     net.update(dt, elapsed);
     // Near the toroidal seam, restitch chunks every frame so the wrap never flashes sky.
