@@ -603,23 +603,29 @@ export function buildChunk(cx,cz){
     }
     if(faces.length){
       if(!waterFaceMat){
-        // Opaque-enough blue sheet — looks like liquid, not glass panes
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x0a4aa0, // strong deep blue
-          transparent: true,
-          opacity: 0.92,
+          color: 0x0d47a1,
+          transparent: false,
           depthWrite: true,
           side: THREE.FrontSide,
         });
+      } else {
+        waterFaceMat.color.setHex(0x0d47a1);
+        waterFaceMat.transparent = false;
+        waterFaceMat.opacity = 1;
       }
       if(!waterSideMat){
         waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x063570, // dark bank blue
-          transparent: true,
-          opacity: 0.88,
+          color: 0x0a3a7a,
+          transparent: false,
           depthWrite: true,
           side: THREE.FrontSide,
         });
+      } else {
+        waterSideMat.color.setHex(0x0a3a7a);
+        waterSideMat.transparent = false;
+        waterSideMat.opacity = 1;
+      }
       }
       const tops = faces.filter(f => f[4] === 1);
       const sides = faces.filter(f => f[4] !== 1);
