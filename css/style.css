@@ -644,3 +644,10 @@ body.inv-open #inv{
   color:#ddd; font-family:monospace; font-size:18px; letter-spacing:2px;
   text-shadow:0 0 12px #000; opacity:.9;
 }
+
+/* Underwater — light cyan wash (surface water stays deep blue) */
+body.underwater #vignette{
+  background: radial-gradient(ellipse at center, rgba(100,190,230,0.15) 0%, rgba(40,120,170,0.45) 100%) !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}

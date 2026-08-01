@@ -37,6 +37,14 @@ const moonSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#dfe7ff'
 moonSpr.scale.set(5,5,1); scene.add(moonSpr);
 const _sky = new THREE.Color();
 export function setDayTime(t){ day.t = ((t%1)+1)%1; }
+
+let _underwater = false;
+const _uwCol = new THREE.Color(0x7ec8e8); // light water tint while submerged
+export function setUnderwater(on){
+  _underwater = !!on;
+  document.body.classList.toggle('underwater', _underwater);
+}
+
 export function updateDayNight(dt, focus){
   if(gm.forge){ day.t = 0.28; }          // Forge: always noon
   else { day.t = (day.t + dt/DAY_LEN) % 1; }
@@ -48,6 +56,15 @@ export function updateDayNight(dt, focus){
   _sky.copy(skyNight).lerp(skyDay, dl).lerp(skyDusk, duskF*.55);
   scene.background.copy(_sky);
   scene.fog.color.copy(_sky);
+  if(_underwater){
+    scene.background.copy(_uwCol);
+    scene.fog.color.copy(_uwCol);
+    scene.fog.near = 1.5;
+    scene.fog.far = 22;
+  } else {
+    scene.fog.near = VIEW * 0.55;
+    scene.fog.far = VIEW * 1.15;
+  }
   ambLight.intensity = .18 + .45*dl;
   sun.intensity = .15 + .6*dl;
   sunSpr.position.copy(focus).addScaledVector(dir, VIEW*1.6);
@@ -588,18 +605,18 @@ export function buildChunk(cx,cz){
       if(!waterFaceMat){
         // Opaque-enough blue sheet — looks like liquid, not glass panes
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x2f86c8,
+          color: 0x1568b8, // deep surface blue
           transparent: true,
-          opacity: 0.72,
+          opacity: 0.82,
           depthWrite: true,
           side: THREE.DoubleSide,
         });
       }
       if(!waterSideMat){
         waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x2470a8,
+          color: 0x0e4f8a, // deeper bank blue
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.7,
           depthWrite: false,
           side: THREE.DoubleSide,
         });
