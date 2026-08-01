@@ -2,8 +2,7 @@
 // Host/solo-only for world-affecting cmds; local cmds for everyone.
 
 import { WORLD, WH, CENTER, getBlock, setBlock, heightAt, wrapC, biomeAt, BIOME_NAME, DEBUG_MARKERS } from './world.js';
-import { day, setDayTime, rebuildAt, applyEdit, trackTorch, trackDoor, trackBed, trackSpecial, TYPES } from './render.js';
-import { ITEMS } from './content.js';
+import { day, setDayTime, rebuildAt, applyEdit, trackTorch, trackDoor, trackBed, trackSpecial, TYPES, ITEMS } from './render.js';
 import { addChat, inventory, hotbarSlots, renderHotbar, renderInv, addToInventory } from './ui.js';
 import { gm, setMode } from './mode.js';
 import * as net from './net.js';
