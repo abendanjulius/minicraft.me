@@ -1,6 +1,6 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME, villageSites } from './world.js';
-import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim,
+import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim, tickWind,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv } from './ui.js';
@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.11.14'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.11.15'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -577,6 +577,7 @@ function loop(now){
       }
       ambientTick?.(dt, { nearWater, biome: bio, nearMarket: villagers.nearMarket(px, pz) });
       tickWaterAnim?.(dt);
+      tickWind?.(dt);
     }
     net.update(dt, elapsed);
     // Near the toroidal seam, restitch chunks every frame so the wrap never flashes sky.

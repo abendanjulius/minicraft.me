@@ -554,14 +554,52 @@ let waterSideMat = null;
 export function tickWaterAnim(dt){
   const tex = waterFaceMat?.userData?.flowTex;
   if(!tex) return;
-  tex.offset.x = (tex.offset.x + dt * 0.06) % 1;
-  tex.offset.y = (tex.offset.y + dt * 0.04) % 1;
+  // Clearly visible flow
+  tex.offset.x = (tex.offset.x + dt * 0.22) % 1;
+  tex.offset.y = (tex.offset.y + dt * 0.14) % 1;
+}
+
+// ---- Wind on leaves (and tall grass markers) ----
+const windMeshes = []; // InstancedMesh with userData.windPts
+let windT = 0;
+export function tickWind(dt){
+  windT += dt;
+  for(const im of windMeshes){
+    const pts = im.userData.windPts;
+    if(!pts || !im.parent) continue;
+    for(let i = 0; i < pts.length; i++){
+      const [x, y, z] = pts[i];
+      const s = Math.sin(windT * 1.7 + x * 0.38 + z * 0.31) * 0.11;
+      const c = Math.cos(windT * 1.25 + x * 0.22 + z * 0.18) * 0.07;
+      dummy.position.set(x + s, y, z + c);
+      dummy.rotation.set(c * 0.35, 0, s * 0.45);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      im.setMatrixAt(i, dummy.matrix);
+    }
+    im.instanceMatrix.needsUpdate = true;
+  }
+  // Plants (cross-planes) sway gently
+  if(typeof specialMeshes !== 'undefined'){
+    for(const m of specialMeshes.values()){
+      if(!m.userData?.isPlant) continue;
+      const bx = m.userData.base?.[0] ?? m.position.x;
+      const bz = m.userData.base?.[2] ?? m.position.z;
+      m.rotation.z = Math.sin(windT * 2.1 + bx * 0.5) * 0.12;
+      m.rotation.x = Math.cos(windT * 1.6 + bz * 0.4) * 0.06;
+    }
+  }
 }
 export function buildChunk(cx,cz){
   cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
   cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
   const ci = cIndex(cx,cz);
-  if(chunkMeshes[ci]) for(const m of chunkMeshes[ci]){ scene.remove(m); m.geometry.dispose(); }
+  if(chunkMeshes[ci]) for(const m of chunkMeshes[ci]){
+    scene.remove(m);
+    m.geometry.dispose();
+    const wi = windMeshes.indexOf(m);
+    if(wi >= 0) windMeshes.splice(wi, 1);
+  }
   const chunk = ensureChunk(cx, cz), byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
@@ -581,8 +619,13 @@ export function buildChunk(cx,cz){
     const g = geo.clone();
     g.boundingSphere = new THREE.Sphere(center.clone(), radius);
     const im = new THREE.InstancedMesh(g, mats, pts.length);
-    pts.forEach((p,i)=>{ dummy.position.set(p[0],p[1],p[2]); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
+    pts.forEach((p,i)=>{ dummy.position.set(p[0],p[1],p[2]); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
     im.instanceMatrix.needsUpdate = true;
+    // Leaves catch the wind
+    if(+id === 5){
+      im.userData.windPts = pts.map(p => [p[0], p[1], p[2]]);
+      windMeshes.push(im);
+    }
     scene.add(im);
     list.push(im);
   }
@@ -658,7 +701,12 @@ export function buildAllChunks(){
 export function disposeChunkMeshes(cx, cz){
   const ci = cIndex(cx, cz);
   if(!chunkMeshes[ci]) return;
-  for(const m of chunkMeshes[ci]){ scene.remove(m); m.geometry.dispose(); }
+  for(const m of chunkMeshes[ci]){
+    scene.remove(m);
+    m.geometry.dispose();
+    const wi = windMeshes.indexOf(m);
+    if(wi >= 0) windMeshes.splice(wi, 1);
+  }
   chunkMeshes[ci] = null;
 }
 export function rebuildAt(x,z){
@@ -998,6 +1046,7 @@ function makePlantMesh(x,y,z,tid){
   g.add(p1); g.add(p2);
   g.position.set(x,y,z);
   g.userData.base=[x,y,z];
+  g.userData.isPlant = true;
   return g;
 }
 
