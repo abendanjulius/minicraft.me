@@ -580,81 +580,46 @@ export function buildChunk(cx,cz){
     scene.add(im);
     list.push(im);
   }
-  // Water: surface sheet only (top of each water column + bank edges).
-  // No deep internal faces → no glass-cube lattice.
+  // Water: top sheets only, medium blue, near-opaque (no glass lattice)
   {
-    const faces = [];
+    const tops = [];
     for(let y=0;y<WH;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       if(chunk[bIndex(lx,y,lz)] !== 64) continue;
       const x = x0+lx, z = z0+lz;
-      // Only the top water cell of a column (air / non-water above)
+      // only top of water column
       if(getBlock(x, y+1, z) === 64) continue;
-
-      // Top sheet (slightly inset so banks read cleanly)
-      faces.push([x, y, z, 0, 1, 0, 1.12]); // scale overlap
-
-      // Bank sides only where the neighbor is not water
-      for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
-        const n = getBlock(x+dx, y, z+dz);
-        if(n === 64) continue;
-        if(n && occludes(x+dx, y, z+dz)) continue;
-        faces.push([x, y, z, dx, 0, dz, 1.0]);
-      }
+      tops.push([x, y, z]);
     }
-    if(faces.length){
+    if(tops.length){
       if(!waterFaceMat){
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x2b7bc4, // medium water blue
+          color: 0x3a9ad9, // medium water blue
           transparent: true,
-          opacity: 0.72,
+          opacity: 0.88,
           depthWrite: true,
           side: THREE.FrontSide,
         });
       } else {
-        waterFaceMat.color.setHex(0x2b7bc4);
+        waterFaceMat.color.setHex(0x3a9ad9);
         waterFaceMat.transparent = true;
-        waterFaceMat.opacity = 0.72;
+        waterFaceMat.opacity = 0.88;
+        waterFaceMat.depthWrite = true;
       }
-      if(!waterSideMat){
-        waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x1e5f9a,
-          transparent: true,
-          opacity: 0.65,
-          depthWrite: false,
-          side: THREE.FrontSide,
-        });
-      } else {
-        waterSideMat.color.setHex(0x1e5f9a);
-        waterSideMat.transparent = true;
-        waterSideMat.opacity = 0.65;
-      }
-      const tops = faces.filter(f => f[4] === 1);
-      const sides = faces.filter(f => f[4] !== 1);
+      const pgeo = new THREE.PlaneGeometry(1.02, 1.02); // slight overlap hides seams
+      const im = new THREE.InstancedMesh(pgeo, waterFaceMat, tops.length);
       const orient = new THREE.Object3D();
-      const addInst = (arr, mat, geo) => {
-        if(!arr.length) return;
-        const im = new THREE.InstancedMesh(geo, mat, arr.length);
-        arr.forEach((f, i)=>{
-          const [x,y,z,dx,dy,dz,sc] = f;
-          orient.position.set(x + dx*0.5, y + dy*0.42, z + dz*0.5); // top slightly below block top
-          orient.rotation.set(0,0,0);
-          orient.scale.set(sc||1, sc||1, sc||1);
-          if(dx === 1) orient.rotation.y = Math.PI/2;
-          else if(dx === -1) orient.rotation.y = -Math.PI/2;
-          else if(dy === 1) orient.rotation.x = -Math.PI/2;
-          else if(dz === -1) orient.rotation.y = Math.PI;
-          else if(dz === 1) orient.rotation.y = 0;
-          orient.updateMatrix();
-          im.setMatrixAt(i, orient.matrix);
-        });
-        im.instanceMatrix.needsUpdate = true;
-        im.renderOrder = 3;
-        scene.add(im);
-        list.push(im);
-      };
-      const pgeo = new THREE.PlaneGeometry(1, 1);
-      addInst(tops, waterFaceMat, pgeo);
-      addInst(sides, waterSideMat, pgeo);
+      tops.forEach((p, i)=>{
+        const [x,y,z] = p;
+        orient.position.set(x, y + 0.42, z);
+        orient.rotation.set(-Math.PI/2, 0, 0);
+        orient.scale.set(1, 1, 1);
+        orient.updateMatrix();
+        im.setMatrixAt(i, orient.matrix);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      im.renderOrder = 3;
+      scene.add(im);
+      list.push(im);
     }
   }
   chunkMeshes[ci] = list;
