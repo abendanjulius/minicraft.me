@@ -88,3 +88,57 @@ export function tickDecay(dt){
   if(decayQ.length > 900) decayQ.length = 900;
   return gone;
 }
+
+// ---- Water flow (simple Minecraft-like) ----
+const WATER = 64;
+const waterQ = [];
+let waterAcc = 0;
+
+export function notifyWater(x, y, z){
+  waterQ.push({x: wrapC(x), y, z: wrapC(z)});
+}
+
+function tryFlow(x, y, z, out){
+  if(getBlock(x, y, z) !== WATER) return;
+  // Fall down first
+  if(y > 0 && !getBlock(x, y - 1, z)){
+    setBlock(x, y, z, 0);
+    setBlock(x, y - 1, z, WATER);
+    out.push([x, y, z, 0], [x, y - 1, z, WATER]);
+    waterQ.push({x, y: y - 1, z});
+    return;
+  }
+  // Spread sideways into air (finite-ish: only if below is solid or water)
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  for(const [dx, dz] of dirs){
+    const nx = wrapC(x + dx), nz = wrapC(z + dz);
+    if(getBlock(nx, y, nz)) continue;
+    // prefer flowing down a step
+    if(y > 0 && !getBlock(nx, y - 1, nz)){
+      setBlock(nx, y - 1, nz, WATER);
+      out.push([nx, y - 1, nz, WATER]);
+      waterQ.push({x: nx, y: y - 1, z: nz});
+    } else {
+      // horizontal spread limited — only if source has water neighbor count
+      setBlock(nx, y, nz, WATER);
+      out.push([nx, y, nz, WATER]);
+      waterQ.push({x: nx, y, z: nz});
+    }
+    // one side per tick per cell to slow the flood
+    break;
+  }
+}
+
+/** Process water queue; returns edit list [[x,y,z,t],...] */
+export function tickWater(dt){
+  waterAcc += dt;
+  if(waterAcc < 0.12) return [];
+  waterAcc = 0;
+  const out = [];
+  const n = Math.min(waterQ.length, 24);
+  for(let i = 0; i < n; i++){
+    const e = waterQ.shift();
+    if(e) tryFlow(e.x, e.y, e.z, out);
+  }
+  return out;
+}

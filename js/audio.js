@@ -36,7 +36,28 @@ function noise({dur=.12,vol=.2,freq=800,q=1}){
 // Characteristic pitch per block type (higher = harder/glassier)
 const PITCH = {1:700,2:600,3:1400,4:900,5:1800,6:500,7:950,8:1350,9:2400};
 let stepAlt=false;
+let ambT = 0, birdT = 2, waterT = 0;
+export function ambientTick(dt, { nearWater = false, biome = 0 } = {}){
+  if(!ctx) return;
+  ambT += dt; birdT -= dt; waterT -= dt;
+  // birds in plains/forest
+  if(birdT <= 0 && (biome === 0 || biome === 1)){
+    birdT = 4 + Math.random() * 8;
+    sfx.bird();
+  }
+  if(nearWater && waterT <= 0){
+    waterT = 1.2 + Math.random() * 1.5;
+    sfx.water();
+  }
+}
 export const sfx = {
+  bird: ()=>{
+    const base = 1800 + Math.random()*800;
+    osc({freq:base, end:base*1.3, type:'sine', dur:.08, vol:.04});
+    setTimeout(()=>osc({freq:base*1.15, end:base*.9, type:'sine', dur:.1, vol:.035}), 90);
+  },
+  water: ()=> noise({dur:.35, vol:.06, freq:400 + Math.random()*200, q:0.6}),
+
   break: t=>{ noise({dur:.18,vol:.38,freq:(PITCH[t]||800)*.7,q:.8}); osc({freq:(PITCH[t]||800)*.35,end:60,type:'triangle',dur:.15,vol:.15}); },
   tick:  t=>noise({dur:.05,vol:.15,freq:PITCH[t]||900,q:2}),
   place: ()=>{ osc({freq:220,end:160,type:'square',dur:.08,vol:.18}); noise({dur:.05,vol:.12,freq:500,q:1}); },

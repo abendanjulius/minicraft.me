@@ -138,9 +138,21 @@ function updateHeld(){
     if(!TYPES[id]){ poseArm('empty'); return; }
     if(!gm.forge && !(inventory[id]>0)){ poseArm('empty'); return; }
     poseArm('block');
-    heldExtra = makeBlockCube(id, 0.58);
-    // lower-right, tilted so top + two sides read clearly (like MC)
-    heldExtra.position.set(0.08, 0.02, -0.42);
+    // Special blocks: slightly different held scale so they don't all look like full cubes
+    const thin = (id===61||id===62||id===63||id===11||id===44);
+    heldExtra = makeBlockCube(id, thin ? 0.5 : 0.58);
+    if(id===61){ // slab — flatten
+      heldExtra.scale.set(1, 0.5, 1);
+      heldExtra.position.set(0.08, -0.05, -0.42);
+    } else if(id===62||id===63){
+      heldExtra.scale.set(1, 0.2, 1);
+      heldExtra.position.set(0.08, 0.0, -0.42);
+    } else if(id===11){
+      heldExtra.scale.set(0.35, 1, 0.35);
+      heldExtra.position.set(0.05, 0.02, -0.4);
+    } else {
+      heldExtra.position.set(0.08, 0.02, -0.42);
+    }
     heldExtra.rotation.set(0.35, -0.85, 0.12);
     handGroup.add(heldExtra);
     return;
@@ -705,6 +717,11 @@ export function update(dt, elapsed){
     const sprinting = !!(keys.ShiftLeft || keys.ShiftRight || keys.sprint);
     let speed = sprinting ? 8.2 : 5;
     if(state.flying && gm.forge) speed = sprinting ? 14 : 9;
+    // Water: slower move + mild buoyancy
+    const feet = getBlock(Math.round(player.pos.x), Math.round(player.pos.y - 0.1), Math.round(player.pos.z));
+    const body = getBlock(Math.round(player.pos.x), Math.round(player.pos.y + 0.6), Math.round(player.pos.z));
+    const inWater = feet === 64 || body === 64;
+    if(inWater && !(state.flying && gm.forge)) speed *= 0.45;
     const fwd = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
     const right = new THREE.Vector3(-fwd.z,0,fwd.x);
     const f = (keys.KeyW?1:0)-(keys.KeyS?1:0) - joy.y;
@@ -727,6 +744,13 @@ export function update(dt, elapsed){
       player.onGround = false;
     } else if(onLadder){
       player.vel.y = keys.Space ? 3.2 : -1.4;
+      player.onGround = false;
+    } else if(inWater){
+      player.vel.y -= 4*dt; // light gravity
+      if(keys.Space) player.vel.y = Math.min(3.5, player.vel.y + 12*dt); // swim up
+      if(keys.ShiftLeft || keys.ShiftRight || keys.sprint) player.vel.y = Math.max(-3, player.vel.y - 10*dt);
+      // gentle float toward surface
+      if(!keys.Space && !keys.ShiftLeft && !keys.sprint) player.vel.y += 2.2*dt;
       player.onGround = false;
     } else {
       player.vel.y -= 20*dt;

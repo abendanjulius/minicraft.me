@@ -1,8 +1,8 @@
 // main.js — menu, boot, game loop
-import { generateWorld, setBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC } from './world.js';
+import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
-         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed } from './render.js';
+         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv } from './ui.js';
 import * as craftMod from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
@@ -10,7 +10,7 @@ import * as persist from './persist.js';
 import { inventory, hotbarSlots, sel } from './ui.js';
 import { day } from './render.js';
 import { sv } from './survival.js';
-import { initAudio, startMusic, sfx } from './audio.js';
+import { initAudio, startMusic, sfx, ambientTick } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
 import * as mobs from './mobs.js';
@@ -30,14 +30,14 @@ physics.setPhysicsFx((x,y,z,tid)=>spawnParticles(x,y,z, TYPES[tid]?.pc ?? 0xdacc
 setEditPhysicsHook((x,y,z,old,t)=>{
   if(old===4 && t===0) physics.notifyLogBroken(x,y,z);
   if(t===0 || physics.GRAVITY.has(t) || physics.GRAVITY.has(old)){
-    // falling sand/gravel must go through net so it is saved AND seen by everyone
     net.syncEdits(physics.afterEdit(x,y,z));
   }
+  if(t===64 || old===64) physics.notifyWater?.(x,y,z);
 });
 
 
 // ---- Version check ----
-const APP_VERSION = '1.9.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.9.4'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -256,7 +256,7 @@ function begin(seed, edits, authority, saved){
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
     generateWorld(seed);
-    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); }
+    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); trackSpecial(x,y,z,0,t); }
     placeDebugMarkers(); // TEMP: 256-block pillars for 2k testing
     buildAllChunks();
     updateChunkVisibility(CENTER, CENTER);
@@ -409,8 +409,9 @@ function loop(now){
       const x = wrapC(playerMod.player.pos.x)|0, y = playerMod.player.pos.y|0, z = wrapC(playerMod.player.pos.z)|0;
       const dx = x - CENTER, dz = z - CENTER;
       const dist = Math.hypot(dx, dz)|0;
-      const mark = DEBUG_MARKERS ? ` · ${dist}m from center · pillars@256` : '';
-      setHud(frames, `${x}, ${y}, ${z}${mark}`);
+      const bio = BIOME_NAME[biomeAt(x,z)] || '';
+      const mark = DEBUG_MARKERS ? ` · ${dist}m · pillars@256` : '';
+      setHud(frames, `${x}, ${y}, ${z} · ${bio}${mark}`);
     }
     frames=0; fpsTime=0;
   }
@@ -439,9 +440,29 @@ function loop(now){
         for(const [lx,ly,lz] of gone) spawnParticles(lx,ly,lz, TYPES[5]?.pc ?? 0x3a7d28, 5);
         net.syncEdits(gone.map(([lx,ly,lz])=>[lx,ly,lz,0]));
       }
+      const flowed = physics.tickWater?.(dt) || [];
+      if(flowed.length){
+        for(const e of flowed){
+          if(e[3]===64) physics.notifyWater?.(e[0],e[1],e[2]);
+        }
+        net.syncEdits(flowed);
+        for(const [lx,ly,lz,t] of flowed){
+          // rebuild meshes around water changes
+          rebuildAt(lx, lz);
+        }
+      }
     }
     const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;
     survival.tick(dt, movingH, dl);
+    {
+      const px = playerMod.player.pos.x, pz = playerMod.player.pos.z;
+      const bio = biomeAt(Math.round(px), Math.round(pz));
+      let nearWater = false;
+      for(let dy=0;dy<=2&&!nearWater;dy++) for(let dx=-2;dx<=2&&!nearWater;dx++) for(let dz=-2;dz<=2;dz++){
+        if(getBlock(Math.round(px)+dx, Math.round(playerMod.player.pos.y)+dy, Math.round(pz)+dz)===64){ nearWater=true; break; }
+      }
+      ambientTick?.(dt, { nearWater, biome: bio });
+    }
     net.update(dt, elapsed);
     // Near the toroidal seam, restitch chunks every frame so the wrap never flashes sky.
     // Far from the edge, throttle to save CPU.

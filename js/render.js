@@ -77,9 +77,18 @@ const dirtTex  = canvasTex(g=>pix(g,()=>{const d=jit(24);return rgb(134+d,96+d,6
 const capDepth = Array.from({length:16},()=>3+Math.floor(Math.random()*2));
 const grassSide= canvasTex(g=>pix(g,(x,y)=>{const d=jit(24);return y<capDepth[x]?rgb(92+d,171+d,60+d):rgb(134+d,96+d,67+d)}));
 const stoneTex = canvasTex(g=>pix(g,()=>{const d=jit(26),s=Math.random()<.08?-25:0;return rgb(128+d+s,128+d+s,131+d+s)}));
-const logSide  = canvasTex(g=>pix(g,x=>{const bark=(x%4===0||x%7===0)?-30:0,d=jit(18);return rgb(109+bark+d,84+bark+d,50+bark+d)}));
+const logSide  = canvasTex(g=>pix(g,(x,y)=>{
+  const bark=(x%4===0||x%7===0)?-32:0,d=jit(16);
+  const knot=(x>=6&&x<=9&&y>=6&&y<=9)?-25:0;
+  return rgb(105+bark+d+knot, 80+bark+d+knot, 46+bark+d+knot);
+}));
 const logTop   = canvasTex(g=>pix(g,(x,y)=>{const r=Math.max(Math.abs(x-7.5),Math.abs(y-7.5)),ring=Math.floor(r)%2===0?12:-14,d=jit(10);return rgb(160+ring+d,130+ring+d,85+ring+d)}));
-const leafTex  = canvasTex(g=>pix(g,()=>{const d=jit(40),hole=Math.random()<.1?-45:0;return rgb(58+d+hole,125+d+hole,40+d+hole)}));
+const leafTex  = canvasTex(g=>pix(g,(x,y)=>{
+  const d=jit(36), hole=Math.random()<.12?-50:0;
+  // slight mottling so leaves don't look like solid plastic cubes
+  const mott=((x*3+y*5)&7)===0?-18:0;
+  return rgb(48+d+hole+mott, 118+d+hole+mott, 36+d+hole+mott);
+}));
 const sandTex  = canvasTex(g=>pix(g,()=>{const d=jit(20);return rgb(218+d,204+d,150+d)}));
 const plankTex = canvasTex(g=>pix(g,(x,y)=>{const seam=(y%4===3)?-40:0,off=((y>>2)%2)*8,end=((x+off)%8===7)?-30:0,d=jit(14);return rgb(178+seam+end+d,138+seam+end+d,90+seam+end+d)}));
 const brickTex = canvasTex(g=>pix(g,(x,y)=>{const my=y%4===3,off=((y>>2)%2)*4,mx=(x+off)%8===7;if(my||mx)return rgb(188,188,188);const d=jit(20);return rgb(150+d,70+d,60+d)}));
@@ -97,7 +106,7 @@ const woolTex  = canvasTex(g=>pix(g,()=>{const d=jit(16);return rgb(238+d,236+d,
 
 const M=(x,tr)=>new THREE.MeshLambertMaterial({map:x.t, transparent:!!tr});
 const mDirt=M(dirtTex), mGrassTop=M(grassTop), mGrassSide=M(grassSide), mStone=M(stoneTex),
-      mLogSide=M(logSide), mLogTop=M(logTop), mLeaf=M(leafTex), mSand=M(sandTex),
+      mLogSide=M(logSide), mLogTop=M(logTop), mLeaf=M(leafTex,true), mSand=M(sandTex),
       mPlank=M(plankTex), mBrick=M(brickTex), mGlass=M(glassTex,true);
 const six=m=>[m,m,m,m,m,m];
 
@@ -408,14 +417,41 @@ export function makeBlockCube(tid, size=.34){
   return new THREE.Mesh(new THREE.BoxGeometry(size,size,size), mats);
 }
 
-/** First-person held icon for non-block items (food, materials, etc.). */
+/** First-person held model for non-block items — 3D snacks when possible, else icon plane. */
 export function makeHeldItemIcon(itemId, size=.45){
   const it = ITEMS[itemId];
+  const id = itemId;
+  // Simple 3D food props
+  if(it?.food){
+    const g = new THREE.Group();
+    if(id===101||id===150){ // pork / seared
+      g.add(box(.28,.12,.18, 0xc47a5a, 0,0,0));
+      g.add(box(.2,.06,.12, 0xe8b896, 0,.06,0));
+    } else if(id===113||id===161){ // apple / pie
+      g.add(box(.22,.22,.22, 0xd9453d, 0,0,0));
+      g.add(box(.04,.1,.04, 0x5a3a1a, 0,.14,0));
+      g.add(box(.1,.04,.04, 0x3a9a3a, .06,.12,0));
+    } else if(id===114){ // berries
+      g.add(box(.1,.1,.1, 0x5b2c8a, -.06,0,0));
+      g.add(box(.1,.1,.1, 0x6c3483, .06,0,0));
+      g.add(box(.1,.1,.1, 0x4a235a, 0,.08,0));
+    } else if(id===103||id===152){ // chicken
+      g.add(box(.16,.16,.28, 0xe8d5a3, 0,0,0));
+      g.add(box(.08,.06,.08, 0xe67e22, .1,.04,.1));
+    } else {
+      // generic loaf / bowl
+      g.add(box(.28,.1,.2, 0xd4a574, 0,0,0));
+      g.add(box(.24,.08,.16, 0xf5c98a, 0,.06,0));
+    }
+    g.scale.set(1.3,1.3,1.3);
+    return g;
+  }
+  // materials / other — emoji plane
   const icon = it?.icon || '❓';
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');
-  g.clearRect(0,0,64,64); // fully transparent — no dark backing plate
+  g.clearRect(0,0,64,64);
   g.font = '52px serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -424,15 +460,15 @@ export function makeHeldItemIcon(itemId, size=.45){
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
   const mat = new THREE.MeshBasicMaterial({
     map: tex, transparent: true, depthTest: true, side: THREE.DoubleSide,
-    alphaTest: 0.1, // drop near-empty pixels so no dark fringe remains
+    alphaTest: 0.1,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
-  return mesh;
+  return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
 
 /** Weapon model tinted by damage tier so each sword looks distinct. */
 export function makeWeaponModel(itemId){
   const dmg = ITEMS[itemId]?.dmg || 3;
+  // fall through
   const blade =
     dmg >= 8 ? 0xb8f0ff :   // crystal
     dmg >= 6 ? 0xc9cdd2 :   // iron
@@ -577,6 +613,10 @@ export function updateChunkVisibility(px,pz){
     const b = m.userData.base;
     if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
   }
+  for(const m of specialMeshes.values()){
+    const b = m.userData.base;
+    if(b) placeWrapped(m, b[0], b[1], b[2], px, pz);
+  }
 }
 
 // ---- Torches: individual small meshes + a pool of real point lights ----
@@ -710,6 +750,131 @@ export function setBedFacing(x,y,z,facing){
   }
 }
 
+
+// ---- Half-blocks, stairs, trapdoors, chest, fence, ladder (not full cubes) ----
+export const specialMeshes = new Map();
+
+function makeSlabMesh(x,y,z,tid){
+  const g = new THREE.Group();
+  const col = TYPES[tid]?.pc ?? 0xb8894a;
+  g.add(box(1, .5, 1, col, 0, -.25, 0));
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+function makeStairsMesh(x,y,z,tid){
+  const g = new THREE.Group();
+  const col = TYPES[tid]?.pc ?? 0xb8894a;
+  // two steps facing +Z
+  g.add(box(1, .5, .5, col, 0, -.25, -.25));
+  g.add(box(1, 1, .5, col, 0, 0, .25));
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+function makeTrapdoorMesh(x,y,z,open){
+  const g = new THREE.Group();
+  const wood = 0x8b6914, dark = 0x5c4010;
+  const panel = new THREE.Group();
+  panel.add(box(.9, .08, .9, wood, 0, 0, 0));
+  panel.add(box(.92, .02, .06, dark, 0, .04, -.4));
+  panel.add(box(.92, .02, .06, dark, 0, .04, .4));
+  panel.add(box(.06, .02, .92, dark, -.4, .04, 0));
+  panel.add(box(.06, .02, .92, dark, .4, .04, 0));
+  if(open){
+    // hinge up against +Z face
+    panel.rotation.x = -Math.PI/2;
+    panel.position.set(0, .45, .45);
+  } else {
+    panel.position.set(0, -.42, 0); // flat on floor of cell
+  }
+  g.add(panel);
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+function makeChestMesh(x,y,z){
+  const g = new THREE.Group();
+  const body = 0x9a6b3a, dark = 0x6b4423, lock = 0xd4b84a;
+  g.add(box(.9, .7, .9, body, 0, -.15, 0));
+  g.add(box(.92, .12, .92, dark, 0, .22, 0)); // lid rim
+  g.add(box(.2, .12, .08, lock, 0, 0, .46)); // latch
+  g.add(box(.88, .08, .88, 0xb8894a, 0, -.48, 0)); // feet plate
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+function makeFenceMesh(x,y,z){
+  const g = new THREE.Group();
+  const wood = 0x8a6236;
+  g.add(box(.18, 1.0, .18, wood, 0, 0, 0)); // post
+  g.add(box(.9, .12, .1, wood, 0, .15, 0));
+  g.add(box(.9, .12, .1, wood, 0, -.15, 0));
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+function makeLadderMesh(x,y,z){
+  const g = new THREE.Group();
+  const wood = 0x8a6236;
+  g.add(box(.08, 1, .08, wood, -.3, 0, -.42));
+  g.add(box(.08, 1, .08, wood, .3, 0, -.42));
+  for(let i=0;i<5;i++) g.add(box(.7, .06, .06, wood, 0, -0.35+i*0.18, -.42));
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
+export function trackSpecial(x,y,z,prev,t){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  const specialIds = new Set([11,44,56,59,60,61,62,63,66,67,68,69]);
+  if(specialIds.has(prev) && specialMeshes.has(k)){
+    scene.remove(specialMeshes.get(k)); specialMeshes.delete(k);
+  }
+  if(!specialIds.has(t)) return;
+  if(specialMeshes.has(k)){ scene.remove(specialMeshes.get(k)); specialMeshes.delete(k); }
+  let m;
+  if(t===61) m = makeSlabMesh(wrapC(x),y,wrapC(z),t);
+  else if(t===59||t===60) m = makeStairsMesh(wrapC(x),y,wrapC(z),t);
+  else if(t===62||t===63) m = makeTrapdoorMesh(wrapC(x),y,wrapC(z),t===63);
+  else if(t===56) m = makeChestMesh(wrapC(x),y,wrapC(z));
+  else if(t===11) m = makeFenceMesh(wrapC(x),y,wrapC(z));
+  else if(t===44) m = makeLadderMesh(wrapC(x),y,wrapC(z));
+  else if(t===66||t===67||t===68||t===69) m = makePlantMesh(wrapC(x),y,wrapC(z),t);
+  if(m){ scene.add(m); specialMeshes.set(k,m); }
+}
+
+function makePlantMesh(x,y,z,tid){
+  const g = new THREE.Group();
+  // cross planes (Minecraft-style)
+  const c = document.createElement('canvas'); c.width=c.height=16;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,16,16);
+  if(tid===66){
+    // tall grass blades
+    for(let i=0;i<5;i++){
+      const px = 3+i*2.5;
+      ctx.fillStyle = i%2? '#3d8f2e' : '#5bb340';
+      ctx.fillRect(px, 4, 1.5, 12);
+      ctx.fillRect(px-1, 6, 1, 4);
+    }
+  } else {
+    // stem
+    ctx.fillStyle = '#3a7a28';
+    ctx.fillRect(7, 8, 2, 8);
+    // petals
+    const col = tid===67 ? '#e74c3c' : tid===68 ? '#f1c40f' : '#f5f5f5';
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(8, 6, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath(); ctx.arc(8, 6, 1.5, 0, Math.PI*2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter;
+  const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, alphaTest:0.15, side:THREE.DoubleSide, depthWrite:false });
+  const p1 = new THREE.Mesh(new THREE.PlaneGeometry(1,1), mat);
+  const p2 = p1.clone(); p2.rotation.y = Math.PI/2;
+  g.add(p1); g.add(p2);
+  g.position.set(x,y,z);
+  g.userData.base=[x,y,z];
+  return g;
+}
+
+
+
 export const doorMeshes = new Map(); // "x,y,z" -> group
 function makeDoorMesh(x, y, z, facing, open, styleId=0){
   const g = new THREE.Group();
@@ -824,6 +989,7 @@ export function applyEdit(x,y,z,t,burst=true){
   trackTorch(x,y,z,old,t);
   trackDoor(x,y,z,old,t);
   trackBed(x,y,z,old,t);
+  trackSpecial(x,y,z,old,t);
   editRecorder?.(wrapC(x), y, wrapC(z), t);
   rebuildAt(x,z);
   if(burst){
@@ -853,7 +1019,7 @@ export function applyEditsBatch(list){
     const old = getBlock(x,y,z);
     setBlock(x,y,z,t);
     trackTorch(x,y,z,old,t);
-    trackDoor(x,y,z,old,t); trackBed(x,y,z,old,t);
+    trackDoor(x,y,z,old,t); trackBed(x,y,z,old,t); trackSpecial(x,y,z,old,t);
     editRecorder?.(x, y, z, t);
     mark(x,z);
   }

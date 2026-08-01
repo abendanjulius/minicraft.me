@@ -56,7 +56,12 @@ export const EXTRA_BLOCKS = {
   62:{name:'Trapdoor',       tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe'},
   63:{name:'Trapdoor Open',  tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe', transparent:1},
   // 65 = bed head marker (paired with foot 58); not in inventory
+  64:{name:'Water',          tex:['glassy',0x3a8fd0],             hard:100, pc:0x3a8fd0, transparent:1},
   65:{name:'Bed Head',       tex:['bed',0xc0392b],              hard:.8, pc:0xc0392b, tool:'axe'},
+  66:{name:'Tall Grass',     tex:['noise',0x4a9a3a,20],         hard:.05, pc:0x4a9a3a},
+  67:{name:'Red Flower',     tex:['noise',0xe74c3c,12],         hard:.05, pc:0xe74c3c},
+  68:{name:'Yellow Flower',  tex:['noise',0xf1c40f,12],         hard:.05, pc:0xf1c40f},
+  69:{name:'White Flower',   tex:['noise',0xf5f5f5,12],         hard:.05, pc:0xf5f5f5},
   // Dark door 70-77
   70:{name:'Dark Door', tex:['door',0x3e2a18], hard:1.6, pc:0x3e2a18, tool:'axe'},
   71:{name:'Dark Door', tex:['door',0x3e2a18], hard:1.6, pc:0x3e2a18, tool:'axe'},
@@ -153,6 +158,10 @@ export const EXTRA_ITEMS = {
 
 // bonus rolls when a block is mined (in addition to the block itself)
 export const BLOCK_DROPS = {
+  66:[[111,.35]],
+  67:[[112,.4]],
+  68:[[112,.4]],
+  69:[[112,.4]],
   1:[[111,.25],[112,.10]],
   2:[[116,.10],[112,.06]],
   3:[[119,.12],[120,.10],[121,.06],[122,.02]],
