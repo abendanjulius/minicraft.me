@@ -292,38 +292,28 @@ function fillChunk(cx, cz, chunk){
 export function placeDebugMarkers(){
   if(!DEBUG_MARKERS) return;
   const step = 256;
+  // Only near spawn band so boot stays fast (full 2k line was too heavy)
   const marks = [];
-  for(let a = 0; a < WORLD; a += step) marks.push(a);
-  // Gold-ish = 45 (crystal?) use brick 8 and glow torch 10, ladder 44 as markers
-  // Prefer highly visible: type 8 brick tower + 10 torch + 9 glass tip
+  for(let a = CENTER - 512; a <= CENTER + 512; a += step) marks.push(wrapC(a));
   const buildPillar = (x, z, labelAxis) => {
     x = wrapC(x); z = wrapC(z);
     const h = heightAt(x, z);
     for(let y = 1; y <= 12; y++){
       const yy = h + y;
       if(yy >= WH) break;
-      // stripe pattern by height so pillars are unique-ish
-      let t = 8; // brick
-      if(y % 4 === 0) t = 11; // if exists else brick
-      // use wool-like: 7 planks band, 8 brick, 45 ore band for color
+      let t = 8;
       if(y <= 2) t = 7;
       else if(y <= 6) t = 8;
       else if(y <= 10) t = 45;
       else t = 9;
-      setBlock(x, yy, z, t === 11 ? 8 : t);
+      setBlock(x, yy, z, t);
     }
-    // torch on top
-    const top = Math.min(h + 13, WH - 1);
-    setBlock(x, top, z, 10);
-    // small arm pointing which axis (extra block on +X or +Z)
+    setBlock(x, Math.min(h + 13, WH - 1), z, 10);
     if(labelAxis === 'x') setBlock(wrapC(x + 1), h + 6, z, 46);
     else setBlock(x, h + 6, wrapC(z + 1), 47);
   };
-  // X-axis line at z = CENTER
   for(const x of marks) buildPillar(x, CENTER, 'x');
-  // Z-axis line at x = CENTER
   for(const z of marks) buildPillar(CENTER, z, 'z');
-  // Origin special: double height
   const ox = CENTER, oz = CENTER;
   const h = heightAt(ox, oz);
   for(let y = 1; y <= 18; y++){

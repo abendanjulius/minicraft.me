@@ -488,6 +488,12 @@ const geo = new THREE.BoxGeometry(1,1,1);
 const chunkMeshes = new Array(CHUNKS*CHUNKS).fill(null);
 const dummy = new THREE.Object3D();
 
+function isCustomMeshBlock(t){
+  return t===10 || t===11 || t===44
+    || (t>=48&&t<=55) || (t>=70&&t<=93)
+    || t===56 || t===58 || t===59 || t===60 || t===61 || t===62 || t===63 || t===65
+    || t===66 || t===67 || t===68 || t===69;
+}
 export function buildChunk(cx,cz){
   cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
   cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
@@ -496,7 +502,7 @@ export function buildChunk(cx,cz){
   const chunk = ensureChunk(cx, cz), byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
-    if(!t || t===10 || (t>=48&&t<=55) || t===58 || t===65) continue; // torches, doors, beds = custom meshes
+    if(!t || isCustomMeshBlock(t)) continue;
     const x = x0+lx, z = z0+lz;
     if(occludes(x+1,y,z)&&occludes(x-1,y,z)&&occludes(x,y+1,z)&&
        occludes(x,y-1,z)&&occludes(x,y,z+1)&&occludes(x,y,z-1)) continue;
@@ -506,10 +512,12 @@ export function buildChunk(cx,cz){
   const center = new THREE.Vector3(x0+CH/2, WH/2, z0+CH/2);
   const radius = Math.sqrt(CH*CH/2 + WH*WH/4) + 1;
   for(const id in byType){
+    const mats = TYPES[id]?.mats;
+    if(!mats) continue; // never crash boot on missing material
     const pts = byType[id];
     const g = geo.clone();
     g.boundingSphere = new THREE.Sphere(center.clone(), radius);
-    const im = new THREE.InstancedMesh(g, TYPES[id].mats, pts.length);
+    const im = new THREE.InstancedMesh(g, mats, pts.length);
     pts.forEach((p,i)=>{ dummy.position.set(p[0],p[1],p[2]); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
     im.instanceMatrix.needsUpdate = true;
     scene.add(im);
@@ -518,9 +526,9 @@ export function buildChunk(cx,cz){
   chunkMeshes[ci] = list;
 }
 export function buildAllChunks(){
-  // Streamed world: only mesh a bubble around spawn at boot
+  // Streamed world: small bubble at boot (rest loads while playing)
   const pcx = CENTER >> 4, pcz = CENTER >> 4;
-  const R = Math.min(10, CHUNKS >> 1);
+  const R = 4; // 9x9 chunks — fast load; updateChunkVisibility fills the rest
   for(let dz = -R; dz <= R; dz++) for(let dx = -R; dx <= R; dx++){
     const cx = (pcx + dx + CHUNKS) % CHUNKS;
     const cz = (pcz + dz + CHUNKS) % CHUNKS;
@@ -562,8 +570,8 @@ export function placeWrapped(obj, x, y, z, px, pz){
 export function updateChunkVisibility(px,pz){
   // Logical chunk under player (toroidal)
   const pcx = wrapC(Math.round(px))>>4, pcz = wrapC(Math.round(pz))>>4;
-  const loadR = VIEW_CHUNKS + 2;
-  const keepR = VIEW_CHUNKS + 4;
+  const loadR = Math.min(VIEW_CHUNKS + 1, 8);
+  const keepR = Math.min(VIEW_CHUNKS + 3, 10);
 
   for(let dz = -loadR; dz <= loadR; dz++) for(let dx = -loadR; dx <= loadR; dx++){
     const cx = (pcx + dx + CHUNKS) % CHUNKS;

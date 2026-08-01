@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.9.4'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.9.5'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -255,10 +255,19 @@ function begin(seed, edits, authority, saved){
   $('menu').style.display = 'none';
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
+  try {
+    const loadEl = $('loading');
+    const setLoad = (t)=>{ if(loadEl) loadEl.textContent = t; };
+    setLoad('Generating world…');
     generateWorld(seed);
+    setLoad('Applying builds…');
     for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); trackSpecial(x,y,z,0,t); }
-    placeDebugMarkers(); // TEMP: 256-block pillars for 2k testing
+    setLoad('Placing markers…');
+    placeDebugMarkers(); // TEMP test pillars
+    setLoad('Meshing terrain…');
+    await new Promise(r=>setTimeout(r, 0)); // let UI paint
     buildAllChunks();
+    setLoad('Almost ready…');
     updateChunkVisibility(CENTER, CENTER);
     animals.init(authority, seed);
     mobs.init(authority);
@@ -300,6 +309,11 @@ function begin(seed, edits, authority, saved){
     } else {
       playerMod.relock();
     }
+  } catch(err){
+    console.error('[MiniCraft] boot failed', err);
+    const loadEl = document.getElementById('loading');
+    if(loadEl) loadEl.innerHTML = 'Failed to load world.<br><small style="opacity:.8">'+((err&&err.message)||err)+'</small><br><small>Try a New World or hard-refresh</small>';
+  }
   }, 60);
 }
 
