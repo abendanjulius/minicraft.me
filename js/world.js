@@ -174,51 +174,64 @@ function fillChunk(cx, cz, chunk){
   else if(bioC === 3){ treeChance = 0.25; treeMax = 1; } // sparse peaks
   else if(bioC === 4){ treeChance = 0.35; treeMax = 2; } // swamp cypress-ish
   else if(bioC === 2){ treeChance = 0.02; treeMax = 1; } // almost no desert trees
+  // Keep trunks away from chunk edges so canopies don't get clipped into floating blobs
   const treeCount = trng() < treeChance ? 1 + Math.floor(trng() * treeMax) : 0;
   for(let t = 0; t < treeCount; t++){
-    const lx = 2 + Math.floor(trng() * (CH - 4));
-    const lz = 2 + Math.floor(trng() * (CH - 4));
+    const lx = 4 + Math.floor(trng() * (CH - 8));
+    const lz = 4 + Math.floor(trng() * (CH - 8));
     let h = 0;
     for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
     if(chunk[bIndex(lx, h, lz)] !== 1) continue; // only on grass
-    const style = bioC === 3 || bioC === 4 ? 1 : Math.floor(trng() * 3); // tall in mountains/swamp
-    const th = style === 1 ? (6 + Math.floor(trng() * 3)) : (4 + Math.floor(trng() * 3));
-    // trunk
-    for(let dy = 1; dy <= th; dy++) if(h + dy < WH) chunk[bIndex(lx, h + dy, lz)] = 4;
-    // canopy
+    // Don't plant on a steep lone block (avoids odd floating looks on cliffs)
+    if(h + 5 >= WH) continue;
+    const style = bioC === 3 || bioC === 4 ? 1 : Math.floor(trng() * 3);
+    const th = style === 1 ? (5 + Math.floor(trng() * 3)) : (4 + Math.floor(trng() * 2));
+    for(let dy = 1; dy <= th; dy++) chunk[bIndex(lx, h + dy, lz)] = 4;
     const putLeaf = (nx, ny, nz) => {
       if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
       if(!chunk[bIndex(nx, ny, nz)]) chunk[bIndex(nx, ny, nz)] = 5;
     };
     if(style === 0){
-      // classic oak: 5×5 with rounded corners, 3 layers
+      // Compact oak — layers hug the trunk (no lone top floaters)
       for(let dy = th - 1; dy <= th + 1; dy++)
         for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
-          if(Math.abs(dx) === 2 && Math.abs(dz) === 2 && dy !== th) continue;
+          if(Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+          if(dy === th + 1 && Math.max(Math.abs(dx), Math.abs(dz)) > 1) continue;
           putLeaf(lx + dx, h + dy, lz + dz);
         }
-      putLeaf(lx, h + th + 2, lz);
     } else if(style === 1){
-      // tall pine-ish: layers shrinking upward
+      // Pine: stacked cones, always touching previous layer
       for(let layer = 0; layer < 4; layer++){
-        const rad = 2 - Math.min(2, layer);
+        const rad = Math.max(0, 2 - layer);
         const ny = h + th - 1 + layer;
+        if(ny >= WH) break;
         for(let dx = -rad; dx <= rad; dx++) for(let dz = -rad; dz <= rad; dz++){
-          if(Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
+          if(rad > 0 && Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
           putLeaf(lx + dx, ny, lz + dz);
         }
       }
-      putLeaf(lx, h + th + 3, lz);
     } else {
-      // bushy wide canopy
-      for(let dy = th - 2; dy <= th + 1; dy++)
-        for(let dx = -3; dx <= 3; dx++) for(let dz = -3; dz <= 3; dz++){
-          const man = Math.abs(dx) + Math.abs(dz);
-          if(man > 4) continue;
-          if(man === 4 && dy !== th) continue;
+      // Bushy but connected (manhattan distance, tight top)
+      for(let dy = th - 1; dy <= th + 1; dy++)
+        for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
+          if(Math.abs(dx) + Math.abs(dz) > 3) continue;
+          if(dy === th + 1 && Math.abs(dx) + Math.abs(dz) > 1) continue;
           putLeaf(lx + dx, h + dy, lz + dz);
         }
     }
+  }
+  // Prune any leaf with no log nearby (kills true floaters from edge cases)
+  for(let lx = 0; lx < CH; lx++) for(let lz = 0; lz < CH; lz++) for(let y = 1; y < WH; y++){
+    if(chunk[bIndex(lx, y, lz)] !== 5) continue;
+    let nearLog = false;
+    for(let dy = -3; dy <= 3 && !nearLog; dy++)
+      for(let dx = -3; dx <= 3 && !nearLog; dx++)
+        for(let dz = -3; dz <= 3; dz++){
+          const nx = lx + dx, ny = y + dy, nz = lz + dz;
+          if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) continue;
+          if(chunk[bIndex(nx, ny, nz)] === 4){ nearLog = true; break; }
+        }
+    if(!nearLog) chunk[bIndex(lx, y, lz)] = 0;
   }
 
   // Water pools in low grass basins
