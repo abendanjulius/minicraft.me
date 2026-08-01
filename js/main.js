@@ -1,5 +1,5 @@
 // main.js — menu, boot, game loop
-import { generateWorld, setBlock, heightAt, CENTER, WORLD } from './world.js';
+import { generateWorld, setBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed } from './render.js';
@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.8.9'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.9.0-test2k'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -256,8 +256,10 @@ function begin(seed, edits, authority, saved){
   $('loading').style.display = 'flex';
   setTimeout(async ()=>{
     generateWorld(seed);
-    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); } // replay history before meshing
+    for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); }
+    placeDebugMarkers(); // TEMP: 256-block pillars for 2k testing
     buildAllChunks();
+    updateChunkVisibility(CENTER, CENTER);
     animals.init(authority, seed);
     mobs.init(authority);
     drops.init(authority);
@@ -403,7 +405,13 @@ function loop(now){
 
   frames++; fpsTime+=dt;
   if(fpsTime>=1){
-    setHud(frames, `${playerMod.player.pos.x|0}, ${playerMod.player.pos.y|0}, ${playerMod.player.pos.z|0}`);
+    {
+      const x = playerMod.player.pos.x|0, y = playerMod.player.pos.y|0, z = playerMod.player.pos.z|0;
+      const dx = x - CENTER, dz = z - CENTER;
+      const dist = Math.hypot(dx, dz)|0;
+      const mark = DEBUG_MARKERS ? ` · ${dist}m from center · pillars@256` : '';
+      setHud(frames, `${x}, ${y}, ${z}${mark}`);
+    }
     frames=0; fpsTime=0;
   }
 

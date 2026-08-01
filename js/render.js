@@ -1,5 +1,5 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf } from './world.js';
+import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
 
@@ -453,9 +453,11 @@ const chunkMeshes = new Array(CHUNKS*CHUNKS).fill(null);
 const dummy = new THREE.Object3D();
 
 export function buildChunk(cx,cz){
+  cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
+  cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
   const ci = cIndex(cx,cz);
   if(chunkMeshes[ci]) for(const m of chunkMeshes[ci]){ scene.remove(m); m.geometry.dispose(); }
-  const chunk = chunks[ci], byType = {}, x0 = cx*CH, z0 = cz*CH;
+  const chunk = ensureChunk(cx, cz), byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
     if(!t || t===10 || (t>=48&&t<=55) || t===58 || t===65) continue; // torches, doors, beds = custom meshes
@@ -480,7 +482,20 @@ export function buildChunk(cx,cz){
   chunkMeshes[ci] = list;
 }
 export function buildAllChunks(){
-  for(let cz=0;cz<CHUNKS;cz++)for(let cx=0;cx<CHUNKS;cx++) buildChunk(cx,cz);
+  // Streamed world: only mesh a bubble around spawn at boot
+  const pcx = CENTER >> 4, pcz = CENTER >> 4;
+  const R = Math.min(10, CHUNKS >> 1);
+  for(let dz = -R; dz <= R; dz++) for(let dx = -R; dx <= R; dx++){
+    const cx = (pcx + dx + CHUNKS) % CHUNKS;
+    const cz = (pcz + dz + CHUNKS) % CHUNKS;
+    buildChunk(cx, cz);
+  }
+}
+export function disposeChunkMeshes(cx, cz){
+  const ci = cIndex(cx, cz);
+  if(!chunkMeshes[ci]) return;
+  for(const m of chunkMeshes[ci]){ scene.remove(m); m.geometry.dispose(); }
+  chunkMeshes[ci] = null;
 }
 export function rebuildAt(x,z){
   x = wrapC(x); z = wrapC(z);
@@ -512,15 +527,32 @@ export function placeWrapped(obj, x, y, z, px, pz){
 
 export function updateChunkVisibility(px,pz){
   const pcx = wrapC(Math.round(px))>>4, pcz = wrapC(Math.round(pz))>>4;
-  for(let cz=0;cz<CHUNKS;cz++)for(let cx=0;cx<CHUNKS;cx++){
-    // signed chunk delta across the wrap
-    let sx = cx-pcx; if(sx >  CHUNKS/2) sx -= CHUNKS; if(sx < -CHUNKS/2) sx += CHUNKS;
-    let sz = cz-pcz; if(sz >  CHUNKS/2) sz -= CHUNKS; if(sz < -CHUNKS/2) sz += CHUNKS;
-    const vis = Math.abs(sx)<=VIEW_CHUNKS && Math.abs(sz)<=VIEW_CHUNKS;
-    const list = chunkMeshes[cIndex(cx,cz)];
+  const loadR = VIEW_CHUNKS + 1;   // generate/mesh
+  const keepR = VIEW_CHUNKS + 3;   // keep meshes a bit further to reduce thrash
+
+  // Load / mesh near chunks only (don't scan all 16k)
+  for(let dz = -loadR; dz <= loadR; dz++) for(let dx = -loadR; dx <= loadR; dx++){
+    const cx = (pcx + dx + CHUNKS) % CHUNKS;
+    const cz = (pcz + dz + CHUNKS) % CHUNKS;
+    const ci = cIndex(cx, cz);
+    ensureChunk(cx, cz);
+    if(!chunkMeshes[ci]) buildChunk(cx, cz);
+  }
+
+  // Update visibility / wrap offset for any meshed chunk; dispose very far ones
+  for(let cz = 0; cz < CHUNKS; cz++) for(let cx = 0; cx < CHUNKS; cx++){
+    const ci = cIndex(cx, cz);
+    const list = chunkMeshes[ci];
     if(!list) continue;
-    // Instance matrices hold absolute coords, so shifting the mesh by ±WORLD
-    // renders the chunk on the near side of the seam — no gap, no visible edge.
+    let sx = cx - pcx; if(sx > CHUNKS/2) sx -= CHUNKS; if(sx < -CHUNKS/2) sx += CHUNKS;
+    let sz = cz - pcz; if(sz > CHUNKS/2) sz -= CHUNKS; if(sz < -CHUNKS/2) sz += CHUNKS;
+    const dist = Math.max(Math.abs(sx), Math.abs(sz));
+    if(dist > keepR){
+      for(const m of list){ scene.remove(m); m.geometry.dispose(); }
+      chunkMeshes[ci] = null;
+      continue;
+    }
+    const vis = dist <= VIEW_CHUNKS;
     const offX = (pcx + sx - cx) * CH;
     const offZ = (pcz + sz - cz) * CH;
     for(const m of list){
