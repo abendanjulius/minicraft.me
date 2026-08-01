@@ -5,6 +5,8 @@ export const chunks = new Array(CHUNKS * CHUNKS).fill(null);
 /** TEMP test flag — set false / remove markers later */
 export const DEBUG_MARKERS = true;
 export let seed = 0;
+/** @type {{x:number,z:number,bio:number,kind:string,key:string}[]} */
+export const villageSites = [];
 
 // Deterministic RNG — every device generates the identical world from the same seed
 export function mulberry32(a){
@@ -100,6 +102,7 @@ export function topY(x,z){
 
 export function generateWorld(s){
   seed = s;
+  villageSites.length = 0;
   // Do NOT allocate the full 2048² — chunks generate on demand via ensureChunk
   for(let i = 0; i < CHUNKS * CHUNKS; i++) chunks[i] = null;
 }
@@ -333,7 +336,9 @@ function fillChunk(cx, cz, chunk){
         if(doorFacing === 0) put(hx + (w>>1), base+2, hz - 0, 10);
       };
 
+      let vKind = 'market';
       if(bio === 0){
+        vKind = 'market';
         // PLAINS — "Coin Market": stalls + well + banner posts
         // Market square path already set
         // Central well
@@ -354,6 +359,7 @@ function fillChunk(cx, cz, chunk){
         put(ox+2, base+1, oz+7, 4); put(ox+2, base+2, oz+7, 4); put(ox+2, base+3, oz+7, 32);
         put(ox+6, base+1, oz+7, 4); put(ox+6, base+2, oz+7, 4); put(ox+6, base+3, oz+7, 29);
       } else if(bio === 2){
+        vKind = 'outpost';
         // DESERT — "Dune Outpost": sandstone keep + courtyard
         house(ox+1, oz+1, 5, 5, 15, 15, 15, 0); // sandstone
         // Courtyard wall ring
@@ -371,6 +377,7 @@ function fillChunk(cx, cz, chunk){
         // Storage crates
         put(ox+5, base+1, oz+2, 56); put(ox+5, base+1, oz+3, 56);
       } else if(bio === 1){
+        vKind = 'haven';
         // FOREST — "Log Haven": twin cabins + fence + firepit
         house(ox, oz+1, 4, 4, 4, 7, 5, 1); // log walls, plank floor, leaf roof
         house(ox+5, oz+1, 4, 4, 4, 7, 5, 3);
@@ -388,6 +395,7 @@ function fillChunk(cx, cz, chunk){
         // Log benches
         put(ox+2, base+1, oz+5, 4); put(ox+5, base+1, oz+5, 4);
       } else if(bio === 4){
+        vKind = 'stilt';
         // SWAMP — "Stilt Rest": raised plank platform + stilts
         for(let lx = ox+1; lx < ox+pad-1; lx++) for(let lz = oz+1; lz < oz+pad-1; lz++){
           put(lx, base+2, lz, 7); // raised floor
@@ -413,9 +421,12 @@ function fillChunk(cx, cz, chunk){
         // Dock plank
         for(let i=0;i<3;i++) put(ox+3+i, base+2, oz+7, 7);
       } else {
-        // Fallback plains-ish cabin
+        vKind = 'market';
         house(ox+2, oz+2, 4, 4, 7, 7, 7, 0);
       }
+      // Register for villager spawning
+      const vx = x0 + ox + 4, vz = z0 + oz + 4;
+      villageSites.push({ x: vx, z: vz, bio, kind: vKind, key: cx+','+cz });
     }
   }
 

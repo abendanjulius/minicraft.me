@@ -15,6 +15,7 @@ import { zombies, corpses } from './mobs.js';
 import * as drops from './drops.js';
 import * as chests from './chests.js';
 import * as keg from './keg.js';
+import * as villagers from './villagers.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
@@ -420,6 +421,8 @@ function toggleDoorAt(bx,by,bz){
 
 export function placeAction(){
   if(survival.sv.dead) return;
+  // Talk to nearby MiniCraft folk
+  if(villagers.tryTalk(player.pos)){ placeAnim = 1; sfx.chat?.(); return; }
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
   const r = castBlock();

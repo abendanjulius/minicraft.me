@@ -20,6 +20,7 @@ import * as physics from './physics.js';
 import * as drops from './drops.js';
 import * as chests from './chests.js';
 import * as keg from './keg.js';
+import * as villagers from './villagers.js';
 import { tryCommand, setCommandContext } from './commands.js';
 
 const $ = id=>document.getElementById(id);
@@ -38,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.10.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.10.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -273,6 +274,7 @@ function begin(seed, edits, authority, saved){
     setLoad('Almost ready…');
     updateChunkVisibility(CENTER, CENTER);
     animals.init(authority, seed);
+    villagers.init();
     mobs.init(authority);
     drops.init(authority);
     isAuthority = authority;
@@ -505,6 +507,7 @@ function loop(now){
   if(playerMod.state.playing && !playerMod.state.paused){
     const dl = updateDayNight(dt, playerMod.player.pos);
     animals.update(dt, elapsed, playerMod.player.pos);
+    villagers.update(dt, elapsed, playerMod.player.pos);
     if(isAuthority){
       const {hurts, digs} = mobs.hostTick(dt, dl, net.getTargets(playerMod.player.pos));
       net.dispatchHurts(hurts);
