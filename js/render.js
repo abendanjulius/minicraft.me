@@ -532,7 +532,8 @@ function isCustomMeshBlock(t){
     || t===66 || t===67 || t===68 || t===69
     || t===64; // water — surface faces only (not glass cubes)
 }
-let waterFaceMat = null; // shared liquid surface material
+let waterFaceMat = null; // top sheet
+let waterSideMat = null; // bank sides
 export function buildChunk(cx,cz){
   cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
   cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
@@ -562,54 +563,74 @@ export function buildChunk(cx,cz){
     scene.add(im);
     list.push(im);
   }
-  // Water: only exposed faces (hides internal cube grid → reads as a surface)
+  // Water: surface sheet only (top of each water column + bank edges).
+  // No deep internal faces → no glass-cube lattice.
   {
     const faces = [];
-    const dirs = [
-      [ 1, 0, 0], [-1, 0, 0],
-      [ 0, 1, 0], [ 0,-1, 0],
-      [ 0, 0, 1], [ 0, 0,-1],
-    ];
     for(let y=0;y<WH;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       if(chunk[bIndex(lx,y,lz)] !== 64) continue;
       const x = x0+lx, z = z0+lz;
-      for(const [dx,dy,dz] of dirs){
-        const n = getBlock(x+dx, y+dy, z+dz);
-        if(n === 64) continue;          // internal water face
-        if(n && occludes(x+dx, y+dy, z+dz)) continue; // buried in solid
-        faces.push([x, y, z, dx, dy, dz]);
+      // Only the top water cell of a column (air / non-water above)
+      if(getBlock(x, y+1, z) === 64) continue;
+
+      // Top sheet (slightly inset so banks read cleanly)
+      faces.push([x, y, z, 0, 1, 0, 1.08]); // scale
+
+      // Bank sides only where the neighbor is not water
+      for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const n = getBlock(x+dx, y, z+dz);
+        if(n === 64) continue;
+        if(n && occludes(x+dx, y, z+dz)) continue;
+        faces.push([x, y, z, dx, 0, dz, 1.0]);
       }
     }
     if(faces.length){
       if(!waterFaceMat){
-        waterFaceMat = new THREE.MeshLambertMaterial({
-          color: 0x3d9ad0,
+        // Opaque-enough blue sheet — looks like liquid, not glass panes
+        waterFaceMat = new THREE.MeshBasicMaterial({
+          color: 0x2f86c8,
           transparent: true,
-          opacity: 0.52,
+          opacity: 0.72,
+          depthWrite: true,
+          side: THREE.DoubleSide,
+        });
+      }
+      if(!waterSideMat){
+        waterSideMat = new THREE.MeshBasicMaterial({
+          color: 0x2470a8,
+          transparent: true,
+          opacity: 0.55,
           depthWrite: false,
           side: THREE.DoubleSide,
         });
       }
-      const pgeo = new THREE.PlaneGeometry(1, 1);
-      const im = new THREE.InstancedMesh(pgeo, waterFaceMat, faces.length);
+      const tops = faces.filter(f => f[4] === 1);
+      const sides = faces.filter(f => f[4] !== 1);
       const orient = new THREE.Object3D();
-      faces.forEach((f, i)=>{
-        const [x,y,z,dx,dy,dz] = f;
-        // face center on the outer side of the block
-        orient.position.set(x + dx*0.5, y + dy*0.5, z + dz*0.5);
-        orient.rotation.set(0, 0, 0);
-        if(dx === 1) orient.rotation.y = Math.PI/2;
-        else if(dx === -1) orient.rotation.y = -Math.PI/2;
-        else if(dy === 1) orient.rotation.x = -Math.PI/2;
-        else if(dy === -1) orient.rotation.x = Math.PI/2;
-        else if(dz === -1) orient.rotation.y = Math.PI;
-        orient.updateMatrix();
-        im.setMatrixAt(i, orient.matrix);
-      });
-      im.instanceMatrix.needsUpdate = true;
-      im.renderOrder = 2;
-      scene.add(im);
-      list.push(im);
+      const addInst = (arr, mat, geo) => {
+        if(!arr.length) return;
+        const im = new THREE.InstancedMesh(geo, mat, arr.length);
+        arr.forEach((f, i)=>{
+          const [x,y,z,dx,dy,dz,sc] = f;
+          orient.position.set(x + dx*0.5, y + dy*0.42, z + dz*0.5); // top slightly below block top
+          orient.rotation.set(0,0,0);
+          orient.scale.set(sc||1, sc||1, sc||1);
+          if(dx === 1) orient.rotation.y = Math.PI/2;
+          else if(dx === -1) orient.rotation.y = -Math.PI/2;
+          else if(dy === 1) orient.rotation.x = -Math.PI/2;
+          else if(dz === -1) orient.rotation.y = Math.PI;
+          else if(dz === 1) orient.rotation.y = 0;
+          orient.updateMatrix();
+          im.setMatrixAt(i, orient.matrix);
+        });
+        im.instanceMatrix.needsUpdate = true;
+        im.renderOrder = 3;
+        scene.add(im);
+        list.push(im);
+      };
+      const pgeo = new THREE.PlaneGeometry(1, 1);
+      addInst(tops, waterFaceMat, pgeo);
+      addInst(sides, waterSideMat, pgeo);
     }
   }
   chunkMeshes[ci] = list;
