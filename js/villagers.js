@@ -104,6 +104,16 @@ function makeVillagerMesh(role){
   return { g, legL, legR };
 }
 
+function groundY(x, z){
+  // Prefer the highest solid among nearby cells (helps stilt platforms / pads)
+  let best = -1;
+  const ix = Math.round(x), iz = Math.round(z);
+  for(let dx = -1; dx <= 1; dx++) for(let dz = -1; dz <= 1; dz++){
+    const ty = topY(ix + dx, iz + dz);
+    if(ty > best) best = ty;
+  }
+  return (best < 0 ? 20 : best) + 0.5;
+}
 function spawnAtSite(site){
   if(spawnedKeys.has(site.key)) return;
   spawnedKeys.add(site.key);
@@ -114,7 +124,7 @@ function spawnAtSite(site){
     const ang = (i / n) * Math.PI * 2;
     const x = site.x + Math.cos(ang) * 2.2;
     const z = site.z + Math.sin(ang) * 2.2;
-    const y = topY(Math.round(x), Math.round(z)) + 0.5; // feet on block top (same as animals)
+    const y = groundY(x, z);
     const mesh = makeVillagerMesh(role);
     mesh.g.position.set(x, y, z);
     const holder = new THREE.Group();
@@ -139,12 +149,29 @@ export function init(){
   villagers.length = 0;
 }
 
+let nearHintT = 0;
 export function update(dt, time, playerPos){
+  nearHintT -= dt;
   // Lazy-spawn when a registered village is nearby
   for(const site of villageSites){
     if(spawnedKeys.has(site.key)) continue;
     if(wrapDist(site.x, site.z, playerPos.x, playerPos.z) < VIEW + 20)
       spawnAtSite(site);
+  }
+
+  // Soft "Talk" hint when a folk is in range
+  if(nearHintT <= 0){
+    const near = pickNear(playerPos, 2.8);
+    if(near){
+      nearHintT = 6;
+      try {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = 'Talk · place / right-click';
+        document.getElementById('toasts')?.appendChild(t);
+        setTimeout(()=>t.remove(), 2500);
+      } catch(e){}
+    }
   }
 
   for(const v of villagers){
@@ -173,10 +200,9 @@ export function update(dt, time, playerPos){
       const nz = v.g.position.z + Math.sin(v.yaw) * sp * dt;
       // stay near home
       if(Math.hypot(nx - v.homeX, nz - v.homeZ) < 4.5){
-        const gy = topY(Math.round(nx), Math.round(nz));
         v.g.position.x = nx;
         v.g.position.z = nz;
-        v.g.position.y += ((gy + 0.5) - v.g.position.y) * Math.min(1, dt * 10);
+        v.g.position.y += (groundY(nx, nz) - v.g.position.y) * Math.min(1, dt * 12);
         v.g.rotation.y = -v.yaw + Math.PI / 2;
         const sw = Math.sin(time * 7 + v.phase) * 0.4;
         v.legL.rotation.x = sw;
@@ -188,8 +214,7 @@ export function update(dt, time, playerPos){
     } else {
       v.legL.rotation.x *= 0.85;
       v.legR.rotation.x *= 0.85;
-      const gy = topY(Math.round(v.g.position.x), Math.round(v.g.position.z));
-      v.g.position.y += ((gy + 0.5) - v.g.position.y) * Math.min(1, dt * 10);
+      v.g.position.y += (groundY(v.g.position.x, v.g.position.z) - v.g.position.y) * Math.min(1, dt * 12);
       // face player when close
       const d = wrapDist(v.g.position.x, v.g.position.z, playerPos.x, playerPos.z);
       if(d < 4){
@@ -214,7 +239,14 @@ export function tryTalk(playerPos){
   if(!best) return false;
   const line = best.folk.lines[Math.floor(Math.random() * best.folk.lines.length)];
   addChat(best.role.name, `(${best.folk.title}) ${line}`);
-  // One small gift per villager per session
+  // Visible toast so mobile players know the interaction worked
+  try {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = `Talk · ${best.role.name}`;
+    document.getElementById('toasts')?.appendChild(t);
+    setTimeout(()=>t.remove(), 2200);
+  } catch(e){}
   if(!best.gifted && best.folk.gift?.length){
     best.gifted = true;
     const gid = best.folk.gift[Math.floor(Math.random() * best.folk.gift.length)];
@@ -232,3 +264,15 @@ export function pickNear(playerPos, maxDist = 3){
   }
   return best;
 }
+
+/** Nearest registered village site within maxDist, or null */
+export function nearestVillage(px, pz, maxDist = 400){
+  let best = null, bestD = maxDist;
+  for(const s of villageSites){
+    const d = wrapDist(s.x, s.z, px, pz);
+    if(d < bestD){ bestD = d; best = { ...s, dist: d|0 }; }
+  }
+  return best;
+}
+
+export function getVillageSites(){ return villageSites; }

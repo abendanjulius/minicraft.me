@@ -8,6 +8,8 @@ import { gm, setMode } from './mode.js';
 import * as net from './net.js';
 import * as mobs from './mobs.js';
 import * as survival from './survival.js';
+import * as persist from './persist.js';
+import * as villagers from './villagers.js';
 
 /** @type {null | (() => any)} */
 let getCtx = null;
@@ -54,13 +56,14 @@ function syncBlock(x,y,z,t){
   else net.sendEdit?.(x,y,z,t);
 }
 
-/** Flatten a disk to flat dirt (no trees/plants/hills). */
+/** Flatten a disk to flat dirt (no trees/plants/hills). Persists + syncs. */
 function cmdFlat(r, ctx){
   if(!needHost()) return;
   r = Math.max(4, Math.min(64, r|0 || 24));
   const px = Math.round(ctx.player.pos.x);
   const pz = Math.round(ctx.player.pos.z);
   const baseY = Math.max(4, Math.min(WH - 6, heightAt(px, pz)));
+  const batch = [];
   let n = 0;
   for(let dx = -r; dx <= r; dx++){
     for(let dz = -r; dz <= r; dz++){
@@ -68,23 +71,27 @@ function cmdFlat(r, ctx){
       const x = wrapC(px + dx), z = wrapC(pz + dz);
       for(let y = 0; y < WH; y++){
         let t = 0;
-        if(y < baseY - 3) t = 3;        // stone deep
-        else if(y < baseY) t = 2;       // dirt
-        else if(y === baseY) t = 2;     // flat dirt surface
-        else t = 0;                     // clear air (trees/plants gone)
+        if(y < baseY - 3) t = 3;
+        else if(y <= baseY) t = 2;
+        else t = 0;
         if(getBlock(x,y,z) !== t){
           setBlock(x,y,z,t);
+          persist.recordEdit?.(x, y, z, t);
+          batch.push([x, y, z, t]);
           n++;
         }
       }
       rebuildAt(x, z);
     }
   }
-  // batch sync is heavy — record via persist path if host
-  if(net.syncEdits){
-    // lightweight: just tell peers to reload is hard; send sample note
+  // Sync to multiplayer in chunks so we don't blow the wire
+  if(net.syncEdits && batch.length){
+    const STEP = 400;
+    for(let i = 0; i < batch.length; i += STEP){
+      net.syncEdits(batch.slice(i, i + STEP));
+    }
   }
-  reply(`Flattened dirt radius ${r} at y=${baseY} (${n} cell updates).`);
+  reply(`Flattened dirt radius ${r} at y=${baseY} (${n} cells saved/synced).`);
 }
 
 function cmdFill(token, r, ctx){
@@ -95,6 +102,7 @@ function cmdFill(token, r, ctx){
   const px = Math.round(ctx.player.pos.x);
   const py = Math.round(ctx.player.pos.y);
   const pz = Math.round(ctx.player.pos.z);
+  const batch = [];
   let n = 0;
   for(let dx = -r; dx <= r; dx++)
     for(let dy = -r; dy <= r; dy++)
@@ -103,12 +111,18 @@ function cmdFill(token, r, ctx){
         const x = wrapC(px+dx), y = py+dy, z = wrapC(pz+dz);
         if(y < 0 || y >= WH) continue;
         setBlock(x,y,z,id);
+        persist.recordEdit?.(x,y,z,id);
+        batch.push([x,y,z,id]);
         n++;
       }
   for(let dx = -r-1; dx <= r+1; dx++)
     for(let dz = -r-1; dz <= r+1; dz++)
       rebuildAt(wrapC(px+dx), wrapC(pz+dz));
-  reply(`Filled ${TYPES[id].name} sphere r=${r} (${n} blocks).`);
+  if(net.syncEdits && batch.length){
+    const STEP = 400;
+    for(let i = 0; i < batch.length; i += STEP) net.syncEdits(batch.slice(i, i + STEP));
+  }
+  reply(`Filled ${TYPES[id].name} sphere r=${r} (${n} blocks saved/synced).`);
 }
 
 export function tryCommand(raw){
@@ -125,6 +139,13 @@ export function tryCommand(raw){
       const z = wrapC(ctx.player.pos.z)|0;
       const bio = BIOME_NAME[biomeAt(x,z)] || '?';
       reply(`You are at ${x}, ${y}, ${z} · ${bio} · mode=${net.mode}`);
+      const nv = villagers.nearestVillage?.(ctx.player.pos.x, ctx.player.pos.z, 600);
+      if(nv){
+        const names = { market:'Coin Market', outpost:'Dune Outpost', haven:'Log Haven', stilt:'Stilt Rest' };
+        reply(`Nearest village: ${names[nv.kind]||nv.kind} · ${nv.dist}m away (${nv.x|0}, ${nv.z|0})`);
+      } else {
+        reply('No village registered nearby (explore new chunks / biomes).');
+      }
       return true;
     }
     case 'fly': {

@@ -3,7 +3,7 @@ export const WORLD = 2048, WH = 48, CH = 16, CHUNKS = WORLD/CH, CENTER = WORLD/2
 // Sparse chunk storage — null until ensureChunk() generates it (streaming)
 export const chunks = new Array(CHUNKS * CHUNKS).fill(null);
 /** TEMP test flag — set false / remove markers later */
-export const DEBUG_MARKERS = true;
+export const DEBUG_MARKERS = false;
 export let seed = 0;
 /** @type {{x:number,z:number,bio:number,kind:string,key:string}[]} */
 export const villageSites = [];
@@ -287,7 +287,7 @@ function fillChunk(cx, cz, chunk){
     const vrng = mulberry32((seed ^ 0x71a9e) + cx * 374761 + cz * 668265);
     const bio = biomeAt(x0 + 8, z0 + 8);
     // Mountains: no full villages (too steep). Others: rare.
-    const chance = bio === 3 ? 0 : bio === 1 ? 0.035 : bio === 2 ? 0.04 : bio === 4 ? 0.03 : 0.045;
+    const chance = bio === 3 ? 0 : bio === 1 ? 0.055 : bio === 2 ? 0.06 : bio === 4 ? 0.05 : 0.07;
     if(vrng() < chance){
       const put = (lx, y, lz, t) => {
         if(lx < 1 || lx >= CH-1 || lz < 1 || lz >= CH-1 || y < 0 || y >= WH) return;

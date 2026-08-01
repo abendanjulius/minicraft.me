@@ -1,5 +1,5 @@
 // main.js — menu, boot, game loop
-import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME } from './world.js';
+import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME, villageSites } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.10.6'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.10.7'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -461,6 +461,11 @@ function updateCompassMap(pos, yaw){
 
   // Home / spawn (amber ring-dot) — same role as old compass arrow
   plot(CENTER, CENTER, '#ff6b5a', 3.5);
+
+  // Village pips (cyan) — registered settlements
+  for(const s of villageSites){
+    plot(s.x, s.z, '#5ee0d0', 3.2);
+  }
 
   // Zombies
   for(const zb of mobs.zombies.values()){
