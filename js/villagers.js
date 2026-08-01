@@ -114,7 +114,7 @@ function spawnAtSite(site){
     const ang = (i / n) * Math.PI * 2;
     const x = site.x + Math.cos(ang) * 2.2;
     const z = site.z + Math.sin(ang) * 2.2;
-    const y = topY(Math.round(x), Math.round(z)) + 1;
+    const y = topY(Math.round(x), Math.round(z)) + 0.5; // feet on block top (same as animals)
     const mesh = makeVillagerMesh(role);
     mesh.g.position.set(x, y, z);
     const holder = new THREE.Group();
@@ -176,7 +176,7 @@ export function update(dt, time, playerPos){
         const gy = topY(Math.round(nx), Math.round(nz));
         v.g.position.x = nx;
         v.g.position.z = nz;
-        v.g.position.y += ((gy + 1) - v.g.position.y) * Math.min(1, dt * 8);
+        v.g.position.y += ((gy + 0.5) - v.g.position.y) * Math.min(1, dt * 10);
         v.g.rotation.y = -v.yaw + Math.PI / 2;
         const sw = Math.sin(time * 7 + v.phase) * 0.4;
         v.legL.rotation.x = sw;
@@ -188,7 +188,9 @@ export function update(dt, time, playerPos){
     } else {
       v.legL.rotation.x *= 0.85;
       v.legR.rotation.x *= 0.85;
-      // face player sometimes when close
+      const gy = topY(Math.round(v.g.position.x), Math.round(v.g.position.z));
+      v.g.position.y += ((gy + 0.5) - v.g.position.y) * Math.min(1, dt * 10);
+      // face player when close
       const d = wrapDist(v.g.position.x, v.g.position.z, playerPos.x, playerPos.z);
       if(d < 4){
         v.g.rotation.y = Math.atan2(playerPos.x - v.g.position.x, playerPos.z - v.g.position.z);
