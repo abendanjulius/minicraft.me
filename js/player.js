@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat } from './ui.js';
@@ -170,11 +170,13 @@ setHeldChangeHook(updateHeld);
 updateHeld(); // initial empty-hand pose
 
 // ---- Visible first-person body — pushed back behind the camera like Minecraft's ----
-let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null;
+let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null, bHead = null;
 function buildBody(){
   if(bodyG) scene.remove(bodyG);
-  const c = makeCharacter(skinIdx(), false); // headless — the camera is the head
-  bodyG = c.g; bArmL = c.armL; bArmR = c.armR; bLegL = c.legL; bLegR = c.legR;
+  // Head included so sleep animation isn't headless; hidden during normal FP
+  const c = makeCharacter(skinIdx(), true);
+  bodyG = c.g; bArmL = c.armL; bArmR = c.armR; bLegL = c.legL; bLegR = c.legR; bHead = c.head;
+  if(bHead) bHead.visible = false;
   bodyG.visible = false;
   scene.add(bodyG);
   armMesh.material.color.setHex(c.sk.skin); // first-person arm matches skin
@@ -559,17 +561,21 @@ function collide(pos){
 
 function startSleep(bx, by, bz){
   if(state.sleeping || state.paused || survival.sv.dead) return;
-  // Nightfall: only full sleep-to-dawn at night; daytime still plays a short rest
   state.sleeping = true;
   state.flying = false;
   for(const k in keys) keys[k] = false;
   const f0 = bedFacing.get(wrapC(bx)+','+by+','+wrapC(bz)) ?? 0;
   const d0 = [[0,1],[1,0],[0,-1],[-1,0]][f0];
   view.yaw = Math.atan2(d0[0], d0[1]);
+  // Show full body (with head) for the sleep sequence; hide FP hand
+  if(bHead) bHead.visible = true;
+  if(bodyG) bodyG.visible = true;
+  handGroup.visible = false;
   sleepSeq = {
-    phase: 'approach', // approach -> lie -> fadeIn -> rest -> fadeOut -> wake
+    phase: 'approach',
     t: 0,
     bed: {x:bx, y:by, z:bz},
+    facing: f0,
     skipNight: !gm.forge && dayIsNight(),
     startYaw: view.yaw,
     startPitch: view.pitch,
@@ -585,57 +591,89 @@ function updateSleep(dt){
   const s = sleepSeq;
   s.t += dt;
   const bed = s.bed;
-  // lie in the center of the 2×1 bed
-  const f = bedFacing.get(wrapC(bed.x)+','+bed.y+','+wrapC(bed.z)) ?? 0;
+  const f = s.facing ?? (bedFacing.get(wrapC(bed.x)+','+bed.y+','+wrapC(bed.z)) ?? 0);
   const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
   const [dx,dz] = dirs[f];
+  // center of the 2×1 mattress
   const targetX = bed.x + 0.5 + dx*0.5;
-  const targetY = bed.y + 0.55;
+  const targetY = bed.y + 0.35;
   const targetZ = bed.z + 0.5 + dz*0.5;
+  // body yaw so head points toward headboard
+  const bodyYaw = Math.atan2(dx, dz) + Math.PI; // feet at footboard
+
+  const poseLying = ()=>{
+    if(!bodyG) return;
+    bodyG.visible = true;
+    if(bHead) bHead.visible = true;
+    // Lie flat on the bed (rotate around X)
+    bodyG.position.set(targetX, targetY, targetZ);
+    bodyG.rotation.set(-Math.PI/2, bodyYaw, 0);
+    // arms relaxed at sides
+    if(bArmL) bArmL.rotation.x = 0.15;
+    if(bArmR) bArmR.rotation.x = 0.15;
+    if(bLegL) bLegL.rotation.x = 0.05;
+    if(bLegR) bLegR.rotation.x = 0.05;
+  };
 
   if(s.phase === 'approach'){
-    // glide onto the bed
-    const k = Math.min(1, s.t / 0.7);
     player.pos.x += (targetX - player.pos.x) * Math.min(1, dt * 4);
     player.pos.z += (targetZ - player.pos.z) * Math.min(1, dt * 4);
-    player.pos.y += (targetY - player.pos.y) * Math.min(1, dt * 3);
+    player.pos.y += ((bed.y + 1.0) - player.pos.y) * Math.min(1, dt * 3);
     player.vel.set(0,0,0);
-    view.pitch += (0.9 - view.pitch) * Math.min(1, dt * 3); // look up at sky while lying
-    if(s.t >= 0.75){ s.phase = 'lie'; s.t = 0; }
+    // camera eases toward a soft top-down of the bed
+    view.pitch += (0.55 - view.pitch) * Math.min(1, dt * 3);
+    if(bodyG){
+      bodyG.visible = true;
+      if(bHead) bHead.visible = true;
+      bodyG.position.copy(player.pos);
+      bodyG.rotation.set(0, view.yaw + Math.PI, 0);
+    }
+    if(s.t >= 0.7){ s.phase = 'lie'; s.t = 0; }
   } else if(s.phase === 'lie'){
-    player.pos.set(targetX, targetY, targetZ);
+    player.pos.set(targetX, targetY + 0.2, targetZ);
     player.vel.set(0,0,0);
-    view.pitch = 0.95;
-    if(s.t >= 0.45){ s.phase = 'fadeIn'; s.t = 0;
+    poseLying();
+    view.pitch = 0.65;
+    if(s.t >= 0.5){
+      s.phase = 'fadeIn'; s.t = 0;
       document.getElementById('sleepFade')?.classList.add('on');
     }
   } else if(s.phase === 'fadeIn'){
-    player.pos.set(targetX, targetY, targetZ);
+    poseLying();
     if(s.t >= 0.75){
       s.phase = 'rest'; s.t = 0;
       if(s.skipNight) survival.sleepTillDawn();
       else {
-        // short rest heal even by day
         survival.sv.hp = Math.min(20, survival.sv.hp + 2);
         survival.renderVitals?.();
       }
     }
   } else if(s.phase === 'rest'){
+    poseLying();
     if(s.t >= (s.skipNight ? 0.6 : 0.35)){
       s.phase = 'fadeOut'; s.t = 0;
       document.getElementById('sleepFade')?.classList.remove('on');
     }
   } else if(s.phase === 'fadeOut'){
-    if(s.t >= 0.8){
-      s.phase = 'wake'; s.t = 0;
-    }
+    poseLying();
+    if(s.t >= 0.8){ s.phase = 'wake'; s.t = 0; }
   } else if(s.phase === 'wake'){
-    // sit up beside the bed
-    player.pos.set(targetX, bed.y + 1.15, targetZ);
+    // sit up next to the bed
+    player.pos.set(targetX, bed.y + 1.2, targetZ);
     view.pitch += (0 - view.pitch) * Math.min(1, dt * 4);
+    if(bodyG){
+      bodyG.position.copy(player.pos);
+      bodyG.rotation.set(0, view.yaw + Math.PI, 0);
+      if(bArmL) bArmL.rotation.x = 0;
+      if(bArmR) bArmR.rotation.x = 0;
+    }
     if(s.t >= 0.5){
       state.sleeping = false;
       sleepSeq = null;
+      // restore FP: hide head, show hand
+      if(bHead) bHead.visible = false;
+      handGroup.visible = true;
+      if(bodyG) bodyG.visible = true;
       const fade = document.getElementById('sleepFade');
       if(fade){ fade.classList.remove('on'); fade.innerHTML = ''; }
       document.exitPointerLock?.();
@@ -650,8 +688,15 @@ export function update(dt, elapsed){
   if(state.paused) return;
   if(state.sleeping){
     updateSleep(dt);
-    // still keep camera on player while sleeping
-    camera.position.copy(player.pos).add(new THREE.Vector3(0, 0.35, 0));
+    // Camera slightly above/beside the lying body so the head is visible
+    const elev = sleepSeq ? 1.35 : 0.35;
+    const back = sleepSeq ? 1.6 : 0;
+    const fx = -Math.sin(view.yaw), fz = -Math.cos(view.yaw);
+    camera.position.set(
+      player.pos.x - fx * back,
+      player.pos.y + elev,
+      player.pos.z - fz * back
+    );
     camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
     return;
   }
@@ -715,10 +760,17 @@ export function update(dt, elapsed){
       }
     } else stepTimer = 0;
 
-    if(player.pos.x < -0.5)       player.pos.x += WORLD;
-    if(player.pos.x >= WORLD-0.5) player.pos.x -= WORLD;
-    if(player.pos.z < -0.5)       player.pos.z += WORLD;
-    if(player.pos.z >= WORLD-0.5) player.pos.z -= WORLD;
+    // Toroidal wrap — snap player, then IMMEDIATELY restitch chunk offsets
+    // so the next rendered frame never shows a sky gap at the seam.
+    let wrapped = false;
+    if(player.pos.x < 0){ player.pos.x += WORLD; wrapped = true; }
+    else if(player.pos.x >= WORLD){ player.pos.x -= WORLD; wrapped = true; }
+    if(player.pos.z < 0){ player.pos.z += WORLD; wrapped = true; }
+    else if(player.pos.z >= WORLD){ player.pos.z -= WORLD; wrapped = true; }
+    if(wrapped){
+      updateChunkVisibility(player.pos.x, player.pos.z);
+      updateTorchLights(player.pos.x, player.pos.z);
+    }
     if(player.pos.y < -20) spawn();
 
     updateMining(dt);
@@ -736,9 +788,10 @@ export function update(dt, elapsed){
 
   // Body follows player, offset backward so the torso sits behind the camera line
   if(bodyG){
+    if(bHead) bHead.visible = false; // never show own head in FP
     const fwdH = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
     bodyG.position.copy(player.pos).addScaledVector(fwdH, -0.24);
-    bodyG.rotation.y = view.yaw + Math.PI;
+    bodyG.rotation.set(0, view.yaw + Math.PI, 0);
     const movingNow2 = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
     const miningNow = state.mineHeld && !invOpen;
     if(movingNow2){

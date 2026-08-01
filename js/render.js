@@ -8,7 +8,7 @@ export const VIEW = isTouch ? 56 : 120;
 
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, VIEW*.4, VIEW);
+scene.fog = new THREE.Fog(0x87ceeb, VIEW*.55, VIEW*1.15);
 export const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, .1, VIEW*2);
 scene.add(camera); // so camera children (first-person hand) render
 export const renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'high-performance'});

@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.8.7'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.8.9'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -435,11 +435,15 @@ function loop(now){
     const movingH = Math.abs(playerMod.player.vel.x)+Math.abs(playerMod.player.vel.z) > .5;
     survival.tick(dt, movingH, dl);
     net.update(dt, elapsed);
+    // Near the toroidal seam, restitch chunks every frame so the wrap never flashes sky.
+    // Far from the edge, throttle to save CPU.
+    const px = playerMod.player.pos.x, pz = playerMod.player.pos.z;
+    const nearSeam = (px < 140 || px > WORLD - 140 || pz < 140 || pz > WORLD - 140);
     cullTimer -= dt;
-    if(cullTimer<=0){
-      updateChunkVisibility(playerMod.player.pos.x, playerMod.player.pos.z);
-      updateTorchLights(playerMod.player.pos.x, playerMod.player.pos.z);
-      cullTimer=.3;
+    if(nearSeam || cullTimer<=0){
+      updateChunkVisibility(px, pz);
+      updateTorchLights(px, pz);
+      cullTimer = nearSeam ? 0 : 0.15;
     }
     const ug = playerMod.player.pos.y < heightAt(Math.round(playerMod.player.pos.x), Math.round(playerMod.player.pos.z)) - 2;
     if(ug){
