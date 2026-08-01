@@ -383,15 +383,18 @@ export function box(w,h,d,color,x,y,z){
 }
 export function makeToolModel(id){
   const g = new THREE.Group();
+  // Slightly chunkier so they read in first-person
   if(id==='pick'){
-    g.add(box(.05,.42,.05,0x8a5a2b,0,.12,0));
-    g.add(box(.36,.06,.06,0x9a9a9a,0,.33,0));
+    g.add(box(.06,.48,.06,0x8a5a2b,0,.14,0));
+    g.add(box(.42,.08,.08,0xa0a0a0,0,.38,0));
+    g.add(box(.08,.1,.08,0x888888,-.18,.34,0));
+    g.add(box(.08,.1,.08,0x888888, .18,.34,0));
   } else if(id==='axe'){
-    g.add(box(.05,.42,.05,0x8a5a2b,0,.12,0));
-    g.add(box(.15,.17,.05,0x9a9a9a,.1,.31,0));
+    g.add(box(.06,.48,.06,0x8a5a2b,0,.14,0));
+    g.add(box(.2,.22,.07,0xa0a0a0,.12,.36,0));
   } else if(id==='shovel'){
-    g.add(box(.05,.44,.05,0x8a5a2b,0,.14,0));
-    g.add(box(.13,.16,.04,0xb0b0b0,0,.4,0));
+    g.add(box(.06,.5,.06,0x8a5a2b,0,.16,0));
+    g.add(box(.16,.2,.05,0xb8b8b8,0,.46,0));
   }
   return g;
 }

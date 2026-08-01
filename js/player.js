@@ -49,48 +49,99 @@ let shake = 0, wasGround = true, fallV = 0, stepTimer = 0;
 export function addShake(v){ shake = Math.min(.4, Math.max(shake, v)); }
 export const skinIdx = ()=>Math.min(SKINS.length-1, Math.max(0, +(localStorage.getItem('mc_skin')||0)));
 
-// ---- First-person hand & held item ----
+// ---- First-person hand & held item (Minecraft-style) ----
 const handGroup = new THREE.Group();
 camera.add(handGroup);
-handGroup.position.set(.52,-.5,-.72);
-handGroup.rotation.set(-.15,.1,0);
-// Arm enters diagonally from the lower-right corner, like Minecraft's
+// Anchor in the lower-right of the view
+handGroup.position.set(0.42, -0.55, -0.55);
+handGroup.rotation.set(0, 0, 0);
+
+// Bare arm: thick forearm coming in from the corner
 const armPivot = new THREE.Group();
-armPivot.rotation.set(.35, -.12, -.55);
-const armMesh = box(.19,.19,.62,0xdba97c,0,0,.1);
+const armMesh = box(0.22, 0.22, 0.78, 0xdba97c, 0, 0, 0);
+// fist / hand at the end of the arm
+const fistMesh = box(0.26, 0.22, 0.22, 0xdba97c, 0, -0.02, -0.42);
 armPivot.add(armMesh);
+armPivot.add(fistMesh);
 handGroup.add(armPivot);
+
 const toolModels = {};
 for(const t of TOOLS) if(t.id!=='hand'){
   const m = makeToolModel(t.id);
-  m.position.set(0,.06,-.22); m.rotation.x = -.5; m.visible = false;
-  handGroup.add(m); toolModels[t.id] = m;
+  m.visible = false;
+  handGroup.add(m);
+  toolModels[t.id] = m;
 }
-let heldExtra = null; // block cube, weapon model, or item icon currently parented to hand
+let heldExtra = null;
 function clearHeldExtra(){
   if(heldExtra){ handGroup.remove(heldExtra); heldExtra = null; }
 }
+
+/** Pose the arm for empty / tool / block modes */
+function poseArm(mode){
+  // mode: 'empty' | 'tool' | 'block' | 'item'
+  if(mode === 'empty'){
+    armPivot.visible = true;
+    armPivot.position.set(0.18, -0.02, 0.05);
+    // diagonal in from bottom-right, matching Minecraft empty hand
+    armPivot.rotation.set(1.15, 0.55, 0.35);
+  } else if(mode === 'block'){
+    // arm mostly tucked; block is the star
+    armPivot.visible = true;
+    armPivot.position.set(0.28, -0.18, 0.12);
+    armPivot.rotation.set(1.0, 0.4, 0.5);
+  } else if(mode === 'tool'){
+    armPivot.visible = true;
+    armPivot.position.set(0.12, -0.05, 0.02);
+    armPivot.rotation.set(0.85, 0.35, 0.25);
+  } else {
+    // item / food icon
+    armPivot.visible = true;
+    armPivot.position.set(0.14, -0.06, 0.04);
+    armPivot.rotation.set(0.95, 0.4, 0.3);
+  }
+}
+
 function updateHeld(){
   const tool = slotTool();
   const held = hotbarSlots[sel.slot];
-  for(const id in toolModels) toolModels[id].visible = (tool===id);
+  for(const id in toolModels) toolModels[id].visible = false;
   clearHeldExtra();
-  // bare arm shows on its own; with a block/tool it tucks back so the item reads clearly
-  const empty = !held || (held.k!=='t' && !(gm.forge || inventory[held.id]>0));
-  armPivot.position.set(0, empty?0:-.06, empty?0:.06);
-  if(!held) return;
 
-  // Mining tools already use toolModels
-  if(held.k==='t') return;
+  // Skin-colored arm
+  const sk = SKINS[skinIdx()]?.skin ?? 0xdba97c;
+  armMesh.material.color.setHex(sk);
+  fistMesh.material.color.setHex(sk);
 
-  // Blocks — show cube (Forge has infinite; survival needs count)
+  // Empty hand
+  if(!held || (held.k!=='t' && !gm.forge && !(inventory[held.id]>0))){
+    poseArm('empty');
+    return;
+  }
+
+  // Mining tools
+  if(held.k==='t'){
+    poseArm('tool');
+    const m = toolModels[held.id];
+    if(m){
+      m.visible = true;
+      m.position.set(-0.02, 0.12, -0.35);
+      m.rotation.set(-0.9, 0.35, 0.15);
+      m.scale.set(1.35, 1.35, 1.35);
+    }
+    return;
+  }
+
+  // Blocks — big cube, classic 3-face angle
   if(held.k==='b'){
     const id = held.id;
-    if(!TYPES[id]) return;
-    if(!gm.forge && !(inventory[id]>0)) return;
-    heldExtra = makeBlockCube(id, .46);
-    heldExtra.position.set(.02,-.02,-.36);
-    heldExtra.rotation.set(.2,-.72,.08); // show top + two sides
+    if(!TYPES[id]){ poseArm('empty'); return; }
+    if(!gm.forge && !(inventory[id]>0)){ poseArm('empty'); return; }
+    poseArm('block');
+    heldExtra = makeBlockCube(id, 0.58);
+    // lower-right, tilted so top + two sides read clearly (like MC)
+    heldExtra.position.set(0.08, 0.02, -0.42);
+    heldExtra.rotation.set(0.35, -0.85, 0.12);
     handGroup.add(heldExtra);
     return;
   }
@@ -98,22 +149,25 @@ function updateHeld(){
   // Items (food, materials, weapons)
   if(held.k==='f'){
     const id = held.id;
-    if(!ITEMS[id]) return;
-    if(!gm.forge && !(inventory[id]>0)) return;
+    if(!ITEMS[id]){ poseArm('empty'); return; }
+    if(!gm.forge && !(inventory[id]>0)){ poseArm('empty'); return; }
     if(ITEMS[id].dmg){
+      poseArm('tool');
       heldExtra = makeWeaponModel(id);
-      heldExtra.scale.set(1.25, 1.25, 1.25);
-      heldExtra.position.set(0,.08,-.24);
-      heldExtra.rotation.x = -.5;
+      heldExtra.scale.set(1.4, 1.4, 1.4);
+      heldExtra.position.set(-0.02, 0.14, -0.32);
+      heldExtra.rotation.set(-0.85, 0.3, 0.1);
     } else {
-      heldExtra = makeHeldItemIcon(id, .48);
-      heldExtra.position.set(0,.1,-.32);
-      heldExtra.rotation.y = .15;
+      poseArm('item');
+      heldExtra = makeHeldItemIcon(id, 0.55);
+      heldExtra.position.set(0.02, 0.14, -0.38);
+      heldExtra.rotation.set(0.1, 0.2, -0.15);
     }
     handGroup.add(heldExtra);
   }
 }
 setHeldChangeHook(updateHeld);
+updateHeld(); // initial empty-hand pose
 
 // ---- Visible first-person body — pushed back behind the camera like Minecraft's ----
 let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null;
@@ -701,18 +755,23 @@ export function update(dt, elapsed){
     if(miningNow) bArmR.rotation.x = -1 - Math.abs(Math.sin(swingT))*.9;
   }
 
-  // First-person hand animation
+  // First-person hand animation (idle bob + mine/place swing)
   const movingNow = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
-  handBob += dt * (movingNow ? 7 : 2);
+  handBob += dt * (movingNow ? 8 : 2.2);
   let swing = 0;
-  if(state.mineHeld && !invOpen){ swingT += dt*13; swing = -Math.abs(Math.sin(swingT))*1.05; }
-  else swingT = 0;
-  if(placeAnim > 0){ placeAnim -= dt*4; swing = Math.min(swing, -Math.sin(Math.max(0,placeAnim)*Math.PI)*1.05); }
-  handGroup.rotation.x = -.2 + swing;
-  handGroup.rotation.y = .15 + swing*.2;
-  handGroup.position.z = -.8 + swing*.14;
-  handGroup.position.y = -.45 + Math.sin(handBob)*.015 + swing*.05;
-  handGroup.position.x = .5 + Math.cos(handBob*.5)*.012;
+  if(state.mineHeld && !invOpen && !state.sleeping){
+    swingT += dt*14;
+    swing = -Math.abs(Math.sin(swingT))*0.95;
+  } else swingT = 0;
+  if(placeAnim > 0){
+    placeAnim -= dt*4;
+    swing = Math.min(swing, -Math.sin(Math.max(0,placeAnim)*Math.PI)*0.9);
+  }
+  // Keep the hand anchored lower-right; bob lightly while moving
+  const bobY = Math.sin(handBob)*0.012;
+  const bobX = Math.cos(handBob*0.5)*0.008;
+  handGroup.position.set(0.42 + bobX, -0.55 + bobY + swing*0.04, -0.55 + swing*0.1);
+  handGroup.rotation.set(swing*0.85, swing*0.15, 0);
 }
 
 // State snapshot for the network
