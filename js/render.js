@@ -591,7 +591,7 @@ export function buildChunk(cx,cz){
       if(getBlock(x, y+1, z) === 64) continue;
 
       // Top sheet (slightly inset so banks read cleanly)
-      faces.push([x, y, z, 0, 1, 0, 1.08]); // scale
+      faces.push([x, y, z, 0, 1, 0, 1.12]); // scale overlap
 
       // Bank sides only where the neighbor is not water
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
@@ -605,20 +605,20 @@ export function buildChunk(cx,cz){
       if(!waterFaceMat){
         // Opaque-enough blue sheet — looks like liquid, not glass panes
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x1568b8, // deep surface blue
+          color: 0x0a4aa0, // strong deep blue
           transparent: true,
-          opacity: 0.82,
+          opacity: 0.92,
           depthWrite: true,
-          side: THREE.DoubleSide,
+          side: THREE.FrontSide,
         });
       }
       if(!waterSideMat){
         waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x0e4f8a, // deeper bank blue
+          color: 0x063570, // dark bank blue
           transparent: true,
-          opacity: 0.7,
-          depthWrite: false,
-          side: THREE.DoubleSide,
+          opacity: 0.88,
+          depthWrite: true,
+          side: THREE.FrontSide,
         });
       }
       const tops = faces.filter(f => f[4] === 1);
