@@ -626,7 +626,6 @@ export function buildChunk(cx,cz){
         waterSideMat.transparent = false;
         waterSideMat.opacity = 1;
       }
-      }
       const tops = faces.filter(f => f[4] === 1);
       const sides = faces.filter(f => f[4] !== 1);
       const orient = new THREE.Object3D();
