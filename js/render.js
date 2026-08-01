@@ -550,7 +550,13 @@ function isCustomMeshBlock(t){
     || t===64; // water — surface faces only (not glass cubes)
 }
 let waterFaceMat = null; // top sheet
-let waterSideMat = null; // bank sides
+let waterSideMat = null;
+export function tickWaterAnim(dt){
+  const tex = waterFaceMat?.userData?.flowTex;
+  if(!tex) return;
+  tex.offset.x = (tex.offset.x + dt * 0.06) % 1;
+  tex.offset.y = (tex.offset.y + dt * 0.04) % 1;
+}
 export function buildChunk(cx,cz){
   cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
   cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
@@ -580,39 +586,54 @@ export function buildChunk(cx,cz){
     scene.add(im);
     list.push(im);
   }
-  // Water: top sheets only, medium blue, near-opaque (no glass lattice)
+  // Water — Minecraft-style flowing top texture (not glass cubes)
   {
     const tops = [];
     for(let y=0;y<WH;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       if(chunk[bIndex(lx,y,lz)] !== 64) continue;
       const x = x0+lx, z = z0+lz;
-      // only top of water column
       if(getBlock(x, y+1, z) === 64) continue;
       tops.push([x, y, z]);
     }
     if(tops.length){
       if(!waterFaceMat){
+        // Classic-style 16×16 flowing water texture
+        const c = document.createElement('canvas');
+        c.width = c.height = 16;
+        const g = c.getContext('2d');
+        for(let y=0;y<16;y++) for(let x=0;x<16;x++){
+          const wave = Math.sin((x + y*1.3)*0.7)*4 + Math.sin((x*0.4 - y)*0.9)*3;
+          const band = ((x + y*2 + (wave|0)) % 5);
+          // deep blue base → lighter flow streaks
+          let R=18, G=70, B=160;
+          if(band === 0){ R=40; G=110; B=210; }
+          else if(band === 1){ R=28; G=90; B=185; }
+          else if(band === 3){ R=22; G=80; B=175; }
+          R = Math.max(0, Math.min(255, R + ((x*3+y*7)&3)));
+          G = Math.max(0, Math.min(255, G + ((x*5+y*2)&3)));
+          B = Math.max(0, Math.min(255, B + ((x+y)&2)));
+          g.fillStyle = 'rgb('+R+','+G+','+B+')';
+          g.fillRect(x,y,1,1);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.magFilter = tex.minFilter = THREE.NearestFilter;
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x3a9ad9, // medium water blue
+          map: tex,
           transparent: true,
-          opacity: 0.88,
+          opacity: 0.92,
           depthWrite: true,
           side: THREE.FrontSide,
         });
-      } else {
-        waterFaceMat.color.setHex(0x3a9ad9);
-        waterFaceMat.transparent = true;
-        waterFaceMat.opacity = 0.88;
-        waterFaceMat.depthWrite = true;
+        waterFaceMat.userData.flowTex = tex;
       }
-      const pgeo = new THREE.PlaneGeometry(1.02, 1.02); // slight overlap hides seams
+      const pgeo = new THREE.PlaneGeometry(1.01, 1.01);
       const im = new THREE.InstancedMesh(pgeo, waterFaceMat, tops.length);
       const orient = new THREE.Object3D();
       tops.forEach((p, i)=>{
         const [x,y,z] = p;
-        orient.position.set(x, y + 0.42, z);
+        orient.position.set(x, y + 0.4, z);
         orient.rotation.set(-Math.PI/2, 0, 0);
-        orient.scale.set(1, 1, 1);
         orient.updateMatrix();
         im.setMatrixAt(i, orient.matrix);
       });
