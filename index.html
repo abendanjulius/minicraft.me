@@ -123,11 +123,20 @@
     if(msg) el.insertAdjacentHTML('afterbegin', '<b>'+msg+'</b><br>');
   }
   function clearAndReload(){
+    try {
+      Object.keys(sessionStorage).forEach(function(k){
+        if(k.indexOf('mc_reloaded_') === 0) sessionStorage.removeItem(k);
+      });
+      sessionStorage.removeItem('mc_force_update_lock');
+    } catch(e){}
     var done = function(){ location.href = location.pathname + '?recovery=' + Date.now(); };
-    if(!('caches' in window)){ done(); return; }
-    caches.keys().then(function(keys){
-      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
-    }).then(function(){
+    var chain = Promise.resolve();
+    if('caches' in window){
+      chain = caches.keys().then(function(keys){
+        return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+      });
+    }
+    chain.then(function(){
       return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : [];
     }).then(function(regs){
       return Promise.all((regs||[]).map(function(r){ return r.unregister(); }));
@@ -139,11 +148,14 @@
     if(e && (e.filename||'').indexOf('.js')>=0) showRecover('Script error');
   });
   window.addEventListener('unhandledrejection', function(){ showRecover('Load error'); });
-  // If main never marks boot OK within 4s, offer recovery
+  // Only show recovery if the world list never appeared (real load failure)
   setTimeout(function(){
-    if(!document.body.classList.contains('boot-ok') && !document.body.classList.contains('playing'))
-      showRecover();
-  }, 4000);
+    if(document.body.classList.contains('playing')) return;
+    if(document.body.classList.contains('boot-ok')) return;
+    var worlds = document.getElementById('worlds');
+    if(worlds && worlds.children && worlds.children.length > 0) return; // menu works
+    showRecover();
+  }, 5000);
 })();
 </script>
 </body>

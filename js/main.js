@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.10.4'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.10.5'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -59,13 +59,14 @@ async function checkVersion(){
       addChat('⚙ System', `Update v${version} available — quit and reload to get it.`);
       return;
     }
-    // guard against reload loops if the CDN is still serving old files
+    // Soft guard: only block rapid loops within 15s
     const key = 'mc_reloaded_' + version;
-    if(sessionStorage.getItem(key)){
-      $('verLabel').textContent = `v${APP_VERSION} (v${version} available — refresh in a minute)`;
+    const last = +(sessionStorage.getItem(key) || 0);
+    if(last && Date.now() - last < 15000){
+      $('verLabel').textContent = `v${APP_VERSION} → updating to v${version}…`;
       return;
     }
-    sessionStorage.setItem(key, '1');
+    sessionStorage.setItem(key, String(Date.now()));
     $('menuStatus').textContent = `Updating to v${version}…`;
     forceUpdate(version);
   }catch(e){}
@@ -202,6 +203,7 @@ function buildWorlds(){
 }
 buildWorlds();
 document.body.classList.add('boot-ok');
+const br = $('bootRecover'); if(br) br.style.display = 'none';
 
 $('btnImport').addEventListener('click', ()=>$('importFile').click());
 $('importFile').addEventListener('change', e=>{
