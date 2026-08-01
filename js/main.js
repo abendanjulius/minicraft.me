@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.9.8'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.9.10'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -349,11 +349,69 @@ function updateCompassMap(pos, yaw){
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height, cx = W/2, cy = H/2, R = W/2 - 2;
   ctx.clearRect(0,0,W,H);
-  // soft disc (CSS already frames it)
-  ctx.fillStyle = 'rgba(10,18,28,.15)';
+
+  // --- Day / night cycle on the outer rim ---
+  // day.t: 0..1, ~0.25 = noon (matches render.js sun angle)
+  const t = day.t;
+  const sunY = Math.sin(t * Math.PI * 2);          // >0 day, <0 night
+  const isNight = sunY < 0.05;
+  const isDusk = !isNight && sunY < 0.35;
+
+  // Base disc tinted by time
+  ctx.fillStyle = isNight ? 'rgba(12,16,36,.55)'
+                : isDusk  ? 'rgba(40,24,18,.4)'
+                :           'rgba(18,28,22,.25)';
   ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+
+  // Outer ring: night arc (dark) + day arc (gold) — full 24h clock
+  // 0 at top = midnight-ish mapping: marker moves clockwise with day.t
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'butt';
+  // Night half-ish track (full circle underlay)
+  ctx.strokeStyle = 'rgba(40,55,90,.85)';
+  ctx.beginPath(); ctx.arc(cx, cy, R - 1.5, 0, Math.PI * 2); ctx.stroke();
+  // Daylight arc length proportional to how high the sun is (visual “day amount”)
+  // Full golden ring near noon; shrinks toward dusk; gone at night
+  if(!isNight){
+    const dayAmt = Math.max(0.15, Math.min(1, sunY * 1.2 + 0.15));
+    const span = Math.PI * 1.6 * dayAmt; // arc sweep
+    const start = -Math.PI / 2 - span / 2;
+    ctx.strokeStyle = isDusk ? '#e8935a' : '#f4d35e';
+    ctx.beginPath();
+    ctx.arc(cx, cy, R - 1.5, start, start + span);
+    ctx.stroke();
+  }
+
+  // Moving sun / moon pip on the rim (clock position from day.t)
+  const a = t * Math.PI * 2 - Math.PI / 2; // t=0.25 → top (noon)
+  const pr = R - 3;
+  const px = cx + Math.cos(a) * pr;
+  const py = cy + Math.sin(a) * pr;
+  if(isNight){
+    // moon
+    ctx.fillStyle = '#dfe7ff';
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(12,16,36,.7)';
+    ctx.beginPath(); ctx.arc(px + 1.5, py - 1, 3, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // sun
+    ctx.fillStyle = isDusk ? '#ffb070' : '#ffe9a8';
+    ctx.beginPath(); ctx.arc(px, py, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,80,.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // Tiny day/night letter under the pip for clarity
+  ctx.fillStyle = isNight ? 'rgba(180,200,255,.9)' : 'rgba(255,230,150,.9)';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // label at bottom of compass
+  ctx.fillText(isNight ? 'NIGHT' : (isDusk ? 'DUSK' : 'DAY'), cx, cy + R * 0.62);
+
   // range rings
-  ctx.strokeStyle = 'rgba(255,255,255,.14)';
+  ctx.strokeStyle = 'rgba(255,255,255,.12)';
   ctx.lineWidth = 1.5;
   for(const f of [.45,.8]){
     ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.stroke();

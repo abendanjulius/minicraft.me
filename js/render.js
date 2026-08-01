@@ -970,6 +970,8 @@ export function trackDoor(x,y,z,prev,t){
     doorMeshes.delete(k);
   }
   if(style){
+    // Upper half of a 2-tall door: no separate mesh (bottom owns the full model)
+    if(doorStyleOf(getBlock(x, y-1, z))) return;
     const facing = (t - style.base) % 4;
     const open = (t - style.base) >= 4;
     if(doorMeshes.has(k)){ scene.remove(doorMeshes.get(k)); doorMeshes.delete(k); }

@@ -80,7 +80,7 @@ export function startMusic(){
   if(!musicEl){
     musicEl = new Audio('./assets/music.mp3');
     musicEl.loop = true;
-    musicEl.volume = 0.07; // 50% quieter than before
+    musicEl.volume = 0.025; // very subtle background
   }
   musicEl.play().catch(()=>{});
   musicOn = true;

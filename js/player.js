@@ -399,11 +399,16 @@ function toggleDoorAt(bx,by,bz){
   const t = getBlock(bx,by,bz);
   const style = doorStyleOf(t);
   if(!style) return false;
-  const facing = doorFacing(t);
-  const open = doorOpen(t);
+  // Resolve to bottom cell if player clicked the upper half
+  let by0 = by;
+  if(doorStyleOf(getBlock(bx, by-1, bz))) by0 = by - 1;
+  const facing = doorFacing(getBlock(bx,by0,bz));
+  const open = doorOpen(getBlock(bx,by0,bz));
   const nt = doorType(style.id, facing, !open);
-  applyEdit(bx, by, bz, nt, false);
-  net.sendEdit(bx, by, bz, nt);
+  applyEdit(bx, by0, bz, nt, false);
+  applyEdit(bx, by0+1, bz, nt, false);
+  net.sendEdit(bx, by0, bz, nt);
+  net.sendEdit(bx, by0+1, bz, nt);
   sfx.place();
   return true;
 }
@@ -475,7 +480,7 @@ export function placeAction(){
   const d = new THREE.Vector3(px,py,pz).sub(player.pos);
   if(Math.abs(d.x)<.9 && Math.abs(d.z)<.9 && d.y>-.5 && d.y<2) return;
 
-  // Place any door style
+  // Place any door style — occupies 2 blocks tall (bottom + top)
   const doorStyle = DOOR_STYLES.find(s => s.item === tid);
   if(doorStyle){
     if(py+1>=WH || getBlock(px,py+1,pz)) return;
@@ -483,12 +488,14 @@ export function placeAction(){
     const facing = yawToFacing(view.yaw);
     const dt = doorType(doorStyle.id, facing, false);
     applyEdit(px,py,pz,dt,false);
+    applyEdit(px,py+1,pz,dt,false); // upper half reserved
     if(!gm.forge) inventory[tid]--;
     placeAnim = 1;
     sfx.place();
     survival.note('place', tid);
     renderHotbar();
     net.sendEdit(px,py,pz,dt);
+    net.sendEdit(px,py+1,pz,dt);
     return;
   }
 
@@ -550,6 +557,12 @@ function updateMining(dt){
       const ORE_YIELD = {45:120, 46:121, 47:122};
       if(doorStyleOf(old)){
         addToInventory(doorItemOf(old));
+        // clear the other half of the 2-tall door
+        const otherY = doorStyleOf(getBlock(bx, by+1, bz)) ? by+1 : (doorStyleOf(getBlock(bx, by-1, bz)) ? by-1 : null);
+        if(otherY !== null){
+          applyEdit(bx, otherY, bz, 0, false);
+          net.sendEdit(bx, otherY, bz, 0);
+        }
       } else if(old===58 || old===65){
         // remove paired bed cell
         const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
@@ -661,7 +674,7 @@ function updateSleep(dt){
     player.pos.y += ((bed.y + 1.0) - player.pos.y) * Math.min(1, dt * 3);
     player.vel.set(0,0,0);
     // camera eases toward a soft top-down of the bed
-    view.pitch += (0.55 - view.pitch) * Math.min(1, dt * 3);
+    view.pitch = -Math.PI/2; // top-down
     if(bodyG){
       bodyG.visible = true;
       if(bHead) bHead.visible = true;
@@ -673,7 +686,7 @@ function updateSleep(dt){
     player.pos.set(targetX, targetY + 0.2, targetZ);
     player.vel.set(0,0,0);
     poseLying();
-    view.pitch = 0.65;
+    view.pitch = -Math.PI/2;
     if(s.t >= 0.5){
       s.phase = 'fadeIn'; s.t = 0;
       document.getElementById('sleepFade')?.classList.add('on');
@@ -728,16 +741,10 @@ export function update(dt, elapsed){
   if(state.paused) return;
   if(state.sleeping){
     updateSleep(dt);
-    // Camera slightly above/beside the lying body so the head is visible
-    const elev = sleepSeq ? 1.35 : 0.35;
-    const back = sleepSeq ? 1.6 : 0;
-    const fx = -Math.sin(view.yaw), fz = -Math.cos(view.yaw);
-    camera.position.set(
-      player.pos.x - fx * back,
-      player.pos.y + elev,
-      player.pos.z - fz * back
-    );
-    camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
+    // Top-down view of the character in bed
+    camera.position.set(player.pos.x, player.pos.y + 4.2, player.pos.z);
+    // Look straight down; keep yaw so body orientation matches bed
+    camera.rotation.set(-Math.PI/2, view.yaw, 0, 'YXZ');
     return;
   }
   if(!invOpen && !survival.sv.dead){
