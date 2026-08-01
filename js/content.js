@@ -56,7 +56,7 @@ export const EXTRA_BLOCKS = {
   62:{name:'Trapdoor',       tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe'},
   63:{name:'Trapdoor Open',  tex:['trapdoor',0x8b6914],         hard:1.2,pc:0x8b6914, tool:'axe', transparent:1},
   // 65 = bed head marker (paired with foot 58); not in inventory
-  64:{name:'Water',          tex:['glassy',0x3a8fd0],             hard:100, pc:0x3a8fd0, transparent:1},
+  64:{name:'Water',          tex:['water',0x3a8fd0],              hard:100, pc:0x3a8fd0, transparent:1},
   65:{name:'Bed Head',       tex:['bed',0xc0392b],              hard:.8, pc:0xc0392b, tool:'axe'},
   66:{name:'Tall Grass',     tex:['noise',0x4a9a3a,20],         hard:.05, pc:0x4a9a3a},
   67:{name:'Red Flower',     tex:['noise',0xe74c3c,12],         hard:.05, pc:0xe74c3c},

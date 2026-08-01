@@ -135,6 +135,24 @@ function texFrom(desc){
       if((x+y)%6===0) return rgb(Math.min(255,r+30),Math.min(255,g+30),Math.min(255,bl+30),.45);
       return rgb(r,g,bl,.2);});});
   }
+  if(kind==='water'){
+    // Soft liquid — no glass-style hard borders
+    const [r,g,bl] = cr(a);
+    return canvasTex(gc=>{
+      gc.clearRect(0,0,16,16);
+      pix(gc,(x,y)=>{
+        const wave = Math.sin((x + y*0.7)*0.9)*8 + Math.sin((x*0.5 - y)*1.1)*5;
+        const d = jit(10) + wave;
+        const a = 0.42 + (wave > 0 ? 0.08 : 0) + (y < 3 ? 0.12 : 0); // brighter near "surface" rows
+        return rgb(
+          Math.min(255, r + d*0.4|0),
+          Math.min(255, g + 20 + d*0.5|0),
+          Math.min(255, bl + 30 + d*0.3|0),
+          Math.max(0.28, Math.min(0.72, a))
+        );
+      });
+    });
+  }
   const [r,g,bl] = cr(a);
   if(kind==='noise'){
     const v = b||16;
@@ -298,6 +316,25 @@ for(const id in EXTRA_BLOCKS){
                light:d.light||null, tool:d.tool||null};
 }
 export const LIGHT_BLOCKS = {10:{c:0xffb066,i:.9}};
+// WATER_MAT_OVERRIDE — liquid look (not glass cubes)
+if(TYPES[64]){
+  const wt = texFrom(['water', 0x2f7eb8]);
+  const mk = (opacity, bright=0)=>{
+    const m = new THREE.MeshLambertMaterial({
+      map: wt.t,
+      color: bright ? 0x6ec0f0 : 0x3a8fd0,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    });
+    return m;
+  };
+  // brighter top face, softer sides
+  const side = mk(0.48), top = mk(0.58, 1), bot = mk(0.4);
+  TYPES[64].mats = [side, side, top, bot, side, side];
+  TYPES[64].icon = wt.url;
+}
+
 for(const id in TYPES) if(TYPES[id].light) LIGHT_BLOCKS[id] = {c:TYPES[id].light.c, i:TYPES[id].light.i};
 
 export const TOOLS = [
