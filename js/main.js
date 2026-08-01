@@ -1,5 +1,5 @@
 // main.js — menu, boot, game loop
-import { generateWorld, setBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS } from './world.js';
+import { generateWorld, setBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed } from './render.js';
@@ -37,7 +37,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.9.0-test2k'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.9.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 $('verLabel').textContent = 'v' + APP_VERSION;
 async function forceUpdate(newVer){
   try{
@@ -406,7 +406,7 @@ function loop(now){
   frames++; fpsTime+=dt;
   if(fpsTime>=1){
     {
-      const x = playerMod.player.pos.x|0, y = playerMod.player.pos.y|0, z = playerMod.player.pos.z|0;
+      const x = wrapC(playerMod.player.pos.x)|0, y = playerMod.player.pos.y|0, z = wrapC(playerMod.player.pos.z)|0;
       const dx = x - CENTER, dz = z - CENTER;
       const dist = Math.hypot(dx, dz)|0;
       const mark = DEBUG_MARKERS ? ` · ${dist}m from center · pillars@256` : '';
@@ -446,7 +446,8 @@ function loop(now){
     // Near the toroidal seam, restitch chunks every frame so the wrap never flashes sky.
     // Far from the edge, throttle to save CPU.
     const px = playerMod.player.pos.x, pz = playerMod.player.pos.z;
-    const nearSeam = (px < 140 || px > WORLD - 140 || pz < 140 || pz > WORLD - 140);
+    const lx = ((px % WORLD) + WORLD) % WORLD, lz = ((pz % WORLD) + WORLD) % WORLD;
+    const nearSeam = (lx < 160 || lx > WORLD - 160 || lz < 160 || lz > WORLD - 160);
     cullTimer -= dt;
     if(nearSeam || cullTimer<=0){
       updateChunkVisibility(px, pz);

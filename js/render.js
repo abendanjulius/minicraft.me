@@ -509,12 +509,10 @@ export function rebuildAt(x,z){
 
 // Only render chunks within view distance (toroidal-aware)
 const VIEW_CHUNKS = Math.ceil(VIEW/CH)+1;
-/** Signed shift (0 or ±WORLD) that puts a world X/Z on the near side of the seam. */
+/** Shift v by k*WORLD so it sits as close as possible to ref (continuous player coords OK). */
 export function wrapShift(v, ref){
-  const d = v - ref;
-  if(d >  WORLD/2) return -WORLD;
-  if(d < -WORLD/2) return  WORLD;
-  return 0;
+  // nearest copy: v + k*WORLD ≈ ref
+  return WORLD * Math.round((ref - v) / WORLD);
 }
 /** True distance across the wrap. */
 export function wrapDist(x, z, px, pz){
@@ -526,11 +524,11 @@ export function placeWrapped(obj, x, y, z, px, pz){
 }
 
 export function updateChunkVisibility(px,pz){
+  // Logical chunk under player (toroidal)
   const pcx = wrapC(Math.round(px))>>4, pcz = wrapC(Math.round(pz))>>4;
-  const loadR = VIEW_CHUNKS + 1;   // generate/mesh
-  const keepR = VIEW_CHUNKS + 3;   // keep meshes a bit further to reduce thrash
+  const loadR = VIEW_CHUNKS + 2;
+  const keepR = VIEW_CHUNKS + 4;
 
-  // Load / mesh near chunks only (don't scan all 16k)
   for(let dz = -loadR; dz <= loadR; dz++) for(let dx = -loadR; dx <= loadR; dx++){
     const cx = (pcx + dx + CHUNKS) % CHUNKS;
     const cz = (pcz + dz + CHUNKS) % CHUNKS;
@@ -539,8 +537,10 @@ export function updateChunkVisibility(px,pz){
     if(!chunkMeshes[ci]) buildChunk(cx, cz);
   }
 
-  // Update visibility / wrap offset for any meshed chunk; dispose very far ones
-  for(let cz = 0; cz < CHUNKS; cz++) for(let cx = 0; cx < CHUNKS; cx++){
+  // Only touch meshed chunks near the player (scan local ring, not all 16k)
+  for(let dz = -keepR - 1; dz <= keepR + 1; dz++) for(let dx = -keepR - 1; dx <= keepR + 1; dx++){
+    const cx = (pcx + dx + CHUNKS) % CHUNKS;
+    const cz = (pcz + dz + CHUNKS) % CHUNKS;
     const ci = cIndex(cx, cz);
     const list = chunkMeshes[ci];
     if(!list) continue;
@@ -553,8 +553,12 @@ export function updateChunkVisibility(px,pz){
       continue;
     }
     const vis = dist <= VIEW_CHUNKS;
-    const offX = (pcx + sx - cx) * CH;
-    const offZ = (pcz + sz - cz) * CH;
+    // Continuous placement: shift chunk by k*WORLD so it sits nearest the player.
+    // Instance matrices store coords in [0,WORLD); mesh.position adds ±k*WORLD.
+    // As the player walks past the seam without snapping, k changes with no teleport.
+    const baseX = cx * CH, baseZ = cz * CH;
+    const offX = WORLD * Math.round((px - baseX) / WORLD);
+    const offZ = WORLD * Math.round((pz - baseZ) / WORLD);
     for(const m of list){
       m.visible = vis;
       if(m.position.x !== offX || m.position.z !== offZ) m.position.set(offX, 0, offZ);

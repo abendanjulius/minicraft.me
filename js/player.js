@@ -760,14 +760,12 @@ export function update(dt, elapsed){
       }
     } else stepTimer = 0;
 
-    // Toroidal wrap — snap player, then IMMEDIATELY restitch chunk offsets
-    // so the next rendered frame never shows a sky gap at the seam.
-    let wrapped = false;
-    if(player.pos.x < 0){ player.pos.x += WORLD; wrapped = true; }
-    else if(player.pos.x >= WORLD){ player.pos.x -= WORLD; wrapped = true; }
-    if(player.pos.z < 0){ player.pos.z += WORLD; wrapped = true; }
-    else if(player.pos.z >= WORLD){ player.pos.z -= WORLD; wrapped = true; }
-    if(wrapped){
+    // NO visual snap at the seam — player coords stay continuous.
+    // getBlock/setBlock already wrapC(); chunks use nearest ±WORLD copy.
+    // Only rebase when extremely far to avoid float precision issues.
+    if(Math.abs(player.pos.x) > WORLD * 2 || Math.abs(player.pos.z) > WORLD * 2){
+      player.pos.x = wrapC(player.pos.x);
+      player.pos.z = wrapC(player.pos.z);
       updateChunkVisibility(player.pos.x, player.pos.z);
       updateTorchLights(player.pos.x, player.pos.z);
     }
