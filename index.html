@@ -144,8 +144,9 @@
   }
   document.getElementById('btnClearCache')?.addEventListener('click', clearAndReload);
   window.addEventListener('error', function(e){
-    // only show for script failures
-    if(e && (e.filename||'').indexOf('.js')>=0) showRecover('Script error');
+    // only show for our game modules, not CDN noise
+    var f = (e && e.filename) || '';
+    if(f.indexOf('/js/') >= 0 || f.indexOf('main.js') >= 0) showRecover('Script error');
   });
   window.addEventListener('unhandledrejection', function(){ showRecover('Load error'); });
   // Only show recovery if the world list never appeared (real load failure)

@@ -386,7 +386,7 @@ function fillChunk(cx, cz, chunk){
         // Bench + lamp near well
         put(ox+2, base+1, oz+5, 7); put(ox+5, base+1, oz+5, 7);
         put(ox+6, base+1, oz+3, 4); put(ox+6, base+2, oz+3, 10);
-      }      } else if(bio === 2){
+      } else if(bio === 2){
         vKind = 'outpost';
         // DESERT — "Dune Outpost": sandstone keep + courtyard
         house(ox+1, oz+1, 5, 5, 15, 15, 15, 0); // sandstone
