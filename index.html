@@ -34,6 +34,10 @@
   <button id="btnImport" class="linkBtn">⬆ Import world file</button>
   <input id="importFile" type="file" accept=".json,application/json" style="display:none">
   <p id="verLabel"></p>
+  <p id="bootRecover" style="display:none;margin-top:12px;max-width:320px;color:#4a2010;background:#ffe8d6;border:1px solid #e0a060;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.45">
+    Game script failed to load (often an old cached build).<br>
+    <button type="button" id="btnClearCache" style="margin-top:8px;padding:8px 12px;font-family:monospace;cursor:pointer">Clear cache &amp; reload</button>
+  </p>
 </div>
 
 <div id="loading">Generating world…</div>
@@ -110,5 +114,37 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script type="module" src="./js/main.js"></script>
+<script>
+(function(){
+  function showRecover(msg){
+    var el = document.getElementById('bootRecover');
+    if(!el) return;
+    el.style.display = 'block';
+    if(msg) el.insertAdjacentHTML('afterbegin', '<b>'+msg+'</b><br>');
+  }
+  function clearAndReload(){
+    var done = function(){ location.href = location.pathname + '?recovery=' + Date.now(); };
+    if(!('caches' in window)){ done(); return; }
+    caches.keys().then(function(keys){
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+    }).then(function(){
+      return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : [];
+    }).then(function(regs){
+      return Promise.all((regs||[]).map(function(r){ return r.unregister(); }));
+    }).then(done).catch(done);
+  }
+  document.getElementById('btnClearCache')?.addEventListener('click', clearAndReload);
+  window.addEventListener('error', function(e){
+    // only show for script failures
+    if(e && (e.filename||'').indexOf('.js')>=0) showRecover('Script error');
+  });
+  window.addEventListener('unhandledrejection', function(){ showRecover('Load error'); });
+  // If main never marks boot OK within 4s, offer recovery
+  setTimeout(function(){
+    if(!document.body.classList.contains('boot-ok') && !document.body.classList.contains('playing'))
+      showRecover();
+  }, 4000);
+})();
+</script>
 </body>
 </html>
