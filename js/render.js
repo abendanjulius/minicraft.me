@@ -529,8 +529,10 @@ function isCustomMeshBlock(t){
   return t===10 || t===11 || t===44
     || (t>=48&&t<=55) || (t>=70&&t<=93)
     || t===56 || t===58 || t===59 || t===60 || t===61 || t===62 || t===63 || t===65
-    || t===66 || t===67 || t===68 || t===69;
+    || t===66 || t===67 || t===68 || t===69
+    || t===64; // water — surface faces only (not glass cubes)
 }
+let waterFaceMat = null; // shared liquid surface material
 export function buildChunk(cx,cz){
   cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
   cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
@@ -559,6 +561,56 @@ export function buildChunk(cx,cz){
     im.instanceMatrix.needsUpdate = true;
     scene.add(im);
     list.push(im);
+  }
+  // Water: only exposed faces (hides internal cube grid → reads as a surface)
+  {
+    const faces = [];
+    const dirs = [
+      [ 1, 0, 0], [-1, 0, 0],
+      [ 0, 1, 0], [ 0,-1, 0],
+      [ 0, 0, 1], [ 0, 0,-1],
+    ];
+    for(let y=0;y<WH;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
+      if(chunk[bIndex(lx,y,lz)] !== 64) continue;
+      const x = x0+lx, z = z0+lz;
+      for(const [dx,dy,dz] of dirs){
+        const n = getBlock(x+dx, y+dy, z+dz);
+        if(n === 64) continue;          // internal water face
+        if(n && occludes(x+dx, y+dy, z+dz)) continue; // buried in solid
+        faces.push([x, y, z, dx, dy, dz]);
+      }
+    }
+    if(faces.length){
+      if(!waterFaceMat){
+        waterFaceMat = new THREE.MeshLambertMaterial({
+          color: 0x3d9ad0,
+          transparent: true,
+          opacity: 0.52,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+      }
+      const pgeo = new THREE.PlaneGeometry(1, 1);
+      const im = new THREE.InstancedMesh(pgeo, waterFaceMat, faces.length);
+      const orient = new THREE.Object3D();
+      faces.forEach((f, i)=>{
+        const [x,y,z,dx,dy,dz] = f;
+        // face center on the outer side of the block
+        orient.position.set(x + dx*0.5, y + dy*0.5, z + dz*0.5);
+        orient.rotation.set(0, 0, 0);
+        if(dx === 1) orient.rotation.y = Math.PI/2;
+        else if(dx === -1) orient.rotation.y = -Math.PI/2;
+        else if(dy === 1) orient.rotation.x = -Math.PI/2;
+        else if(dy === -1) orient.rotation.x = Math.PI/2;
+        else if(dz === -1) orient.rotation.y = Math.PI;
+        orient.updateMatrix();
+        im.setMatrixAt(i, orient.matrix);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      im.renderOrder = 2;
+      scene.add(im);
+      list.push(im);
+    }
   }
   chunkMeshes[ci] = list;
 }
