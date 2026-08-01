@@ -156,7 +156,15 @@ const nameOf = id => (id>=100 ? ITEMS[id]?.name : TYPES[id]?.name) || 'Unknown';
 
 function idsForCat(cat){
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
-  const hideVariant = id => (id>=49 && id<=55) || id===63;
+  const hideVariant = id => {
+    if(id===63 || id===65) return true;
+    // hide non-item door state ids (keep base item ids 48,70,78,86)
+    if(id>=49 && id<=55) return true;
+    if(id>=71 && id<=77) return true;
+    if(id>=79 && id<=85) return true;
+    if(id>=87 && id<=93) return true;
+    return false;
+  };
   if(cat==='inv'){
     if(gm.forge) return all.filter(id => !hideVariant(id));
     return all.filter(id => !hideVariant(id) && (inventory[id]||0) > 0);

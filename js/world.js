@@ -28,13 +28,32 @@ export function setBlock(x,y,z,t){
   chunks[cIndex(x>>4, z>>4)][bIndex(x&15, y, z&15)] = t;
 }
 // glass (9) doesn't hide its neighbours
-export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && !(b>=48&&b<=55) && b!==63; };
+export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && !doorStyleOf(b) && b!==63 && b!==58 && b!==65; };
 // walk-through: air, torch, ladder, open doors (52-55)
-export const isWalkThrough = b => !b || b===10 || b===44 || (b>=52 && b<=55) || b===63;
-export const isDoor = b => b>=48 && b<=55;
-export const doorFacing = b => (b>=48 && b<=55) ? (b-48)%4 : 0;
-export const doorOpen = b => b>=52 && b<=55;
-export const doorType = (facing, open) => 48 + (facing&3) + (open?4:0);
+export const isWalkThrough = b => !b || b===10 || b===44 || doorOpen(b) || b===63 || b===58 || b===65;
+// Door styles occupy 8-type bands: base..base+3 closed facing, base+4..base+7 open
+export const DOOR_STYLES = [
+  { id:0, base:48, item:48, name:'Oak Door' },
+  { id:1, base:70, item:70, name:'Dark Door' },
+  { id:2, base:78, item:78, name:'Glass Door' },
+  { id:3, base:86, item:86, name:'Iron Door' },
+];
+export function doorStyleOf(b){
+  for(const s of DOOR_STYLES) if(b>=s.base && b<s.base+8) return s;
+  return null;
+}
+export const isDoor = b => !!doorStyleOf(b);
+export const doorFacing = b => { const s=doorStyleOf(b); return s ? (b-s.base)%4 : 0; };
+export const doorOpen = b => { const s=doorStyleOf(b); return s ? (b-s.base)>=4 : false; };
+export const doorType = (styleId, facing, open) => {
+  const s = DOOR_STYLES[styleId] || DOOR_STYLES[0];
+  return s.base + (facing&3) + (open?4:0);
+};
+export const doorItemOf = b => doorStyleOf(b)?.item ?? 48;
+
+export const isBed = b => b===58 || b===65;
+// bed foot facing: stored in a weak side-channel via head offset; mesh uses bedFacing map in render
+
 
 // Frequencies are exact multiples of 2π/WORLD so terrain tiles seamlessly at the wrap seam
 const F = n => Math.PI*2*n/WORLD;

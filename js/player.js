@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
-import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType } from './world.js';
+import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat } from './ui.js';
@@ -301,10 +301,11 @@ function yawToFacing(yaw){
 }
 function toggleDoorAt(bx,by,bz){
   const t = getBlock(bx,by,bz);
-  if(!isDoor(t)) return false;
+  const style = doorStyleOf(t);
+  if(!style) return false;
   const facing = doorFacing(t);
   const open = doorOpen(t);
-  const nt = doorType(facing, !open);
+  const nt = doorType(style.id, facing, !open);
   applyEdit(bx, by, bz, nt, false);
   net.sendEdit(bx, by, bz, nt);
   sfx.place();
@@ -330,11 +331,21 @@ export function placeAction(){
       placeAnim = 1;
       return;
     }
-    if(hit===58){ // Bed — set spawn + sleep animation
-      survival.setBedSpawn(hx, hy, hz);
+    if(hit===58 || hit===65){ // Bed foot or head — set spawn + sleep
+      // normalize to foot position
+      let fx=hx, fy=hy, fz=hz;
+      if(hit===65){
+        // find adjacent foot
+        let found=false;
+        for(const [dx,dz] of [[0,1],[1,0],[0,-1],[-1,0]]){
+          if(getBlock(hx-dx,hy,hz-dz)===58){ fx=hx-dx; fz=hz-dz; found=true; break; }
+        }
+        if(!found){ fx=hx; fz=hz; }
+      }
+      survival.setBedSpawn(fx, fy, fz);
       placeAnim = 1;
       sfx.place();
-      startSleep(hx, hy, hz);
+      startSleep(fx, fy, fz);
       return;
     }
     if(hit===62 || hit===63){ // Trapdoor toggle
@@ -358,30 +369,55 @@ export function placeAction(){
   if(!r || !r.place) return;
   let tid = slotBlock();
   if(!tid) return;
-  // only hold "Door" item id 48 in inventory; any 48-55 treated as placeable door
-  if(tid>=48 && tid<=55) tid = 48;
+  // Normalize door state ids back to item ids
+  for(const s of DOOR_STYLES){
+    if(tid>=s.base && tid<s.base+8) tid = s.item;
+  }
   if(!gm.forge && !(inventory[tid]>0)) return;
   const [px,py,pz] = r.place;
   if(py<0||py>=WH) return;
   const d = new THREE.Vector3(px,py,pz).sub(player.pos);
   if(Math.abs(d.x)<.9 && Math.abs(d.z)<.9 && d.y>-.5 && d.y<2) return;
 
-  // Place door: one cell marker, thin mesh spans 2 tall — need air above
-  if(tid===48){
-    if(py+1>=WH || getBlock(px,py+1,pz)) return; // need headroom for the leaf
+  // Place any door style
+  const doorStyle = DOOR_STYLES.find(s => s.item === tid);
+  if(doorStyle){
+    if(py+1>=WH || getBlock(px,py+1,pz)) return;
     if(getBlock(px,py,pz)) return;
     const facing = yawToFacing(view.yaw);
-    const dt = doorType(facing, false); // closed
+    const dt = doorType(doorStyle.id, facing, false);
     applyEdit(px,py,pz,dt,false);
-    if(!gm.forge) inventory[48]--;
+    if(!gm.forge) inventory[tid]--;
     placeAnim = 1;
     sfx.place();
-    survival.note('place', 48);
+    survival.note('place', tid);
     renderHotbar();
     net.sendEdit(px,py,pz,dt);
     return;
   }
 
+  // Place bed: 2 cells long × 1 wide rectangle
+  if(tid===58){
+    if(getBlock(px,py,pz)) return;
+    const facing = yawToFacing(view.yaw);
+    const dirs = [[0,1],[1,0],[0,-1],[-1,0]]; // 0=+Z,1=+X,2=-Z,3=-X
+    const [dx,dz] = dirs[facing];
+    const hx = px+dx, hz = pz+dz;
+    // need head cell free
+    if(getBlock(hx,py,hz)) return;
+    applyEdit(px,py,pz,58,false);
+    applyEdit(hx,py,hz,65,false); // head marker
+    setBedFacing(px,py,pz,facing);
+    if(!gm.forge) inventory[58]--;
+    placeAnim = 1;
+    sfx.place();
+    survival.note('place', 58);
+    renderHotbar();
+    net.sendEdit(px,py,pz,58);
+    net.sendEdit(hx,py,hz,65);
+    // facing sync: piggyback as chat-free path — clients infer from head offset on apply
+    return;
+  }
   applyEdit(px,py,pz,tid,false);
   if(!gm.forge) inventory[tid]--;
   placeAnim = 1;
@@ -416,8 +452,24 @@ function updateMining(dt){
     const old = applyEdit(bx,by,bz,0,true);
     if(old){
       const ORE_YIELD = {45:120, 46:121, 47:122};
-      if(old>=48 && old<=55){
-        addToInventory(48);
+      if(doorStyleOf(old)){
+        addToInventory(doorItemOf(old));
+      } else if(old===58 || old===65){
+        // remove paired bed cell
+        const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+        if(old===58){
+          const f = bedFacing.get(wrapC(bx)+','+by+','+wrapC(bz)) ?? 0;
+          const [dx,dz] = dirs[f];
+          if(getBlock(bx+dx,by,bz+dz)===65) applyEdit(bx+dx,by,bz+dz,0,false);
+        } else {
+          for(const [dx,dz] of dirs){
+            if(getBlock(bx-dx,by,bz-dz)===58){
+              applyEdit(bx-dx,by,bz-dz,0,false);
+              break;
+            }
+          }
+        }
+        addToInventory(58);
       } else if(old===62 || old===63){
         addToInventory(62);
       } else if(old===56){
@@ -432,7 +484,7 @@ function updateMining(dt){
       } else {
         addToInventory(old);
       }
-      sfx.break(old); addShake(.16); survival.note('mine', (old>=48&&old<=55)?48:old);
+      sfx.break(old); addShake(.16); survival.note('mine', doorStyleOf(old)?doorItemOf(old):old);
       const rolls = BLOCK_DROPS[old];
       if(rolls) for(const [item,p] of rolls) if(Math.random()<p) addToInventory(item);
     }
@@ -457,6 +509,9 @@ function startSleep(bx, by, bz){
   state.sleeping = true;
   state.flying = false;
   for(const k in keys) keys[k] = false;
+  const f0 = bedFacing.get(wrapC(bx)+','+by+','+wrapC(bz)) ?? 0;
+  const d0 = [[0,1],[1,0],[0,-1],[-1,0]][f0];
+  view.yaw = Math.atan2(d0[0], d0[1]);
   sleepSeq = {
     phase: 'approach', // approach -> lie -> fadeIn -> rest -> fadeOut -> wake
     t: 0,
@@ -476,7 +531,13 @@ function updateSleep(dt){
   const s = sleepSeq;
   s.t += dt;
   const bed = s.bed;
-  const targetX = bed.x + 0.5, targetY = bed.y + 0.55, targetZ = bed.z + 0.5;
+  // lie in the center of the 2×1 bed
+  const f = bedFacing.get(wrapC(bed.x)+','+bed.y+','+wrapC(bed.z)) ?? 0;
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+  const [dx,dz] = dirs[f];
+  const targetX = bed.x + 0.5 + dx*0.5;
+  const targetY = bed.y + 0.55;
+  const targetZ = bed.z + 0.5 + dz*0.5;
 
   if(s.phase === 'approach'){
     // glide onto the bed

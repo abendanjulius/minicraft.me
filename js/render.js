@@ -1,5 +1,5 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock } from './world.js';
+import { WORLD, WH, CH, CHUNKS, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
 
@@ -455,7 +455,7 @@ export function buildChunk(cx,cz){
   const chunk = chunks[ci], byType = {}, x0 = cx*CH, z0 = cz*CH;
   for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
-    if(!t || t===10 || (t>=48&&t<=55) || t===58) continue; // torches, doors, beds = custom meshes
+    if(!t || t===10 || (t>=48&&t<=55) || t===58 || t===65) continue; // torches, doors, beds = custom meshes
     const x = x0+lx, z = z0+lz;
     if(occludes(x+1,y,z)&&occludes(x-1,y,z)&&occludes(x,y+1,z)&&
        occludes(x,y-1,z)&&occludes(x,y,z+1)&&occludes(x,y,z-1)) continue;
@@ -595,83 +595,173 @@ export function nearestTorchDist(x,z){
 
 // ---- Beds: low custom mesh (not a full cube) ----
 export const bedMeshes = new Map();
-function makeBedMesh(x, y, z){
+// facing: 0=+Z, 1=+X, 2=-Z, 3=-X  — bed is 2 long × 1 wide (rectangle)
+export const bedFacing = new Map(); // "x,y,z" foot key -> facing 0..3
+function makeBedMesh(x, y, z, facing=0){
   const g = new THREE.Group();
-  // four legs
-  for(const [lx,lz] of [[-.38,-.38],[-.38,.38],[.38,-.38],[.38,.38]]){
-    g.add(box(.12,.22,.12, 0x6b4423, lx, -.39, lz));
+  // Local model: length along +Z (foot at z=-0.5, head at z=+0.5), width along X
+  // Legs at four corners of the 2×1 footprint
+  for(const [lx,lz] of [[-.38,-.85],[-.38,.85],[.38,-.85],[.38,.85]]){
+    g.add(box(.12,.2,.12, 0x6b4423, lx, -.4, lz));
   }
-  // wood frame / base
-  g.add(box(.92,.1,.92, 0x8b5a2b, 0, -.22, 0));
-  // mattress / blanket (red with white band)
-  g.add(box(.86,.12,.86, 0xc0392b, 0, -.08, 0));
-  g.add(box(.86,.04,.18, 0xf5f5f5, 0, -.01, -.1)); // white stripe
-  // pillow at head (+Z end)
-  g.add(box(.5,.1,.28, 0xf0ebe3, 0, .02, .28));
-  // subtle headboard
-  g.add(box(.9,.28,.08, 0x6b4423, 0, -.05, .46));
+  // wood frame
+  g.add(box(.9,.1,1.9, 0x8b5a2b, 0, -.25, 0));
+  // mattress / blanket
+  g.add(box(.84,.14,1.82, 0xc0392b, 0, -.1, 0));
+  // white stripe across middle of blanket
+  g.add(box(.84,.05,.22, 0xf5f5f5, 0, -.01, -.15));
+  // pillow at head (+Z)
+  g.add(box(.55,.12,.32, 0xf0ebe3, 0, .02, .72));
+  // headboard
+  g.add(box(.92,.32,.1, 0x6b4423, 0, -.02, .95));
+  // footboard
+  g.add(box(.88,.22,.08, 0x7a4a28, 0, -.08, -.95));
+  // rotate so length points in facing direction; foot sits on the placed cell
+  // model center is between foot and head; offset so foot cell is at origin
+  g.children.forEach(ch=>{ ch.position.z += 0.5; }); // shift model so foot is near local 0
+  g.rotation.y = facing * Math.PI/2;
   g.position.set(x, y, z);
   g.userData.base = [x, y, z];
+  g.userData.facing = facing;
   return g;
 }
-export function trackBed(x,y,z,prev,t){
+export function trackBed(x,y,z,prev,t,facing){
   const k = wrapC(x)+','+y+','+wrapC(z);
-  if(prev===58 && bedMeshes.has(k)){
+  // removing foot clears mesh
+  if((prev===58) && bedMeshes.has(k)){
     scene.remove(bedMeshes.get(k));
     bedMeshes.delete(k);
+    bedFacing.delete(k);
   }
   if(t===58){
     if(bedMeshes.has(k)){ scene.remove(bedMeshes.get(k)); bedMeshes.delete(k); }
-    const m = makeBedMesh(wrapC(x), y, wrapC(z));
+    const f = (facing!=null ? facing : bedFacing.get(k)) ?? 0;
+    bedFacing.set(k, f);
+    const m = makeBedMesh(wrapC(x), y, wrapC(z), f);
+    scene.add(m);
+    bedMeshes.set(k, m);
+  }
+  // Head placed: infer facing from adjacent foot and refresh mesh
+  if(t===65){
+    for(let f=0; f<4; f++){
+      const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+      const [dx,dz] = dirs[f];
+      const fx = wrapC(x-dx), fz = wrapC(z-dz);
+      if(getBlock(fx,y,fz)===58){
+        setBedFacing(fx,y,fz,f);
+        break;
+      }
+    }
+  }
+  // Foot removed already handled; if head removed alone, clear facing leftovers
+  if(prev===65 && t===0){ /* foot mesh remains until foot broken */ }
+}
+export function setBedFacing(x,y,z,facing){
+  const k = wrapC(x)+','+y+','+wrapC(z);
+  bedFacing.set(k, facing&3);
+  // rebuild mesh if present
+  if(bedMeshes.has(k)){
+    scene.remove(bedMeshes.get(k));
+    bedMeshes.delete(k);
+  }
+  if(getBlock(x,y,z)===58){
+    const m = makeBedMesh(wrapC(x), y, wrapC(z), facing&3);
     scene.add(m);
     bedMeshes.set(k, m);
   }
 }
 
 export const doorMeshes = new Map(); // "x,y,z" -> group
-function makeDoorMesh(x, y, z, facing, open){
+function makeDoorMesh(x, y, z, facing, open, styleId=0){
   const g = new THREE.Group();
-  // hinge pivot at edge of cell
   const panel = new THREE.Group();
-  // door leaf: thin, 2 blocks tall
-  const wood = 0x8b6914, dark = 0x5c4010, handle = 0xd4b84a;
-  // Everything is modelled AHEAD of the hinge (local +Z), so the panel group's
-  // origin IS the hinge line — rotating it swings the door like a real one.
-  const leaf = box(.12, 1.95, .9, wood, 0, 0.975, .45);
-  panel.add(leaf);
-  // frame lines (decorative)
-  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .03));
-  panel.add(box(.13, 1.95, .06, dark, 0, 0.975, .87));
-  panel.add(box(.13, .06, .9, dark, 0, 1.92, .45));
-  panel.add(box(.13, .06, .9, dark, 0, .05, .45));
-  // handle sits near the free edge, far from the hinge
-  panel.add(box(.08, .08, .08, handle, .1, 0.95, .74));
-  // hinge line on the -Z edge of the cell
+  // Everything is modelled AHEAD of the hinge (local +Z)
+  const addFrame = (p, col, thick=.13) => {
+    p.add(box(thick, 1.95, .06, col, 0, 0.975, .03));
+    p.add(box(thick, 1.95, .06, col, 0, 0.975, .87));
+    p.add(box(thick, .06, .9, col, 0, 1.92, .45));
+    p.add(box(thick, .06, .9, col, 0, .05, .45));
+    p.add(box(thick, .06, .9, col, 0, 1.0, .45)); // mid rail
+  };
+  const handle = (p, col, hx=.12) => p.add(box(.08,.08,.08, col, hx, 0.95, .74));
+
+  if(styleId === 0){
+    // Oak — four recessed panels
+    const wood=0x9a6b2e, dark=0x5c4010, gold=0xd4b84a;
+    panel.add(box(.1, 1.95, .9, wood, 0, 0.975, .45));
+    addFrame(panel, dark, .12);
+    // 4 panel insets
+    panel.add(box(.06, .7, .32, 0xb8894a, -.02, 1.45, .28));
+    panel.add(box(.06, .7, .32, 0xb8894a, -.02, 1.45, .62));
+    panel.add(box(.06, .7, .32, 0xb8894a, -.02, 0.55, .28));
+    panel.add(box(.06, .7, .32, 0xb8894a, -.02, 0.55, .62));
+    handle(panel, gold);
+  } else if(styleId === 1){
+    // Dark — braced timber with X cross
+    const wood=0x3e2a18, dark=0x1f150c, iron=0x888888;
+    panel.add(box(.12, 1.95, .9, wood, 0, 0.975, .45));
+    addFrame(panel, dark, .14);
+    // diagonal braces (approx with thin boxes)
+    panel.add(box(.08, 1.5, .08, dark, .02, 0.975, .45));
+    panel.add(box(.08, .08, .7, dark, .02, 1.4, .45));
+    panel.add(box(.08, .08, .7, dark, .02, 0.55, .45));
+    // X mark
+    panel.add(box(.05, 1.1, .08, 0x2a1c10, .04, 0.975, .45));
+    handle(panel, iron, .14);
+  } else if(styleId === 2){
+    // Glass — wood frame + transparent panes
+    const frame=0xc4a36a, dark=0x7a6238, gold=0xe8d48a;
+    // outer frame only (no solid leaf)
+    addFrame(panel, frame, .14);
+    panel.add(box(.14, 1.95, .08, frame, 0, 0.975, .03));
+    panel.add(box(.14, 1.95, .08, frame, 0, 0.975, .87));
+    // vertical mullion
+    panel.add(box(.1, 1.85, .06, dark, 0, 0.975, .45));
+    // glass panes (MeshBasicMaterial-ish via box helper color)
+    const glass = 0x9fd0e8;
+    panel.add(box(.04, .8, .32, glass, 0, 1.42, .24));
+    panel.add(box(.04, .8, .32, glass, 0, 1.42, .66));
+    panel.add(box(.04, .8, .32, glass, 0, 0.52, .24));
+    panel.add(box(.04, .8, .32, glass, 0, 0.52, .66));
+    handle(panel, gold);
+  } else {
+    // Iron — heavy plates, rivets, barred window
+    const metal=0x7a8088, dark=0x3a3e44, rust=0x6a5040, gold=0xc0c0c0;
+    panel.add(box(.14, 1.95, .9, metal, 0, 0.975, .45));
+    addFrame(panel, dark, .15);
+    // upper window with bars
+    panel.add(box(.04, .45, .4, 0x1a1a20, 0, 1.45, .45)); // dark recess
+    panel.add(box(.06, .45, .04, dark, .02, 1.45, .30));
+    panel.add(box(.06, .45, .04, dark, .02, 1.45, .45));
+    panel.add(box(.06, .45, .04, dark, .02, 1.45, .60));
+    // rivets
+    for(const ry of [0.25, 0.975, 1.7]) for(const rz of [0.15, 0.75]){
+      panel.add(box(.05,.05,.05, gold, .1, ry, rz));
+    }
+    handle(panel, 0x222222, .16);
+  }
+
   panel.position.set(0, 0, -0.45);
   g.add(panel);
   g.position.set(x, y - 0.5, z);
-  // base rotation by facing: 0=+Z wall, 1=+X, 2=-Z, 3=-X
-  const base = facing * Math.PI/2;
-  g.rotation.y = base;
-  // open swings ~95°
-  panel.rotation.y = open ? -Math.PI/2 : 0;   // swings a clean 90° on the hinge
-  g.userData = {panel, facing, open, base:[x, y - 0.5, z]};
+  g.rotation.y = facing * Math.PI/2;
+  panel.rotation.y = open ? -Math.PI/2 : 0;
+  g.userData = {panel, facing, open, styleId, base:[x, y - 0.5, z]};
   return g;
 }
 export function trackDoor(x,y,z,prev,t){
   const k = wrapC(x)+','+y+','+wrapC(z);
-  const wasDoor = prev>=48 && prev<=55;
-  const isDoor = t>=48 && t<=55;
+  const wasDoor = !!doorStyleOf(prev);
+  const style = doorStyleOf(t);
   if(wasDoor && doorMeshes.has(k)){
     scene.remove(doorMeshes.get(k));
     doorMeshes.delete(k);
   }
-  if(isDoor){
-    const facing = (t-48)%4;
-    const open = t>=52;
-    // remove any stale
+  if(style){
+    const facing = (t - style.base) % 4;
+    const open = (t - style.base) >= 4;
     if(doorMeshes.has(k)){ scene.remove(doorMeshes.get(k)); doorMeshes.delete(k); }
-    const m = makeDoorMesh(wrapC(x), y, wrapC(z), facing, open);
+    const m = makeDoorMesh(wrapC(x), y, wrapC(z), facing, open, style.id);
     scene.add(m);
     doorMeshes.set(k, m);
   }
