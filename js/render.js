@@ -604,27 +604,29 @@ export function buildChunk(cx,cz){
     if(faces.length){
       if(!waterFaceMat){
         waterFaceMat = new THREE.MeshBasicMaterial({
-          color: 0x0a3d7a,
-          transparent: false,
+          color: 0x2b7bc4, // medium water blue
+          transparent: true,
+          opacity: 0.72,
           depthWrite: true,
           side: THREE.FrontSide,
         });
       } else {
-        waterFaceMat.color.setHex(0x0a3d7a);
-        waterFaceMat.transparent = false;
-        waterFaceMat.opacity = 1;
+        waterFaceMat.color.setHex(0x2b7bc4);
+        waterFaceMat.transparent = true;
+        waterFaceMat.opacity = 0.72;
       }
       if(!waterSideMat){
         waterSideMat = new THREE.MeshBasicMaterial({
-          color: 0x062f5c,
-          transparent: false,
-          depthWrite: true,
+          color: 0x1e5f9a,
+          transparent: true,
+          opacity: 0.65,
+          depthWrite: false,
           side: THREE.FrontSide,
         });
       } else {
-        waterSideMat.color.setHex(0x062f5c);
-        waterSideMat.transparent = false;
-        waterSideMat.opacity = 1;
+        waterSideMat.color.setHex(0x1e5f9a);
+        waterSideMat.transparent = true;
+        waterSideMat.opacity = 0.65;
       }
       const tops = faces.filter(f => f[4] === 1);
       const sides = faces.filter(f => f[4] !== 1);
