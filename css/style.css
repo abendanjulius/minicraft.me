@@ -654,21 +654,6 @@ body.inv-open #inv{
   body.inv-open .dCraft{ background: #5cab3c !important; border-color: #3d6b24 !important; }
   body.inv-open .dAssign{ background: #5a7a9a !important; border-color: #3a5a7a !important; }
 
-  /* Character panel */
-  .charPane{ display:flex; flex-direction:column; align-items:center; gap:8px; }
-  .charArmorCol{ display:flex; flex-direction:column; gap:4px; }
-  .charBody{
-    width: 72px; height: 120px; background: #1a1a1a; border: 2px solid #373737;
-    border-radius: 2px; position: relative; image-rendering: pixelated;
-    background-image: linear-gradient(#2a2a2a 0 20%, #3d6e3a 20% 55%, #5a4030 55% 78%, #2a2a2a 78% 100%);
-  }
-  .charRow{ display:flex; gap:8px; align-items:center; justify-content:center; }
-  .armorSlot{
-    width: 40px; height: 40px; background: #8b8b8b; border: 2px solid #373737;
-    border-radius: 2px; display:flex; align-items:center; justify-content:center;
-    font-size: 18px; color: #555;
-  }
-  .armorSlot.filled{ color: #111; background: #9a9a9a; }
 }
 
 /* Narrow portrait phones: stack side under main, still almost full screen */
@@ -716,3 +701,83 @@ body.underwater #vignette{
   opacity: 1 !important;
   pointer-events: none;
 }
+
+
+/* ===== Character / Armor pane (Minecraft-style) ===== */
+.charPane{ display:flex; flex-direction:column; gap:10px; height:100%; }
+.charStage{
+  display:flex; flex-direction:row; align-items:stretch; gap:8px;
+  flex:1; min-height:180px;
+}
+.charArmorCol{
+  display:flex; flex-direction:column; gap:4px; flex:0 0 auto; justify-content:center;
+}
+.armorSlot{
+  width:40px; height:40px; padding:0; margin:0;
+  background:#8b8b8b; border:2px solid #373737; border-radius:2px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; position:relative;
+  box-shadow: inset 1px 1px 0 #fff4, inset -1px -1px 0 #0004;
+}
+.armorSlot.filled{ background:#9a9a9a; }
+.armorSlot .sw{ width:24px; height:24px; image-rendering:pixelated; background-size:cover; }
+.armorSlot .ticon{ font-size:18px; }
+.armorSlot .sCnt{
+  position:absolute; bottom:0; right:2px; font-size:9px; font-weight:bold;
+  text-shadow:1px 1px 0 #000; color:#fff;
+}
+.armorGlyph{
+  display:block; width:22px; height:22px;
+  background: center / contain no-repeat;
+  opacity:.55;
+}
+.armorGlyph.helmet{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23333' d='M3 7h10v2H3zM4 4h8v3H4zM5 3h6v1H5z'/%3E%3C/svg%3E");
+}
+.armorGlyph.chest{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23333' d='M3 3h3v2H3zm7 0h3v2h-3zM4 5h8v9H4z'/%3E%3C/svg%3E");
+}
+.armorGlyph.legs{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23333' d='M4 2h8v4H4zm0 4h3v8H4zm5 0h3v8H9z'/%3E%3C/svg%3E");
+}
+.armorGlyph.boots{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23333' d='M3 6h4v7H3zm6 0h4v7H9zM2 12h5v2H2zm7 0h5v2H9z'/%3E%3C/svg%3E");
+}
+.armorGlyph.shield{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23333' d='M8 1L2 4v4c0 4 3 6 6 7 3-1 6-3 6-7V4L8 1z'/%3E%3C/svg%3E");
+}
+.charPreview{
+  flex:1; min-width:0; background:#000; border:2px solid #373737;
+  border-radius:2px; display:flex; align-items:center; justify-content:center;
+  position:relative;
+}
+.charFigure{
+  position:relative; width:56px; height:120px;
+}
+.cf-head{
+  position:absolute; left:14px; top:4px; width:28px; height:28px;
+  background:#c48a5a; border:1px solid #0003;
+  box-shadow: inset -3px 0 0 #0001;
+}
+.cf-head::after{ /* hair */
+  content:''; position:absolute; left:0; top:0; right:0; height:10px; background:#6b3a1e;
+}
+.cf-body{
+  position:absolute; left:12px; top:34px; width:32px; height:40px;
+  background:#3d6e3a; border:1px solid #0003;
+}
+.cf-arm{
+  position:absolute; top:34px; width:12px; height:36px; background:#c48a5a; border:1px solid #0002;
+}
+.cf-arm-l{ left:0; }
+.cf-arm-r{ right:0; }
+.cf-leg{
+  position:absolute; top:74px; width:14px; height:40px; background:#4a3420; border:1px solid #0002;
+}
+.cf-leg-l{ left:12px; }
+.cf-leg-r{ right:12px; }
+.charHint{ text-align:center; font-size:11px; margin:0; opacity:.8; }
+
+/* Desktop also uses light-ish side when character open — keep readable on dark side */
+#invSide .charPane .dHint{ color:inherit; }
+body.inv-char #invSide::before{ content:'Armor'; }

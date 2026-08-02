@@ -135,6 +135,9 @@ const CATS = [
   {id:'guide',  icon:'📖', label:'Guide'},
 ];
 let invCat = 'inv', invPick = null;
+// head, chest, legs, feet, offhand (shield)
+export const armorSlots = { head:null, chest:null, legs:null, feet:null, off:null };
+
 
 function catOf(id){
   if(id < 100){
@@ -197,21 +200,36 @@ function renderRail(){
 }
 
 function renderCharPane(){
+  // Minecraft-style: 5 slots (helmet, chest, legs, boots, shield) + character preview
   const slotMeta = [
-    { icon:'🧢', label:'Head' },
-    { icon:'🦺', label:'Chest' },
-    { icon:'👖', label:'Legs' },
-    { icon:'👢', label:'Feet' },
+    { key:'head',  glyph:'helmet', label:'Helmet' },
+    { key:'chest', glyph:'chest',  label:'Chestplate' },
+    { key:'legs',  glyph:'legs',   label:'Leggings' },
+    { key:'feet',  glyph:'boots',  label:'Boots' },
+    { key:'off',   glyph:'shield', label:'Off-hand' },
   ];
-  const slots = slotMeta.map(s =>
-    `<div class="armorSlot" title="${s.label}">${s.icon}</div>`
-  ).join('');
+  const slots = slotMeta.map(s => {
+    const eq = armorSlots[s.key];
+    const inner = eq
+      ? (iconOf(eq) + (inventory[eq] ? `<span class="sCnt">${inventory[eq]}</span>` : ''))
+      : `<span class="armorGlyph ${s.glyph}"></span>`;
+    return `<button type="button" class="armorSlot${eq?' filled':''}" data-armor="${s.key}" title="${s.label}">${inner}</button>`;
+  }).join('');
   return `<div class="charPane">
-    <div class="charRow">
+    <div class="charStage">
       <div class="charArmorCol">${slots}</div>
-      <div class="charBody" title="You"></div>
+      <div class="charPreview">
+        <div class="charFigure">
+          <div class="cf-head"></div>
+          <div class="cf-body"></div>
+          <div class="cf-arm cf-arm-l"></div>
+          <div class="cf-arm cf-arm-r"></div>
+          <div class="cf-leg cf-leg-l"></div>
+          <div class="cf-leg cf-leg-r"></div>
+        </div>
+      </div>
     </div>
-    <div class="dFact" style="text-align:center;margin-top:8px">Tap items on the left to hold them.<br>Open Equipment for weapons & armor.</div>
+    <p class="dHint charHint">Select an armor piece, then tap a slot to equip. Tap a filled slot to unequip.</p>
   </div>`;
 }
 
@@ -361,6 +379,27 @@ export function renderInv(){
         : '<span class="empty-note">Nothing here yet.</span>';
   }
   renderDetail();
+  // Armor slot clicks (character pane)
+  const detail = $('invDetail');
+  if(detail){
+    detail.querySelectorAll('[data-armor]').forEach(btn=>{
+      btn.addEventListener('pointerdown', e=>{
+        e.stopPropagation();
+        const key = btn.dataset.armor;
+        if(armorSlots[key]){
+          // unequip back to inventory count already there
+          armorSlots[key] = null;
+        } else if(invPick != null){
+          const it = ITEMS[invPick];
+          // accept armor-tagged items, or any gear when on gear tab
+          if(it?.armor || invCat==='gear' || (it && (it.icon||'').length)){
+            armorSlots[key] = invPick;
+          }
+        }
+        renderInv();
+      });
+    });
+  }
 }
 
 export function setInvCat(cat){ invCat = cat; renderInv(); }
