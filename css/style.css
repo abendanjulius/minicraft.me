@@ -781,3 +781,38 @@ body.underwater #vignette{
 /* Desktop also uses light-ish side when character open — keep readable on dark side */
 #invSide .charPane .dHint{ color:inherit; }
 body.inv-char #invSide::before{ content:'Armor'; }
+
+/* v1.12.4 — force visible character armor panel */
+body.inv-char #invSide{
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 200px !important;
+}
+body.inv-char #invDetail{
+  flex: 1 1 auto !important;
+  min-height: 200px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+body.inv-char .charPane{
+  flex: 1 1 auto !important;
+  min-height: 220px !important;
+  width: 100% !important;
+}
+body.inv-char .charStage{
+  flex: 1 1 auto !important;
+  min-height: 200px !important;
+  width: 100% !important;
+}
+body.inv-char .charPreview{
+  min-height: 180px !important;
+  background: #000 !important;
+}
+body.inv-char #invSide::before{
+  content: "Armor" !important;
+  color: #ffd97a !important;
+}
+/* Mobile light theme title */
+@media (max-width: 900px){
+  body.inv-char #invSide::before{ color: #202020 !important; }
+}

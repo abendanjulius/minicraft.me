@@ -235,11 +235,12 @@ function renderCharPane(){
 
 function renderDetail(){
   const box = $('invDetail');
+  // Character tab ALWAYS shows the armor + figure panel (Minecraft-style)
+  if(invCat==='inv' || invCat==='gear'){
+    box.innerHTML = renderCharPane();
+    return;
+  }
   if(invPick == null || !(TYPES[invPick] || ITEMS[invPick])){
-    if(invCat==='inv' || invCat==='gear'){
-      box.innerHTML = renderCharPane();
-      return;
-    }
     if(invCat==='can'){
       box.innerHTML = `<div class="dSlots"><div class="dSlot"></div><div class="dSlot"></div>
           <div class="dSlot"></div><div class="dSlot"></div></div>
