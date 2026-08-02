@@ -816,3 +816,150 @@ body.inv-char #invSide::before{
 @media (max-width: 900px){
   body.inv-char #invSide::before{ color: #202020 !important; }
 }
+
+
+/* ===== v1.12.5 Minecraft Armor pane (right column) ===== */
+body.inv-char #invSide::before{
+  content: "Armor" !important;
+  display: block !important;
+  text-align: center !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+  margin: 0 0 10px !important;
+  color: #3a3a3a !important;
+}
+body.inv-char #invSide{
+  display: flex !important;
+  flex-direction: column !important;
+  background: #c6c6c6 !important;
+  border: 2px solid #373737 !important;
+  color: #202020 !important;
+  padding: 10px !important;
+  min-width: 240px !important;
+  flex: 0 0 300px !important;
+}
+body.inv-char #invDetail{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.mcArmorBox{
+  flex: 1 1 auto !important;
+  min-height: 240px !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.mcArmorInner{
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  min-height: 220px !important;
+}
+.mcArmorSlots{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  flex: 0 0 42px !important;
+  justify-content: center !important;
+}
+.armorSlot{
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #8b8b8b !important;
+  border: 2px solid #373737 !important;
+  border-radius: 1px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  position: relative !important;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.25), inset -1px -1px 0 rgba(0,0,0,.25) !important;
+}
+.armorSlot.filled{ background: #9a9a9a !important; }
+.armorSil{ width: 22px !important; height: 22px !important; opacity: 0.9 !important; }
+.armorSlot .sw{ width: 24px !important; height: 24px !important; image-rendering: pixelated !important; }
+.armorSlot .ticon{ font-size: 18px !important; }
+
+.mcArmorView{
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 200px !important;
+  background: #000 !important;
+  border: 2px solid #373737 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+.mcSkin{
+  position: relative !important;
+  width: 64px !important;
+  height: 140px !important;
+}
+.mcHair{
+  position: absolute !important; left: 16px !important; top: 2px !important;
+  width: 32px !important; height: 12px !important; background: #6b3a1e !important;
+  z-index: 2 !important;
+}
+.mcHead{
+  position: absolute !important; left: 16px !important; top: 8px !important;
+  width: 32px !important; height: 32px !important; background: #c48a5a !important;
+  z-index: 1 !important;
+}
+.mcEye{
+  position: absolute !important; top: 14px !important;
+  width: 6px !important; height: 4px !important; background: #fff !important;
+}
+.mcEye::after{
+  content: "" !important; position: absolute !important; left: 2px !important; top: 0 !important;
+  width: 3px !important; height: 4px !important; background: #2a6 !important;
+}
+.mcEyeL{ left: 6px !important; }
+.mcEyeR{ right: 6px !important; }
+.mcMouth{
+  position: absolute !important; left: 12px !important; bottom: 6px !important;
+  width: 8px !important; height: 3px !important; background: #a06050 !important;
+}
+.mcTorso{
+  position: absolute !important; left: 16px !important; top: 40px !important;
+  width: 32px !important; height: 44px !important; background: #3d7a4a !important;
+}
+.mcArmL, .mcArmR{
+  position: absolute !important; top: 40px !important;
+  width: 12px !important; height: 40px !important; background: #c48a5a !important;
+}
+.mcArmL{ left: 4px !important; }
+.mcArmR{ right: 4px !important; }
+.mcLegL, .mcLegR{
+  position: absolute !important; top: 84px !important;
+  width: 14px !important; height: 44px !important; background: #4a3420 !important;
+}
+.mcLegL{ left: 16px !important; }
+.mcLegR{ left: 34px !important; }
+
+/* Mobile keeps same structure */
+@media (max-width: 900px){
+  body.inv-char #invSide{
+    flex: unset !important;
+    min-width: 0 !important;
+  }
+  .mcSkin{ width: 56px !important; height: 120px !important; }
+  .mcHair{ left: 12px !important; width: 28px !important; }
+  .mcHead{ left: 12px !important; width: 28px !important; height: 28px !important; }
+  .mcTorso{ left: 12px !important; width: 28px !important; top: 36px !important; height: 38px !important; }
+  .mcArmL, .mcArmR{ top: 36px !important; height: 34px !important; }
+  .mcArmL{ left: 0 !important; }
+  .mcArmR{ right: 0 !important; }
+  .mcLegL, .mcLegR{ top: 74px !important; height: 38px !important; }
+  .mcLegL{ left: 12px !important; }
+  .mcLegR{ left: 28px !important; }
+}

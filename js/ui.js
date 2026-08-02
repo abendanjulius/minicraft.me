@@ -200,36 +200,45 @@ function renderRail(){
 }
 
 function renderCharPane(){
-  // Minecraft-style: 5 slots (helmet, chest, legs, boots, shield) + character preview
+  // Exact Minecraft Pocket-style Armor pane
   const slotMeta = [
-    { key:'head',  glyph:'helmet', label:'Helmet' },
-    { key:'chest', glyph:'chest',  label:'Chestplate' },
-    { key:'legs',  glyph:'legs',   label:'Leggings' },
-    { key:'feet',  glyph:'boots',  label:'Boots' },
-    { key:'off',   glyph:'shield', label:'Off-hand' },
+    { key:'head',  label:'Helmet',     svg:'M4 6h8v2H4zm1-3h6v3H5z' },
+    { key:'chest', label:'Chestplate', svg:'M3 3h3v2H3zm7 0h3v2h-3zM4 5h8v9H4z' },
+    { key:'legs',  label:'Leggings',   svg:'M4 2h8v3H4zm0 3h3v9H4zm5 0h3v9H9z' },
+    { key:'feet',  label:'Boots',      svg:'M3 5h4v8H3zm6 0h4v8H9zM2 11h5v3H2zm7 0h5v3H9z' },
+    { key:'off',   label:'Shield',     svg:'M8 1L2 4v4c0 4 3 6 6 7 3-1 6-3 6-7V4L8 1z' },
   ];
   const slots = slotMeta.map(s => {
     const eq = armorSlots[s.key];
-    const inner = eq
-      ? (iconOf(eq) + (inventory[eq] ? `<span class="sCnt">${inventory[eq]}</span>` : ''))
-      : `<span class="armorGlyph ${s.glyph}"></span>`;
+    let inner;
+    if(eq){
+      inner = iconOf(eq);
+    } else {
+      inner = `<svg class="armorSil" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill="#3a3a3a" d="${s.svg}"/></svg>`;
+    }
     return `<button type="button" class="armorSlot${eq?' filled':''}" data-armor="${s.key}" title="${s.label}">${inner}</button>`;
   }).join('');
-  return `<div class="charPane">
-    <div class="charStage">
-      <div class="charArmorCol">${slots}</div>
-      <div class="charPreview">
-        <div class="charFigure">
-          <div class="cf-head"></div>
-          <div class="cf-body"></div>
-          <div class="cf-arm cf-arm-l"></div>
-          <div class="cf-arm cf-arm-r"></div>
-          <div class="cf-leg cf-leg-l"></div>
-          <div class="cf-leg cf-leg-r"></div>
+
+  // Pixel-ish figure using nested divs (always visible)
+  return `<div class="mcArmorBox">
+    <div class="mcArmorInner">
+      <div class="mcArmorSlots">${slots}</div>
+      <div class="mcArmorView">
+        <div class="mcSkin">
+          <div class="mcHair"></div>
+          <div class="mcHead">
+            <div class="mcEye mcEyeL"></div>
+            <div class="mcEye mcEyeR"></div>
+            <div class="mcMouth"></div>
+          </div>
+          <div class="mcTorso"></div>
+          <div class="mcArmL"></div>
+          <div class="mcArmR"></div>
+          <div class="mcLegL"></div>
+          <div class="mcLegR"></div>
         </div>
       </div>
     </div>
-    <p class="dHint charHint">Select an armor piece, then tap a slot to equip. Tap a filled slot to unequip.</p>
   </div>`;
 }
 
