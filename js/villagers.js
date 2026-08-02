@@ -11,9 +11,10 @@ const FOLK = {
   market: {
     title: 'Coin Market',
     roles: [
-      { name: 'Ledger',  shirt:0xc9a227, pants:0x3a2a10, accent:0xffe08a, job:'tallies trades', anchor:[0, 0.5] },
-      { name: 'Barter',  shirt:0xe8c547, pants:0x5c4010, accent:0xfff3c4, job:'haggles cheerfully', anchor:[-2.2, -2.2] },
-      { name: 'Scale',   shirt:0xb8860b, pants:0x2a2010, accent:0xd4af37, job:'weighs goods', anchor:[2.2, -2.2] },
+      { name: 'Ledger',  shirt:0xc9a227, pants:0x3a2a10, accent:0xffe08a, job:'tallies trades', anchor:[0, 0] },
+      { name: 'Barter',  shirt:0xe8c547, pants:0x5c4010, accent:0xfff3c4, job:'haggles cheerfully', anchor:[-4, -4] },
+      { name: 'Scale',   shirt:0xb8860b, pants:0x2a2010, accent:0xd4af37, job:'weighs goods', anchor:[4, -4] },
+      { name: 'Tiller',  shirt:0xa08040, pants:0x4a3a20, accent:0xc4a060, job:'tends the plots', anchor:[-3, 5] },
     ],
     lines: [
       'Coins flip luck — but fiber and flint flip dinner.',
@@ -50,9 +51,10 @@ const FOLK = {
   haven: {
     title: 'Log Haven',
     roles: [
-      { name: 'Moss',   shirt:0x4a7c3f, pants:0x2d4a24, accent:0x8fbc8f, job:'tends the firepit', anchor:[0, 1.5] },
-      { name: 'Canopy', shirt:0x5d8a3e, pants:0x3e5c2a, accent:0xc5e1a5, job:'listens to the trees', anchor:[-2, -1] },
-      { name: 'Kindling',shirt:0x6b8e23, pants:0x3a4a18, accent:0xd4e157, job:'keeps embers alive', anchor:[2, -1] },
+      { name: 'Moss',   shirt:0x4a7c3f, pants:0x2d4a24, accent:0x8fbc8f, job:'tends the firepit', anchor:[0, 0] },
+      { name: 'Canopy', shirt:0x5d8a3e, pants:0x3e5c2a, accent:0xc5e1a5, job:'listens to the trees', anchor:[-4, -4] },
+      { name: 'Kindling',shirt:0x6b8e23, pants:0x3a4a18, accent:0xd4e157, job:'keeps embers alive', anchor:[4, -4] },
+      { name: 'Bark',   shirt:0x6b5a3e, pants:0x3a3020, accent:0xa08050, job:'mends the cabins', anchor:[0, 4] },
     ],
     lines: [
       'The Grove Kin do not deal in coins — only warmth.',

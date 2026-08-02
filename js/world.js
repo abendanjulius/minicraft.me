@@ -183,60 +183,94 @@ function fillChunk(cx, cz, chunk){
 
   // Trees — varied shapes (oak blob / tall / wide), ~0.7–1.2 per chunk
   const trng = mulberry32((seed ^ 0xc2a5) + cx * 19349663 + cz * 83492791);
-  // Sample biome at chunk center for density
   const bioC = biomeAt(x0 + 8, z0 + 8);
-  let treeChance = 0.5, treeMax = 2;
-  if(bioC === 1){ treeChance = 0.85; treeMax = 4; }      // forest dense
-  else if(bioC === 0){ treeChance = 0.4; treeMax = 2; }  // plains
-  else if(bioC === 3){ treeChance = 0.25; treeMax = 1; } // sparse peaks
-  else if(bioC === 4){ treeChance = 0.35; treeMax = 2; } // swamp cypress-ish
-  else if(bioC === 2){ treeChance = 0.02; treeMax = 1; } // almost no desert trees
-  // Keep trunks away from chunk edges so canopies don't get clipped into floating blobs
+  let treeChance = 0.45, treeMax = 2;
+  if(bioC === 1){ treeChance = 0.9; treeMax = 5; }       // forest dense
+  else if(bioC === 0){ treeChance = 0.35; treeMax = 2; } // plains
+  else if(bioC === 3){ treeChance = 0.2; treeMax = 1; }  // peaks
+  else if(bioC === 4){ treeChance = 0.3; treeMax = 2; }  // swamp
+  else if(bioC === 2){ treeChance = 0.015; treeMax = 1; } // desert
   const treeCount = trng() < treeChance ? 1 + Math.floor(trng() * treeMax) : 0;
   for(let t = 0; t < treeCount; t++){
     const lx = 4 + Math.floor(trng() * (CH - 8));
     const lz = 4 + Math.floor(trng() * (CH - 8));
     let h = 0;
     for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
-    if(chunk[bIndex(lx, h, lz)] !== 1) continue; // only on grass
-    // Don't plant on a steep lone block (avoids odd floating looks on cliffs)
-    if(h + 5 >= WH) continue;
-    const style = bioC === 3 || bioC === 4 ? 1 : Math.floor(trng() * 3);
-    const th = style === 1 ? (5 + Math.floor(trng() * 3)) : (4 + Math.floor(trng() * 2));
-    for(let dy = 1; dy <= th; dy++) chunk[bIndex(lx, h + dy, lz)] = 4;
+    if(chunk[bIndex(lx, h, lz)] !== 1) continue;
+    if(h + 8 >= WH) continue;
+    // 0 oak, 1 pine/tall, 2 round canopy, 3 branched oak
+    let style = Math.floor(trng() * 4);
+    if(bioC === 3 || bioC === 4) style = 1;
+    if(bioC === 0 && trng() < 0.35) style = 0;
+
     const putLeaf = (nx, ny, nz) => {
       if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
       if(!chunk[bIndex(nx, ny, nz)]) chunk[bIndex(nx, ny, nz)] = 5;
     };
-    if(style === 0){
-      // Compact oak — layers hug the trunk (no lone top floaters)
-      for(let dy = th - 1; dy <= th + 1; dy++)
-        for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
-          if(Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
-          if(dy === th + 1 && Math.max(Math.abs(dx), Math.abs(dz)) > 1) continue;
-          putLeaf(lx + dx, h + dy, lz + dz);
-        }
-    } else if(style === 1){
-      // Pine: stacked cones, always touching previous layer
-      for(let layer = 0; layer < 4; layer++){
-        const rad = Math.max(0, 2 - layer);
-        const ny = h + th - 1 + layer;
+    const putLog = (nx, ny, nz) => {
+      if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
+      chunk[bIndex(nx, ny, nz)] = 4;
+    };
+
+    if(style === 1){
+      // Tall pine / cypress — narrow trunk, cone canopy
+      const th = 6 + Math.floor(trng() * 4);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
+      for(let layer = 0; layer < 5; layer++){
+        const rad = Math.max(0, 3 - Math.floor(layer * 0.7));
+        const ny = h + th - 3 + layer;
         if(ny >= WH) break;
         for(let dx = -rad; dx <= rad; dx++) for(let dz = -rad; dz <= rad; dz++){
-          if(rad > 0 && Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
+          if(rad >= 2 && Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
+          if(rad >= 1 && Math.abs(dx) + Math.abs(dz) > rad + 1) continue;
           putLeaf(lx + dx, ny, lz + dz);
         }
       }
-    } else {
-      // Bushy but connected (manhattan distance, tight top)
-      for(let dy = th - 1; dy <= th + 1; dy++)
+      putLeaf(lx, h + th + 1, lz); // tip
+    } else if(style === 2){
+      // Round canopy oak — fuller sphere of leaves
+      const th = 4 + Math.floor(trng() * 2);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
+      const cy = h + th;
+      for(let dy = -2; dy <= 2; dy++)
+        for(let dx = -3; dx <= 3; dx++) for(let dz = -3; dz <= 3; dz++){
+          const d = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
+          if(d > 4) continue;
+          if(Math.abs(dx) === 3 && Math.abs(dz) === 3) continue;
+          putLeaf(lx + dx, cy + dy, lz + dz);
+        }
+    } else if(style === 3){
+      // Branched oak — trunk + side branch + wide canopy
+      const th = 5 + Math.floor(trng() * 2);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
+      // one side branch
+      const bx = trng() < 0.5 ? 1 : -1;
+      const bz = trng() < 0.5 ? 0 : (trng() < 0.5 ? 1 : -1);
+      const by = h + Math.floor(th * 0.6);
+      putLog(lx + bx, by, lz + bz);
+      putLog(lx + bx * 2, by, lz + bz * (bz ? 2 : 0));
+      for(let dy = th - 2; dy <= th + 1; dy++)
         for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
-          if(Math.abs(dx) + Math.abs(dz) > 3) continue;
-          if(dy === th + 1 && Math.abs(dx) + Math.abs(dz) > 1) continue;
+          if(Math.abs(dx) === 2 && Math.abs(dz) === 2 && dy !== th) continue;
           putLeaf(lx + dx, h + dy, lz + dz);
         }
+      // leaves on branch tip
+      putLeaf(lx + bx * 2, by + 1, lz + bz * (bz ? 2 : 0));
+      putLeaf(lx + bx * 2 + bx, by, lz + bz * (bz ? 2 : 0));
+    } else {
+      // Classic oak — layered canopy hugging trunk
+      const th = 4 + Math.floor(trng() * 3);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
+      for(let dy = th - 2; dy <= th + 1; dy++){
+        const rad = dy >= th ? 1 : 2;
+        for(let dx = -rad; dx <= rad; dx++) for(let dz = -rad; dz <= rad; dz++){
+          if(Math.abs(dx) === rad && Math.abs(dz) === rad && rad > 1) continue;
+          putLeaf(lx + dx, h + dy, lz + dz);
+        }
+      }
     }
   }
+
   // Prune any leaf with no log nearby (kills true floaters from edge cases)
   for(let lx = 0; lx < CH; lx++) for(let lz = 0; lz < CH; lz++) for(let y = 1; y < WH; y++){
     if(chunk[bIndex(lx, y, lz)] !== 5) continue;
@@ -301,7 +335,14 @@ function fillChunk(cx, cz, chunk){
     const vrng = mulberry32((seed ^ 0x71a9e) + cx * 374761 + cz * 668265);
     const bio = biomeAt(x0 + 8, z0 + 8);
     // Mountains: no full villages (too steep). Others: rare.
-    const chance = bio === 3 ? 0 : bio === 1 ? 0.055 : bio === 2 ? 0.06 : bio === 4 ? 0.05 : 0.07;
+    // ~1 village per large region (Minecraft-like rarity)
+    // Only eligible on a coarse grid cell, then a second roll
+    const cellX = Math.floor(cx / 14), cellZ = Math.floor(cz / 14);
+    const cellRng = mulberry32((seed ^ 0x51a1e) + cellX * 374761 + cellZ * 668265);
+    const pickX = Math.floor(cellRng() * 14);
+    const pickZ = Math.floor(cellRng() * 14);
+    const isVillageChunk = (cx % 14 === pickX) && (cz % 14 === pickZ);
+    const chance = !isVillageChunk || bio === 3 ? 0 : 0.85;
     if(vrng() < chance){
       const put = (lx, y, lz, t) => {
         if(lx < 1 || lx >= CH-1 || lz < 1 || lz >= CH-1 || y < 0 || y >= WH) return;
@@ -312,7 +353,7 @@ function fillChunk(cx, cz, chunk){
         return 20;
       };
       // Flatten a small pad for the village
-      const ox = 4, oz = 4, pad = 8; // 8×8 footprint starting at (4,4)
+      const ox = 1, oz = 1, pad = 14; // near full-chunk village footprint
       let sum = 0, cnt = 0;
       for(let lx = ox; lx < ox + pad; lx++) for(let lz = oz; lz < oz + pad; lz++){
         sum += surfaceY(lx, lz); cnt++;
@@ -353,75 +394,84 @@ function fillChunk(cx, cz, chunk){
       let vKind = 'market';
       if(bio === 0){
         vKind = 'market';
-        // PLAINS — Coin Market: crossroads, well, 5 stalls, entrance, sign post
-        // Cross paths through center
+        // PLAINS — Coin Market: roads, well, 4 houses, stalls, farm plots
+        // Cross roads
         for(let i = 0; i < pad; i++){
-          put(ox + i, base, oz + 3, 21);
-          put(ox + i, base, oz + 4, 21);
-          put(ox + 3, base, oz + i, 21);
-          put(ox + 4, base, oz + i, 21);
+          put(ox + i, base, oz + 6, 21);
+          put(ox + i, base, oz + 7, 21);
+          put(ox + 6, base, oz + i, 21);
+          put(ox + 7, base, oz + i, 21);
         }
-        // Central well (stone ring)
-        put(ox+3, base, oz+3, 13); put(ox+4, base, oz+3, 13);
-        put(ox+3, base, oz+4, 13); put(ox+4, base, oz+4, 13);
-        put(ox+3, base+1, oz+3, 13); put(ox+4, base+1, oz+4, 13);
-        // Five stalls: corners + one north mid
-        const stalls = [[ox,oz],[ox+5,oz],[ox,oz+5],[ox+5,oz+5],[ox+2,oz]];
-        for(const [sx,sz] of stalls){
-          for(let i=0;i<3;i++) for(let j=0;j<2;j++){
-            put(sx+i, base+1, sz+j, 7);
-            put(sx+i, base+2, sz+j, 28 + (vrng()*4|0));
-          }
-          put(sx+1, base+3, sz, 10);
+        // Central well
+        put(ox+6, base, oz+6, 13); put(ox+7, base, oz+6, 13);
+        put(ox+6, base, oz+7, 13); put(ox+7, base, oz+7, 13);
+        put(ox+6, base+1, oz+6, 13);
+        // Four houses at corners of the cross
+        house(ox+1, oz+1, 4, 4, 7, 7, 8, 2);   // NW, door south
+        house(ox+9, oz+1, 4, 4, 7, 7, 8, 2);   // NE
+        house(ox+1, oz+9, 4, 4, 7, 7, 8, 0);   // SW, door north
+        house(ox+9, oz+9, 4, 4, 7, 7, 8, 0);   // SE
+        // Market stalls along road
+        for(const [sx,sz] of [[ox+4,oz+4],[ox+8,oz+4],[ox+4,oz+9],[ox+8,oz+9]]){
+          put(sx, base+1, sz, 7); put(sx+1, base+1, sz, 7);
+          put(sx, base+2, sz, 28); put(sx+1, base+2, sz, 29);
+          put(sx, base+3, sz, 10);
         }
-        // Entrance arch south
-        put(ox+2, base+1, oz+7, 7); put(ox+5, base+1, oz+7, 7);
-        put(ox+2, base+2, oz+7, 7); put(ox+5, base+2, oz+7, 7);
-        put(ox+3, base+3, oz+7, 28); put(ox+4, base+3, oz+7, 28);
-        // Sign post (gold wool "flag" + plank post) — name also as sprite at runtime
-        put(ox+1, base+1, oz+6, 4);
-        put(ox+1, base+2, oz+6, 4);
-        put(ox+1, base+3, oz+6, 32); // gold wool as market sign board
-        put(ox+1, base+4, oz+6, 10);
-        // Bench + lamp near well
-        put(ox+2, base+1, oz+5, 7); put(ox+5, base+1, oz+5, 7);
-        put(ox+6, base+1, oz+3, 4); put(ox+6, base+2, oz+3, 10);
-      } else if(bio === 2){
+        // Farm plots (dirt + wheat-look: tall grass)
+        for(let i = 0; i < 3; i++) for(let j = 0; j < 2; j++){
+          put(ox+2+i, base, oz+12+j, 2);
+          if(base+1 < WH) put(ox+2+i, base+1, oz+12+j, 66);
+        }
+        // Lamp posts
+        put(ox+5, base+1, oz+5, 4); put(ox+5, base+2, oz+5, 10);
+        put(ox+8, base+1, oz+8, 4); put(ox+8, base+2, oz+8, 10);
+        // Sign post
+        put(ox+3, base+1, oz+7, 4);
+        put(ox+3, base+2, oz+7, 4);
+        put(ox+3, base+3, oz+7, 32);
+            } else if(bio === 2){
         vKind = 'outpost';
         // DESERT — "Dune Outpost": sandstone keep + courtyard
-        house(ox+1, oz+1, 5, 5, 15, 15, 15, 0); // sandstone
-        // Courtyard wall ring
+        // Main keep
+        house(ox+4, oz+4, 6, 6, 15, 15, 15, 0);
+        // Wall ring
         for(let i = 0; i < pad; i++){
-          put(ox+i, base+1, oz, 15);
-          put(ox+i, base+1, oz+pad-1, 15);
-          put(ox, base+1, oz+i, 15);
-          put(ox+pad-1, base+1, oz+i, 15);
+          put(ox+i, base+1, oz, 15); put(ox+i, base+2, oz, 15);
+          put(ox+i, base+1, oz+pad-1, 15); put(ox+i, base+2, oz+pad-1, 15);
+          put(ox, base+1, oz+i, 15); put(ox, base+2, oz+i, 15);
+          put(ox+pad-1, base+1, oz+i, 15); put(ox+pad-1, base+2, oz+i, 15);
         }
-        // Gate gap
-        put(ox+3, base+1, oz, 0); put(ox+4, base+1, oz, 0);
-        // Torch pillars
-        put(ox+1, base+1, oz+6, 15); put(ox+1, base+2, oz+6, 10);
-        put(ox+6, base+1, oz+6, 15); put(ox+6, base+2, oz+6, 10);
-        // Storage crates
-        put(ox+5, base+1, oz+2, 56); put(ox+5, base+1, oz+3, 56);
+        // Gate
+        put(ox+6, base+1, oz, 0); put(ox+7, base+1, oz, 0);
+        put(ox+6, base+2, oz, 0); put(ox+7, base+2, oz, 0);
+        // Corner towers
+        for(const [tx,tz] of [[ox,oz],[ox+pad-1,oz],[ox,oz+pad-1],[ox+pad-1,oz+pad-1]]){
+          put(tx, base+3, tz, 15); put(tx, base+4, tz, 10);
+        }
+        // Storage
+        put(ox+10, base+1, oz+5, 56); put(ox+10, base+1, oz+6, 56);
+        put(ox+3, base+1, oz+10, 56);
       } else if(bio === 1){
         vKind = 'haven';
         // FOREST — "Log Haven": twin cabins + fence + firepit
-        house(ox, oz+1, 4, 4, 4, 7, 5, 1); // log walls, plank floor, leaf roof
-        house(ox+5, oz+1, 4, 4, 4, 7, 5, 3);
-        // Fence ring
+        house(ox+1, oz+1, 4, 4, 4, 7, 5, 2);
+        house(ox+9, oz+1, 4, 4, 4, 7, 5, 2);
+        house(ox+5, oz+8, 4, 4, 4, 7, 5, 0);
+        // Path between cabins
+        for(let i = 3; i < 11; i++){ put(ox+i, base, oz+5, 21); put(ox+i, base, oz+6, 21); }
+        // Fence
         for(let i = 0; i < pad; i++){
-          if(i !== 3 && i !== 4){
+          if(i < 5 || i > 8){
             put(ox+i, base+1, oz, 11);
             put(ox+i, base+1, oz+pad-1, 11);
           }
         }
-        // Firepit
-        put(ox+3, base, oz+5, 8); put(ox+4, base, oz+5, 8);
-        put(ox+3, base, oz+6, 8); put(ox+4, base, oz+6, 8);
-        put(ox+3, base+1, oz+5, 10); put(ox+4, base+1, oz+6, 10);
-        // Log benches
-        put(ox+2, base+1, oz+5, 4); put(ox+5, base+1, oz+5, 4);
+        // Firepit center
+        put(ox+6, base, oz+5, 8); put(ox+7, base, oz+5, 8);
+        put(ox+6, base, oz+6, 8); put(ox+7, base, oz+6, 8);
+        put(ox+6, base+1, oz+5, 10);
+        // Benches
+        put(ox+4, base+1, oz+5, 4); put(ox+9, base+1, oz+5, 4);
       } else if(bio === 4){
         vKind = 'stilt';
         // SWAMP — "Stilt Rest": raised plank platform + stilts
