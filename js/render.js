@@ -622,7 +622,7 @@ export function buildChunk(cx,cz){
     pts.forEach((p,i)=>{ dummy.position.set(p[0],p[1],p[2]); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
     im.instanceMatrix.needsUpdate = true;
     // Leaves catch the wind
-    if(+id === 5){
+    if(+id === 5 || +id === 98 || +id === 99 || +id === 100 || +id === 101){
       im.userData.windPts = pts.map(p => [p[0], p[1], p[2]]);
       windMeshes.push(im);
     }

@@ -184,103 +184,136 @@ function fillChunk(cx, cz, chunk){
   // Trees — varied shapes (oak blob / tall / wide), ~0.7–1.2 per chunk
   const trng = mulberry32((seed ^ 0xc2a5) + cx * 19349663 + cz * 83492791);
   const bioC = biomeAt(x0 + 8, z0 + 8);
-  let treeChance = 0.45, treeMax = 2;
-  if(bioC === 1){ treeChance = 0.9; treeMax = 5; }       // forest dense
-  else if(bioC === 0){ treeChance = 0.35; treeMax = 2; } // plains
-  else if(bioC === 3){ treeChance = 0.2; treeMax = 1; }  // peaks
-  else if(bioC === 4){ treeChance = 0.3; treeMax = 2; }  // swamp
-  else if(bioC === 2){ treeChance = 0.015; treeMax = 1; } // desert
+  let treeChance = 0.4, treeMax = 2;
+  if(bioC === 1){ treeChance = 0.88; treeMax = 5; }
+  else if(bioC === 0){ treeChance = 0.32; treeMax = 2; }
+  else if(bioC === 3){ treeChance = 0.22; treeMax = 1; }
+  else if(bioC === 4){ treeChance = 0.28; treeMax = 2; }
+  else if(bioC === 2){ treeChance = 0.02; treeMax = 1; }
   const treeCount = trng() < treeChance ? 1 + Math.floor(trng() * treeMax) : 0;
+
+  // log/leaf pairs: oak=4/5, birch=94/98, spruce=95/99, acacia=96/100, dark=97/101
+  const putLeaf = (nx, ny, nz, leafId) => {
+    if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
+    if(!chunk[bIndex(nx, ny, nz)]) chunk[bIndex(nx, ny, nz)] = leafId;
+  };
+  const putLog = (nx, ny, nz, logId) => {
+    if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
+    chunk[bIndex(nx, ny, nz)] = logId;
+  };
+
   for(let t = 0; t < treeCount; t++){
     const lx = 4 + Math.floor(trng() * (CH - 8));
     const lz = 4 + Math.floor(trng() * (CH - 8));
     let h = 0;
     for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
     if(chunk[bIndex(lx, h, lz)] !== 1) continue;
-    if(h + 8 >= WH) continue;
-    // 0 oak, 1 pine/tall, 2 round canopy, 3 branched oak
-    let style = Math.floor(trng() * 4);
-    if(bioC === 3 || bioC === 4) style = 1;
-    if(bioC === 0 && trng() < 0.35) style = 0;
+    if(h + 10 >= WH) continue;
 
-    const putLeaf = (nx, ny, nz) => {
-      if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
-      if(!chunk[bIndex(nx, ny, nz)]) chunk[bIndex(nx, ny, nz)] = 5;
-    };
-    const putLog = (nx, ny, nz) => {
-      if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) return;
-      chunk[bIndex(nx, ny, nz)] = 4;
-    };
+    // Pick species by biome (Minecraft-like)
+    // 0 oak, 1 spruce, 2 birch, 3 jungle, 4 acacia, 5 dark oak
+    let species;
+    if(bioC === 2) species = 4; // desert → acacia
+    else if(bioC === 3) species = 1; // mountains → spruce
+    else if(bioC === 4) species = trng() < 0.5 ? 1 : 0; // swamp spruce/oak
+    else if(bioC === 1){ // forest mix
+      const r = trng();
+      species = r < 0.35 ? 0 : r < 0.55 ? 2 : r < 0.7 ? 1 : r < 0.85 ? 3 : 5;
+    } else { // plains
+      const r = trng();
+      species = r < 0.55 ? 0 : r < 0.85 ? 2 : 1;
+    }
 
-    if(style === 1){
-      // Tall pine / cypress — narrow trunk, cone canopy
-      const th = 6 + Math.floor(trng() * 4);
-      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
-      for(let layer = 0; layer < 5; layer++){
-        const rad = Math.max(0, 3 - Math.floor(layer * 0.7));
-        const ny = h + th - 3 + layer;
-        if(ny >= WH) break;
-        for(let dx = -rad; dx <= rad; dx++) for(let dz = -rad; dz <= rad; dz++){
-          if(rad >= 2 && Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
-          if(rad >= 1 && Math.abs(dx) + Math.abs(dz) > rad + 1) continue;
-          putLeaf(lx + dx, ny, lz + dz);
-        }
-      }
-      putLeaf(lx, h + th + 1, lz); // tip
-    } else if(style === 2){
-      // Round canopy oak — fuller sphere of leaves
+    if(species === 0){
+      // OAK — short trunk, round canopy
       const th = 4 + Math.floor(trng() * 2);
-      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
-      const cy = h + th;
-      for(let dy = -2; dy <= 2; dy++)
-        for(let dx = -3; dx <= 3; dx++) for(let dz = -3; dz <= 3; dz++){
-          const d = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
-          if(d > 4) continue;
-          if(Math.abs(dx) === 3 && Math.abs(dz) === 3) continue;
-          putLeaf(lx + dx, cy + dy, lz + dz);
-        }
-    } else if(style === 3){
-      // Branched oak — trunk + side branch + wide canopy
-      const th = 5 + Math.floor(trng() * 2);
-      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
-      // one side branch
-      const bx = trng() < 0.5 ? 1 : -1;
-      const bz = trng() < 0.5 ? 0 : (trng() < 0.5 ? 1 : -1);
-      const by = h + Math.floor(th * 0.6);
-      putLog(lx + bx, by, lz + bz);
-      putLog(lx + bx * 2, by, lz + bz * (bz ? 2 : 0));
-      for(let dy = th - 2; dy <= th + 1; dy++)
-        for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
-          if(Math.abs(dx) === 2 && Math.abs(dz) === 2 && dy !== th) continue;
-          putLeaf(lx + dx, h + dy, lz + dz);
-        }
-      // leaves on branch tip
-      putLeaf(lx + bx * 2, by + 1, lz + bz * (bz ? 2 : 0));
-      putLeaf(lx + bx * 2 + bx, by, lz + bz * (bz ? 2 : 0));
-    } else {
-      // Classic oak — layered canopy hugging trunk
-      const th = 4 + Math.floor(trng() * 3);
-      for(let dy = 1; dy <= th; dy++) putLog(lx, h + dy, lz);
-      for(let dy = th - 2; dy <= th + 1; dy++){
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h+dy, lz, 4);
+      for(let dy = th-2; dy <= th+1; dy++){
         const rad = dy >= th ? 1 : 2;
-        for(let dx = -rad; dx <= rad; dx++) for(let dz = -rad; dz <= rad; dz++){
-          if(Math.abs(dx) === rad && Math.abs(dz) === rad && rad > 1) continue;
-          putLeaf(lx + dx, h + dy, lz + dz);
+        for(let dx=-rad; dx<=rad; dx++) for(let dz=-rad; dz<=rad; dz++){
+          if(Math.abs(dx)===rad && Math.abs(dz)===rad && rad>1) continue;
+          putLeaf(lx+dx, h+dy, lz+dz, 5);
         }
       }
+    } else if(species === 1){
+      // SPRUCE — tall narrow trunk, layered cone
+      const th = 7 + Math.floor(trng() * 4);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h+dy, lz, 95);
+      for(let layer = 0; layer < 6; layer++){
+        const rad = Math.max(0, 3 - Math.floor(layer * 0.55));
+        const ny = h + th - 4 + layer;
+        if(ny >= WH) break;
+        for(let dx=-rad; dx<=rad; dx++) for(let dz=-rad; dz<=rad; dz++){
+          if(rad>=2 && Math.abs(dx)===rad && Math.abs(dz)===rad) continue;
+          if(Math.abs(dx)+Math.abs(dz) > rad+1) continue;
+          putLeaf(lx+dx, ny, lz+dz, 99);
+        }
+      }
+      putLeaf(lx, h+th+1, lz, 99);
+    } else if(species === 2){
+      // BIRCH — thin tall trunk, small high canopy
+      const th = 5 + Math.floor(trng() * 3);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h+dy, lz, 94);
+      for(let dy = th-1; dy <= th+1; dy++){
+        const rad = dy === th+1 ? 1 : 2;
+        for(let dx=-rad; dx<=rad; dx++) for(let dz=-rad; dz<=rad; dz++){
+          if(Math.abs(dx)===rad && Math.abs(dz)===rad) continue;
+          putLeaf(lx+dx, h+dy, lz+dz, 98);
+        }
+      }
+    } else if(species === 3){
+      // JUNGLE — very tall trunk, bushy top (and maybe small vines as leaves down)
+      const th = 8 + Math.floor(trng() * 4);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h+dy, lz, 4);
+      for(let dy = th-2; dy <= th+2; dy++)
+        for(let dx=-3; dx<=3; dx++) for(let dz=-3; dz<=3; dz++){
+          if(Math.abs(dx)+Math.abs(dz)+Math.abs(dy-(th)) > 5) continue;
+          if(Math.abs(dx)===3 && Math.abs(dz)===3) continue;
+          putLeaf(lx+dx, h+dy, lz+dz, 5);
+        }
+    } else if(species === 4){
+      // ACACIA — forked trunk, flat umbrella canopy
+      const th = 4 + Math.floor(trng() * 2);
+      for(let dy = 1; dy <= th; dy++) putLog(lx, h+dy, lz, 96);
+      // fork
+      const dir = trng() < 0.5 ? 1 : -1;
+      putLog(lx+dir, h+th, lz, 96);
+      putLog(lx+dir*2, h+th+1, lz, 96);
+      const cx2 = lx + dir*2, cy2 = h + th + 1;
+      for(let dx=-3; dx<=3; dx++) for(let dz=-3; dz<=3; dz++){
+        if(Math.abs(dx)+Math.abs(dz) > 4) continue;
+        if(Math.abs(dx)===3 && Math.abs(dz)===3) continue;
+        putLeaf(cx2+dx, cy2, lz+dz, 100);
+        if(Math.abs(dx)+Math.abs(dz) <= 2) putLeaf(cx2+dx, cy2+1, lz+dz, 100);
+      }
+    } else {
+      // DARK OAK — thick 2×2 trunk, wide dense canopy
+      const th = 5 + Math.floor(trng() * 2);
+      for(let dy = 1; dy <= th; dy++){
+        putLog(lx, h+dy, lz, 97);
+        putLog(lx+1, h+dy, lz, 97);
+        putLog(lx, h+dy, lz+1, 97);
+        putLog(lx+1, h+dy, lz+1, 97);
+      }
+      const cx2 = lx, cz2 = lz;
+      for(let dy = th-1; dy <= th+1; dy++)
+        for(let dx=-3; dx<=4; dx++) for(let dz=-3; dz<=4; dz++){
+          if(Math.abs(dx-0.5)+Math.abs(dz-0.5) > 4.5) continue;
+          putLeaf(cx2+dx, h+dy, cz2+dz, 101);
+        }
     }
   }
 
   // Prune any leaf with no log nearby (kills true floaters from edge cases)
   for(let lx = 0; lx < CH; lx++) for(let lz = 0; lz < CH; lz++) for(let y = 1; y < WH; y++){
-    if(chunk[bIndex(lx, y, lz)] !== 5) continue;
+    const leafHere = chunk[bIndex(lx, y, lz)]; if(leafHere!==5&&leafHere!==98&&leafHere!==99&&leafHere!==100&&leafHere!==101) continue;
     let nearLog = false;
     for(let dy = -3; dy <= 3 && !nearLog; dy++)
       for(let dx = -3; dx <= 3 && !nearLog; dx++)
         for(let dz = -3; dz <= 3; dz++){
           const nx = lx + dx, ny = y + dy, nz = lz + dz;
           if(nx < 0 || nx >= CH || nz < 0 || nz >= CH || ny < 0 || ny >= WH) continue;
-          if(chunk[bIndex(nx, ny, nz)] === 4){ nearLog = true; break; }
+          const bb = chunk[bIndex(nx, ny, nz)]; if(bb===4||bb===94||bb===95||bb===96||bb===97){ nearLog = true; break; }
         }
     if(!nearLog) chunk[bIndex(lx, y, lz)] = 0;
   }
@@ -335,14 +368,16 @@ function fillChunk(cx, cz, chunk){
     const vrng = mulberry32((seed ^ 0x71a9e) + cx * 374761 + cz * 668265);
     const bio = biomeAt(x0 + 8, z0 + 8);
     // Mountains: no full villages (too steep). Others: rare.
-    // ~1 village per large region (Minecraft-like rarity)
-    // Only eligible on a coarse grid cell, then a second roll
-    const cellX = Math.floor(cx / 14), cellZ = Math.floor(cz / 14);
+    // ~1 village per ~32×32 chunk region (~512 blocks) — Minecraft-like spacing
+    const REGION = 32;
+    const cellX = Math.floor(cx / REGION), cellZ = Math.floor(cz / REGION);
     const cellRng = mulberry32((seed ^ 0x51a1e) + cellX * 374761 + cellZ * 668265);
-    const pickX = Math.floor(cellRng() * 14);
-    const pickZ = Math.floor(cellRng() * 14);
-    const isVillageChunk = (cx % 14 === pickX) && (cz % 14 === pickZ);
-    const chance = !isVillageChunk || bio === 3 ? 0 : 0.85;
+    // Pick one chunk near the middle of the region so neighbors don't cluster
+    const pickX = 10 + Math.floor(cellRng() * 12);
+    const pickZ = 10 + Math.floor(cellRng() * 12);
+    const isVillageChunk = ((cx % REGION + REGION) % REGION === pickX)
+                        && ((cz % REGION + REGION) % REGION === pickZ);
+    const chance = (!isVillageChunk || bio === 3) ? 0 : 0.7;
     if(vrng() < chance){
       const put = (lx, y, lz, t) => {
         if(lx < 1 || lx >= CH-1 || lz < 1 || lz >= CH-1 || y < 0 || y >= WH) return;

@@ -89,6 +89,15 @@ export const EXTRA_BLOCKS = {
   91:{name:'Iron Door', tex:['door',0x8a9199], hard:3.5, pc:0x8a9199, tool:'pick', transparent:1},
   92:{name:'Iron Door', tex:['door',0x8a9199], hard:3.5, pc:0x8a9199, tool:'pick', transparent:1},
   93:{name:'Iron Door', tex:['door',0x8a9199], hard:3.5, pc:0x8a9199, tool:'pick', transparent:1},
+  // Tree variants (Minecraft-style shapes + colors)
+  94:{name:'Birch Log',      tex:['bands',0xe8e4d8,0xd0ccc0], hard:1.6, pc:0xe8e4d8, tool:'axe'},
+  95:{name:'Spruce Log',     tex:['noise',0x4a3520,14],       hard:1.6, pc:0x4a3520, tool:'axe'},
+  96:{name:'Acacia Log',     tex:['noise',0x6b5a48,14],       hard:1.6, pc:0x6b5a48, tool:'axe'},
+  97:{name:'Dark Oak Log',   tex:['noise',0x2a1a10,12],       hard:1.6, pc:0x2a1a10, tool:'axe'},
+  98:{name:'Birch Leaves',   tex:['speckle',0x7ec850,0x5a9a30], hard:.3, pc:0x7ec850, tool:'axe', transparent:1},
+  99:{name:'Spruce Leaves',  tex:['speckle',0x2d5a3a,0x1a3a28], hard:.3, pc:0x2d5a3a, tool:'axe', transparent:1},
+  100:{name:'Acacia Leaves', tex:['speckle',0x88a838,0x6a8820], hard:.3, pc:0x88a838, tool:'axe', transparent:1},
+  101:{name:'Dark Leaves',   tex:['speckle',0x1e4a28,0x0e2a18], hard:.3, pc:0x1e4a28, tool:'axe', transparent:1},
 };
 
 
