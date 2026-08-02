@@ -125,14 +125,14 @@ function bindItemInfo(el, name, blurb, onPick){
 
 export let invOpen = false;
 const CATS = [
-  {id:'inv',    icon:'🎒', label:'Inventory'},
-  {id:'can',    icon:'✨', label:'Craftable'},
-  {id:'guide',  icon:'📖', label:'Guide'},
-  {id:'build',  icon:'🧱', label:'Construction'},
+  {id:'inv',    icon:'👤', label:'Character'},
+  {id:'can',    icon:'🛠️', label:'Crafting'},
+  {id:'build',  icon:'🧱', label:'Blocks'},
   {id:'gear',   icon:'⚔️', label:'Equipment'},
   {id:'light',  icon:'💡', label:'Lights'},
-  {id:'food',   icon:'🍖', label:'Food & Meds'},
-  {id:'nature', icon:'🌿', label:'Materials'},
+  {id:'food',   icon:'🍖', label:'Food'},
+  {id:'nature', icon:'🌿', label:'Items'},
+  {id:'guide',  icon:'📖', label:'Guide'},
 ];
 let invCat = 'inv', invPick = null;
 
@@ -196,17 +196,44 @@ function renderRail(){
   ).join('');
 }
 
+function renderCharPane(){
+  const slotMeta = [
+    { icon:'🧢', label:'Head' },
+    { icon:'🦺', label:'Chest' },
+    { icon:'👖', label:'Legs' },
+    { icon:'👢', label:'Feet' },
+  ];
+  const slots = slotMeta.map(s =>
+    `<div class="armorSlot" title="${s.label}">${s.icon}</div>`
+  ).join('');
+  return `<div class="charPane">
+    <div class="charRow">
+      <div class="charArmorCol">${slots}</div>
+      <div class="charBody" title="You"></div>
+    </div>
+    <div class="dFact" style="text-align:center;margin-top:8px">Tap items on the left to hold them.<br>Open Equipment for weapons & armor.</div>
+  </div>`;
+}
+
 function renderDetail(){
   const box = $('invDetail');
   if(invPick == null || !(TYPES[invPick] || ITEMS[invPick])){
+    if(invCat==='inv' || invCat==='gear'){
+      box.innerHTML = renderCharPane();
+      return;
+    }
+    if(invCat==='can'){
+      box.innerHTML = `<div class="dSlots"><div class="dSlot"></div><div class="dSlot"></div>
+          <div class="dSlot"></div><div class="dSlot"></div></div>
+        <div class="dArrow">▼</div>
+        <div class="dSlot out"></div>
+        <p class="dHint">Pick a craftable item to see its recipe.</p>`;
+      return;
+    }
     const hint = invCat==='guide'
       ? 'Pick an entry to learn where to find it and what it is for.'
-      : 'Pick an item on the left to see its recipe.';
-    box.innerHTML = `<div class="dSlots"><div class="dSlot"></div><div class="dSlot"></div>
-        <div class="dSlot"></div><div class="dSlot"></div></div>
-      <div class="dArrow">▼</div>
-      <div class="dSlot out"></div>
-      <p class="dHint">${hint}</p>`;
+      : 'Pick an item on the left for details.';
+    box.innerHTML = `<p class="dHint">${hint}</p>`;
     return;
   }
   const id = invPick;
@@ -273,8 +300,11 @@ export function renderInv(){
   if(!grid) return;
   renderRail();
   document.body.classList.toggle('inv-guide', invCat==='guide');
+  document.body.classList.toggle('inv-craft', invCat==='can');
+  document.body.classList.toggle('inv-char', invCat==='inv' || invCat==='gear');
+  document.body.classList.toggle('inv-full', invCat==='build' || invCat==='nature' || invCat==='light' || invCat==='food');
   const title = $('invTitle');
-  if(title) title.textContent = CATS.find(c=>c.id===invCat)?.label || 'Inventory';
+  if(title) title.textContent = CATS.find(c=>c.id===invCat)?.label || 'Items';
   const q = getSearchQuery();
   grid.innerHTML = '';
 
