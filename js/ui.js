@@ -690,22 +690,29 @@ function initTouch(hooks){
     }
   });
 
-  $('btnJump').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.jump(true); });
-  $('btnJump').addEventListener('touchend', ()=>hooks.jump(false));
+  function bindPress(el, onStart, onEnd){
+    if(!el) return;
+    const down = e=>{ e.preventDefault(); e.stopPropagation(); el.classList.add('pressed'); onStart?.(e); };
+    const up = e=>{ el.classList.remove('pressed'); onEnd?.(e); };
+    el.addEventListener('touchstart', down, {passive:false});
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+  }
+  bindPress($('btnJump'), ()=>hooks.jump(true), ()=>hooks.jump(false));
   // Mine / Place buttons removed — tap & hold on world instead
   const bm = $('btnMine'); if(bm) bm.style.display = 'none';
   const bp = $('btnPlace'); if(bp) bp.style.display = 'none';
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
-  const sp = $('btnSprint');
-  if(sp){
-    sp.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.sprint?.(true); });
-    sp.addEventListener('touchend', ()=>hooks.sprint?.(false));
-  }
+  bindPress($('btnSprint'), ()=>hooks.sprint?.(true), ()=>hooks.sprint?.(false));
+  bindPress($('btnDrop'), ()=>hooks.drop?.(), null);
   const bf = $('btnFly');
   if(bf){
     bf.addEventListener('touchstart', e=>{
       e.preventDefault(); e.stopPropagation();
+      bf.classList.add('pressed');
       hooks.fly?.();
+      // active class is toggled by player.toggleFly
+      setTimeout(()=> bf.classList.remove('pressed'), 120);
     });
   }
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
