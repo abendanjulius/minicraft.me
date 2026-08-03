@@ -209,9 +209,11 @@ export function updateDayNight(dt, focus){
   } else {
     skyDome.visible = true;
     cloudGroup.visible = true;
-    // Soft horizon: start fog later, end past view edge
+    // Soft horizon: fog must reach full opacity BEFORE the drawn terrain ends,
+    // else unloaded space past the edge shows through as a sky band. Cap fog.far
+    // to just inside the guaranteed-visible radius (VIEW_CHUNKS chunks).
     scene.fog.near = VIEW * 0.62;
-    scene.fog.far = VIEW * 1.35;
+    scene.fog.far = Math.min(VIEW * 1.35, VIEW_CHUNKS * CH - CH * 0.5);
   }
   ambLight.intensity = .18 + .45*dl;
   sun.intensity = .15 + .6*dl;
@@ -959,8 +961,13 @@ export function placeWrapped(obj, x, y, z, px, pz){
 export function updateChunkVisibility(px,pz){
   // Logical chunk under player (toroidal)
   const pcx = wrapC(Math.round(px))>>4, pcz = wrapC(Math.round(pz))>>4;
-  const loadR = Math.min(VIEW_CHUNKS + 1, 8);
-  const keepR = Math.min(VIEW_CHUNKS + 3, 10);
+  // Build one ring beyond the visible radius, and keep two more (hysteresis), so
+  // every drawn chunk is always meshed. The old min(…,8/10) caps throttled this
+  // BELOW the visible radius on desktop, leaving a ring that was drawn but never
+  // built — a sky band at the render edge. VIEW is fixed per device, so these are
+  // bounded (desktop 10/12, mobile 6/8).
+  const loadR = VIEW_CHUNKS + 1;
+  const keepR = VIEW_CHUNKS + 3;
 
   for(let dz = -loadR; dz <= loadR; dz++) for(let dx = -loadR; dx <= loadR; dx++){
     const cx = (pcx + dx + CHUNKS) % CHUNKS;
