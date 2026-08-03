@@ -410,13 +410,26 @@ function faceAdjacentPlace(hx, hy, hz, dir){
  * Shared by placeAction (to place) and the update loop (to preview the ghost),
  * so the ghost always shows the true destination cell.
  */
-function resolvePlaceCell(r){
+function resolvePlaceCell(r, flush = true){
   if(!r || !r.hit) return null;
   let place = r.place;
   if(!place){
     const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
     place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], dir);
   }
+
+  // Flush paving — looking DOWN at a block's top face fills that block's own
+  // cell, so the new block sits level with the ground you aimed at instead of
+  // stacking a half-block above the crosshair. Build upward by aiming at a
+  // block's SIDE face, which still places adjacent as usual. Multi-cell pieces
+  // (doors, beds) need free space, so they opt out via flush=false.
+  if(flush){
+    const [hx,hy,hz] = r.hit;
+    if(place[0]===hx && place[2]===hz && place[1]===hy+1 && !placeOverlapsPlayer(hx,hy,hz)){
+      return [hx,hy,hz];
+    }
+  }
+
   let [px,py,pz] = place;
   if(py<0||py>=WH) return null;
 
@@ -584,12 +597,12 @@ export function placeAction(){
   if(!gm.forge && !(inventory[tid]>0)) return;
 
   // Compute / validate place cell against the hit face (shared with the ghost preview)
-  const cell = resolvePlaceCell(r);
+  const doorStyle = DOOR_STYLES.find(s => s.item === tid);
+  const cell = resolvePlaceCell(r, !doorStyle && tid !== 58);
   if(!cell) return;
   let [px,py,pz] = cell;
 
   // Place any door style — occupies 2 blocks tall (bottom + top)
-  const doorStyle = DOOR_STYLES.find(s => s.item === tid);
   if(doorStyle){
     if(py+1>=WH || getBlock(px,py+1,pz)) return;
     if(getBlock(px,py,pz)) return;
@@ -961,7 +974,10 @@ export function update(dt, elapsed){
       let tid = slotBlock();
       if(tid){
         for(const s of DOOR_STYLES){ if(tid>=s.base && tid<s.base+8) tid = s.item; }
-        if(gm.forge || inventory[tid] > 0) ghost = resolvePlaceCell(r);
+        if(gm.forge || inventory[tid] > 0){
+          const doorStyle = DOOR_STYLES.find(s => s.item === tid);
+          ghost = resolvePlaceCell(r, !doorStyle && tid !== 58);
+        }
       }
     }
     updatePlacePreview(r && r.hit ? r.hit : null, ghost);

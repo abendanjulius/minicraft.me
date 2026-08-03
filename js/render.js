@@ -770,15 +770,17 @@ _targetOutline.visible = false;
 _targetOutline.renderOrder = 999;
 scene.add(_targetOutline);
 
+// Slightly oversized so it reads as a highlight ON the block when the ghost
+// lands on an occupied cell (flush paving) instead of z-fighting with it.
 const _ghostBox = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.28, depthWrite: false }));
+  new THREE.BoxGeometry(1.03, 1.03, 1.03),
+  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
 _ghostBox.visible = false;
 _ghostBox.renderOrder = 998;
 scene.add(_ghostBox);
 const _ghostEdges = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.03, 1.03, 1.03)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }));
 _ghostBox.add(_ghostEdges);
 
 /** hit / place are [x,y,z] block cells (or null). Positions the outline + ghost. */
