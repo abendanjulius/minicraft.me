@@ -31,12 +31,131 @@ function discTex(color){
   const g=c.getContext('2d'); g.fillStyle=color; g.beginPath(); g.arc(32,32,26,0,7); g.fill();
   return new THREE.CanvasTexture(c);
 }
-const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#ffe9a8'), fog:false}));
-sunSpr.scale.set(9,9,1); scene.add(sunSpr);
-const moonSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#dfe7ff'), fog:false}));
-moonSpr.scale.set(5,5,1); scene.add(moonSpr);
+const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#ffe9a8'), fog:false, depthWrite:false}));
+sunSpr.scale.set(10,10,1); scene.add(sunSpr);
+const moonSpr = new THREE.Sprite(new THREE.SpriteMaterial({map:discTex('#dfe7ff'), fog:false, depthWrite:false}));
+moonSpr.scale.set(6,6,1); scene.add(moonSpr);
+
+// ---- Sky dome + soft clouds (replaces flat clear-color void) ----
+const skyZenithDay = new THREE.Color(0x3d8fd9);
+const skyHorizonDay = new THREE.Color(0xc5dff0);
+const skyZenithDusk = new THREE.Color(0x2a3a6a);
+const skyHorizonDusk = new THREE.Color(0xe8a06a);
+const skyZenithNight = new THREE.Color(0x070b18);
+const skyHorizonNight = new THREE.Color(0x1a2440);
 const _sky = new THREE.Color();
-export function setDayTime(t){ day.t = ((t%1)+1)%1; }
+const _zen = new THREE.Color();
+const _hor = new THREE.Color();
+
+function paintSkyGradient(zenHex, horHex, stars){
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  // v=0 top of texture → sphere +Y (zenith); v=1 → bottom / lower sky
+  grd.addColorStop(0.00, zenHex);
+  grd.addColorStop(0.45, zenHex);
+  grd.addColorStop(0.72, horHex);
+  grd.addColorStop(0.90, horHex);
+  // slight ground haze band
+  grd.addColorStop(1.00, horHex);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 8, 256);
+  if(stars > 0.15){
+    g.fillStyle = `rgba(255,255,255,${0.35 + stars * 0.5})`;
+    for(let i = 0; i < 80; i++){
+      const x = (Math.sin(i * 12.9898) * 43758.5453) % 1;
+      const y = (Math.sin(i * 78.233) * 12345.678) % 1;
+      const yy = Math.abs(y) * 140; // upper sky only
+      if(yy > 130) continue;
+      const s = 0.6 + (Math.abs(Math.sin(i * 3.1)) * 1.4);
+      g.fillRect((Math.abs(x) * 8)|0, yy|0, s, s);
+    }
+  }
+  return c;
+}
+
+function hexCol(c){
+  return '#' + c.getHexString();
+}
+
+let _skyLastKey = '';
+const skyCanvas = paintSkyGradient('#3d8fd9', '#c5dff0', 0);
+const skyTex = new THREE.CanvasTexture(skyCanvas);
+skyTex.magFilter = THREE.LinearFilter;
+skyTex.minFilter = THREE.LinearFilter;
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(Math.max(VIEW * 1.85, 140), 24, 16),
+  new THREE.MeshBasicMaterial({
+    map: skyTex,
+    side: THREE.BackSide,
+    fog: false,
+    depthWrite: false,
+  })
+);
+skyDome.frustumCulled = false;
+scene.add(skyDome);
+
+function makeCloudTex(){
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0,0,128,128);
+  const blobs = [
+    [40,64,28],[64,58,34],[88,64,26],[52,72,22],[76,70,20]
+  ];
+  for(const [x,y,r] of blobs){
+    const grd = g.createRadialGradient(x,y,2,x,y,r);
+    grd.addColorStop(0, 'rgba(255,255,255,0.85)');
+    grd.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = t.minFilter = THREE.LinearFilter;
+  return t;
+}
+const cloudTex = makeCloudTex();
+const cloudGroup = new THREE.Group();
+cloudGroup.frustumCulled = false;
+scene.add(cloudGroup);
+const CLOUD_N = isTouch ? 6 : 10;
+for(let i = 0; i < CLOUD_N; i++){
+  const mat = new THREE.MeshBasicMaterial({
+    map: cloudTex,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    fog: false,
+    side: THREE.DoubleSide,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(28, 14), mat);
+  const a = (i / CLOUD_N) * Math.PI * 2;
+  const rad = 40 + (i % 3) * 18;
+  m.position.set(Math.cos(a) * rad, 28 + (i % 4) * 5, Math.sin(a) * rad);
+  m.rotation.order = 'YXZ';
+  m.userData.baseA = a;
+  m.userData.rad = rad;
+  m.userData.y = m.position.y;
+  m.userData.spin = 0.015 + (i % 5) * 0.004;
+  cloudGroup.add(m);
+}
+
+function refreshSkyTexture(dl, duskF, nightAmt){
+  _zen.copy(skyZenithNight).lerp(skyZenithDay, dl).lerp(skyZenithDusk, duskF * 0.65);
+  _hor.copy(skyHorizonNight).lerp(skyHorizonDay, dl).lerp(skyHorizonDusk, duskF * 0.75);
+  const key = _zen.getHexString() + _hor.getHexString() + (nightAmt*10|0);
+  if(key === _skyLastKey) return;
+  _skyLastKey = key;
+  const c = paintSkyGradient(hexCol(_zen), hexCol(_hor), nightAmt);
+  const ctx = skyCanvas.getContext('2d');
+  ctx.clearRect(0,0,8,256);
+  ctx.drawImage(c, 0, 0);
+  skyTex.needsUpdate = true;
+}
+
+export function setDayTime(t){ day.t = ((t%1)+1)%1; _skyLastKey = ''; }
 
 let _underwater = false;
 const _uwCol = new THREE.Color(0x7ec8e8); // light water tint while submerged
@@ -52,24 +171,55 @@ export function updateDayNight(dt, focus){
   const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), .3).normalize();
   sun.position.copy(dir);
   const dl = Math.max(0, Math.min(1, dir.y*2.2 + .15));       // daylight 0..1
-  const duskF = Math.max(0, 1 - Math.abs(dir.y)*4) * dl;      // near-horizon warmth
-  _sky.copy(skyNight).lerp(skyDay, dl).lerp(skyDusk, duskF*.55);
-  scene.background.copy(_sky);
-  scene.fog.color.copy(_sky);
+  const duskF = Math.max(0, 1 - Math.abs(dir.y)*4);           // near-horizon warmth
+  const nightAmt = Math.max(0, 1 - dl * 1.35);
+
+  // Gradient sky dome (zenith → horizon) + night stars
+  refreshSkyTexture(dl, Math.max(0, duskF * (0.4 + dl)), nightAmt);
+  if(focus){
+    skyDome.position.copy(focus);
+    cloudGroup.position.set(focus.x, 0, focus.z);
+  }
+  // Slow cloud drift
+  for(const m of cloudGroup.children){
+    m.userData.baseA += m.userData.spin * dt;
+    const a = m.userData.baseA;
+    m.position.set(
+      Math.cos(a) * m.userData.rad,
+      m.userData.y,
+      Math.sin(a) * m.userData.rad
+    );
+    m.lookAt(focus.x, m.position.y, focus.z);
+    m.material.opacity = 0.15 + 0.55 * dl; // fade at night
+    m.visible = dl > 0.05;
+  }
+
+  // Fog matches horizon (so distant chunks melt into sky, not a flat wall)
+  _hor.copy(skyHorizonNight).lerp(skyHorizonDay, dl).lerp(skyHorizonDusk, Math.max(0, duskF * 0.7));
+  _sky.copy(_hor);
+  scene.background.copy(_zen.copy(skyZenithNight).lerp(skyZenithDay, dl)); // fallback clear
+  scene.fog.color.copy(_hor);
   if(_underwater){
     scene.background.copy(_uwCol);
     scene.fog.color.copy(_uwCol);
     scene.fog.near = 1.5;
     scene.fog.far = 22;
+    skyDome.visible = false;
+    cloudGroup.visible = false;
   } else {
-    scene.fog.near = VIEW * 0.55;
-    scene.fog.far = VIEW * 1.15;
+    skyDome.visible = true;
+    cloudGroup.visible = true;
+    // Soft horizon: start fog later, end past view edge
+    scene.fog.near = VIEW * 0.62;
+    scene.fog.far = VIEW * 1.35;
   }
   ambLight.intensity = .18 + .45*dl;
   sun.intensity = .15 + .6*dl;
-  sunSpr.position.copy(focus).addScaledVector(dir, VIEW*1.6);
-  moonSpr.position.copy(focus).addScaledVector(dir, -VIEW*1.6);
-  return dl; // 0 at night (mobs will want this later)
+  sunSpr.position.copy(focus).addScaledVector(dir, VIEW*1.55);
+  moonSpr.position.copy(focus).addScaledVector(dir, -VIEW*1.55);
+  sunSpr.visible = dl > 0.08;
+  moonSpr.visible = nightAmt > 0.25;
+  return dl;
 }
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
