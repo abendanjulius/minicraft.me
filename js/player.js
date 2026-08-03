@@ -376,87 +376,80 @@ export function initControls(){
 
 export function jump(b){ keys.Space = b; }
 
-/** Solid enough to attach a new block to (not air / plants / open doors / water) */
+/** Solid block you can attach to */
 function isSupportBlock(b){
-  if(!b) return false;
-  if(isWalkThrough(b)) return false;
-  return true;
+  return !!(b && !isWalkThrough(b) && b !== 64);
 }
 
-/** True if cell touches at least one solid block (6-neighbor) */
 function hasBlockSupport(x, y, z){
-  const n = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
-  for(const [dx,dy,dz] of n){
+  for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){
     if(isSupportBlock(getBlock(x+dx, y+dy, z+dz))) return true;
   }
   return false;
 }
 
-/** Block cells are CENTERED on integers (render uses unit cubes at integer positions). */
+/** Center-indexed unit cubes: block at n occupies [n-0.5, n+0.5] */
 function placeOverlapsPlayer(px, py, pz){
-  const half = 0.35;
+  const half = 0.3;
   const px0 = player.pos.x - half, px1 = player.pos.x + half;
   const pz0 = player.pos.z - half, pz1 = player.pos.z + half;
-  const py0 = player.pos.y,       py1 = player.pos.y + 1.75;
-  // Block occupies [n-0.5, n+0.5]
-  const bx0 = px - 0.5, bx1 = px + 0.5;
-  const by0 = py - 0.5, by1 = py + 0.5;
-  const bz0 = pz - 0.5, bz1 = pz + 0.5;
-  return !(px1 <= bx0 || px0 >= bx1 || py1 <= by0 || py0 >= by1 || pz1 <= bz0 || pz0 >= bz1);
+  const py0 = player.pos.y + 0.05, py1 = player.pos.y + 1.7;
+  return !(px1 <= px-0.5 || px0 >= px+0.5 || py1 <= py-0.5 || py0 >= py+0.5 || pz1 <= pz-0.5 || pz0 >= pz+0.5);
+}
+
+function faceAdjacentPlace(hx, hy, hz, dir){
+  const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
+  if(ay >= ax && ay >= az) return [hx, hy - (dir.y >= 0 ? 1 : -1), hz];
+  if(ax >= az) return [hx - (dir.x >= 0 ? 1 : -1), hy, hz];
+  return [hx, hy, hz - (dir.z >= 0 ? 1 : -1)];
 }
 
 /**
- * Raycast against CENTER-indexed unit blocks (Math.round).
- * place is always the face-adjacent cell opposite the incoming ray — never a diagonal.
+ * Crosshair raycast — blocks are centered on integer coords (Math.round).
+ * Returns { hit, place, dist } where place is face-adjacent empty cell.
  */
-export function castBlock(maxDist = 7){
+export function castBlock(maxDist = 8){
   const dir = new THREE.Vector3(0,0,-1)
-    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
-    .normalize();
-  if(dir.lengthSq() < 1e-8) return null;
-  const eye = player.pos.clone().add(new THREE.Vector3(0, 1.62, 0));
+    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'));
+  if(dir.lengthSq() < 1e-10) return null;
+  dir.normalize();
+  const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.62, player.pos.z);
 
-  let lx = null, ly = null, lz = null;
-  let hit = null;
-  let hitDist = 0;
+  let lx = NaN, ly = NaN, lz = NaN;
+  let lastEmpty = null;
 
-  const step = 0.02;
-  for(let t = 0; t <= maxDist; t += step){
+  for(let t = 0; t <= maxDist; t += 0.025){
     const wx = eye.x + dir.x * t;
     const wy = eye.y + dir.y * t;
     const wz = eye.z + dir.z * t;
-    const bx = Math.round(wx);
-    const by = Math.round(wy);
-    const bz = Math.round(wz);
+    const bx = Math.round(wx), by = Math.round(wy), bz = Math.round(wz);
     if(bx === lx && by === ly && bz === lz) continue;
     lx = bx; ly = by; lz = bz;
 
     const b = getBlock(bx, by, bz);
-    if(!b || b === 64) continue; // air / water — keep going
 
-    // Skip if still inside a solid at the very start (camera embedded)
-    if(t < 0.12 && !isWalkThrough(b)) continue;
+    // Pass through air and water
+    if(!b || b === 64){
+      lastEmpty = [bx, by, bz];
+      continue;
+    }
 
-    // Any other block is a valid target (solid or plant)
-    hit = [bx, by, bz];
-    hitDist = t;
-    break;
+    // Skip only the first solid cells if camera is inside geometry
+    if(t < 0.2 && isSupportBlock(b)){
+      lastEmpty = null;
+      continue;
+    }
+
+    // Hit a target block (solid or plant/etc.)
+    let place = faceAdjacentPlace(bx, by, bz, dir);
+    // Prefer lastEmpty if it is already face-adjacent to hit
+    if(lastEmpty){
+      const adx = Math.abs(lastEmpty[0]-bx)+Math.abs(lastEmpty[1]-by)+Math.abs(lastEmpty[2]-bz);
+      if(adx === 1) place = lastEmpty;
+    }
+    return { hit:[bx,by,bz], place, dist:t };
   }
-  if(!hit) return null;
-
-  // Place against the face we entered from (dominant axis of ray direction)
-  const [hx, hy, hz] = hit;
-  const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
-  let place;
-  if(ay >= ax && ay >= az){
-    place = [hx, hy - Math.sign(dir.y || -1), hz];
-  } else if(ax >= az){
-    place = [hx - Math.sign(dir.x || 1), hy, hz];
-  } else {
-    place = [hx, hy, hz - Math.sign(dir.z || 1)];
-  }
-
-  return { hit, place, dist: hitDist };
+  return null;
 }
 
 function yawToFacing(yaw){
@@ -543,21 +536,47 @@ export function placeAction(){
       return;
     }
   }
-  if(!r || !r.place) return;
+  if(!r || !r.hit) return;
   let tid = slotBlock();
-  if(!tid) return;
+  if(!tid){
+    // Holding a tool / empty — interact already handled above; nothing to place
+    return;
+  }
   // Normalize door state ids back to item ids
   for(const s of DOOR_STYLES){
     if(tid>=s.base && tid<s.base+8) tid = s.item;
   }
   if(!gm.forge && !(inventory[tid]>0)) return;
-  const [px,py,pz] = r.place;
+
+  // Compute / validate place cell against the hit face
+  let place = r.place;
+  if(!place){
+    const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
+    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], dir);
+  }
+  let [px,py,pz] = place;
   if(py<0||py>=WH) return;
-  // Cell must be empty
-  if(getBlock(px,py,pz)) return;
-  // Must attach to an existing solid block (no floating first block in air)
+
+  // If computed place is occupied, try the other faces around the hit
+  if(getBlock(px,py,pz)){
+    const [hx,hy,hz] = r.hit;
+    let found = null;
+    for(const [dx,dy,dz] of [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
+      const cx = hx+dx, cy = hy+dy, cz = hz+dz;
+      if(cy<0||cy>=WH) continue;
+      if(!getBlock(cx,cy,cz) && hasBlockSupport(cx,cy,cz) && !placeOverlapsPlayer(cx,cy,cz)){
+        // prefer the face toward the player eye
+        found = [cx,cy,cz];
+        if(dy === 1 || dy === -1){ found = [cx,cy,cz]; break; }
+        if(!found) found = [cx,cy,cz];
+      }
+    }
+    if(!found) return;
+    [px,py,pz] = found;
+  }
+
+  // No floating blocks — must touch a solid
   if(!hasBlockSupport(px, py, pz)) return;
-  // Don't place inside the player
   if(placeOverlapsPlayer(px, py, pz)) return;
 
   // Place any door style — occupies 2 blocks tall (bottom + top)

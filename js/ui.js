@@ -622,29 +622,41 @@ function initTouch(hooks){
       if(t.identifier===lookId) lookId=null;
     }
   });
-  // Tap = place, hold = mine (Minecraft PE style)
-  // Finger jitter used to cancel place (MOVE_PX too low) — fixed with looser thresholds.
+  // ========== Crosshair dig/place (Minecraft PE style) ==========
+  // Aim with crosshair. Short tap = place. Hold = mine.
+  // Looking is allowed on the same finger; only large early drag cancels a pending hold.
   let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
-  const HOLD_MS = 280;
-  const PLACE_MOVE_MAX = 48;  // still counts as a "tap" if finger slips less than this
-  const MINE_MOVE_MAX = 28;   // cancel pending hold-to-mine if dragged before HOLD_MS
+  const HOLD_MS = 320;
+  const PLACE_SLOP = 70;   // px — finger jitter still counts as tap
+  const MINE_CANCEL = 36;  // px — drag this much before HOLD cancels pending mine start
 
-  function clearDig(){
+  function digClear(stopMine){
     if(digTimer){ clearTimeout(digTimer); digTimer = null; }
-    if(digMining){ hooks.mine(false); digMining = false; }
-    digId = null; digMaxMove = 0;
+    if(stopMine && digMining){ hooks.mine(false); digMining = false; }
+    digId = null;
   }
 
-  $('game').addEventListener('touchstart', e=>{
-    e.preventDefault();
-    if(invOpen) return;
-    const t = e.changedTouches[0];
-    // ignore UI controls (but NOT the canvas itself)
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    if(el && el.closest && el.closest('#hotbar,#touchUI .tbtn,#btnChat,#btnQuit,#btnMode,#compass,#inv,#joyZone')) return;
+  function isUiTouch(x, y){
+    const el = document.elementFromPoint(x, y);
+    if(!el || !el.closest) return false;
+    return !!el.closest('#hotbar,#joyZone,.tbtn,#btnChat,#btnQuit,#btnMode,#compass,#inv,#pauseMenu,#chatBox');
+  }
 
-    if(lookId===null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
+  // Prefer the canvas; fall back to #game
+  const digSurface = document.querySelector('#game canvas') || $('game');
+
+  digSurface.addEventListener('touchstart', e=>{
+    if(invOpen || !hooks) return;
+    // only primary finger for dig
+    const t = e.changedTouches[0];
+    if(isUiTouch(t.clientX, t.clientY)) return;
+    // right-ish side preferred but allow full canvas except left joystick zone
+    if(t.clientX < innerWidth * 0.38) return;
+
+    e.preventDefault();
+    if(lookId === null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
+
     digId = t.identifier;
     digX = t.clientX; digY = t.clientY;
     digStart = performance.now();
@@ -653,48 +665,45 @@ function initTouch(hooks){
     if(digTimer) clearTimeout(digTimer);
     digTimer = setTimeout(()=>{
       digTimer = null;
-      // Start mining only if we haven't dragged much yet
-      if(digId != null && digMaxMove < MINE_MOVE_MAX && !invOpen){
-        digMining = true;
-        hooks.mine(true);
-      }
+      if(digId == null || invOpen) return;
+      if(digMaxMove > MINE_CANCEL) return; // was looking around
+      digMining = true;
+      hooks.mine(true);
     }, HOLD_MS);
   }, {passive:false});
 
   document.addEventListener('touchmove', e=>{
+    if(digId == null) return;
     for(const t of e.changedTouches){
       if(t.identifier !== digId) continue;
-      const dist = Math.hypot(t.clientX - digX, t.clientY - digY);
-      if(dist > digMaxMove) digMaxMove = dist;
-      // If player is clearly looking around before hold fires, cancel pending mine
-      if(!digMining && digMaxMove > MINE_MOVE_MAX && digTimer){
+      const d = Math.hypot(t.clientX - digX, t.clientY - digY);
+      if(d > digMaxMove) digMaxMove = d;
+      if(!digMining && digMaxMove > MINE_CANCEL && digTimer){
         clearTimeout(digTimer); digTimer = null;
       }
-      // Once mining has started, allow look — do NOT cancel mine on move
     }
   }, {passive:true});
 
-  document.addEventListener('touchend', e=>{
+  const endDig = e=>{
+    if(digId == null) return;
     for(const t of e.changedTouches){
       if(t.identifier !== digId) continue;
-      const dt = performance.now() - digStart;
+      const held = performance.now() - digStart;
       const wasMining = digMining;
+      const move = digMaxMove;
       if(digTimer){ clearTimeout(digTimer); digTimer = null; }
       if(digMining){ hooks.mine(false); digMining = false; }
       digId = null;
 
-      // PLACE: quick release before hold threshold, allow modest finger jitter
-      if(!wasMining && !invOpen && dt < HOLD_MS + 40 && digMaxMove < PLACE_MOVE_MAX){
-        hooks.place?.();
+      // PLACE on quick tap (crosshair target) — tolerate finger slop
+      if(!wasMining && !invOpen && held < HOLD_MS + 60 && move < PLACE_SLOP){
+        // Defer one frame so look math from last move is settled
+        requestAnimationFrame(()=> hooks.place?.());
       }
-      digMaxMove = 0;
     }
-  });
-  document.addEventListener('touchcancel', e=>{
-    for(const t of e.changedTouches){
-      if(t.identifier === digId) clearDig();
-    }
-  });
+  };
+  document.addEventListener('touchend', endDig);
+  document.addEventListener('touchcancel', endDig);
 
   function bindPress(el, onStart, onEnd){
     if(!el) return;
