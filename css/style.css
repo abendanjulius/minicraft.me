@@ -1036,9 +1036,9 @@ body.inv-char #invDetail{
 
 /* Hotbar item name (Minecraft-style center toast) */
 #slotNameToast{
-  position:fixed; left:50%; bottom:92px; transform:translateX(-50%);
-  background:rgba(0,0,0,.78); color:#fff; padding:5px 14px; border-radius:4px;
-  font-family:monospace; font-size:14px; letter-spacing:.3px;
+  position:fixed; left:50%; bottom:40px; transform:translateX(-50%);
+  background:rgba(0,0,0,.78); color:#fff; padding:3px 10px; border-radius:4px;
+  font-family:monospace; font-size:12px; letter-spacing:.2px;
   opacity:0; pointer-events:none; z-index:6;
   transition:opacity .12s ease; white-space:nowrap;
   text-shadow:1px 1px 0 #000;
@@ -1207,4 +1207,53 @@ body:not(.touch) #btnChat{ right: 8px !important; }
     font-size: 11px !important;
     padding: 2px 8px !important;
   }
+}
+
+
+/* ===== v1.12.12 FORCE — controls size + toast + tools ===== */
+html body #touchUI .tbtn,
+html body .tbtn#btnJump,
+html body .tbtn#btnMine,
+html body .tbtn#btnPlace,
+html body .tbtn#btnDrop,
+html body .tbtn#btnSprint,
+html body .tbtn#btnFly{
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  font-size: 13px !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+}
+html body #btnJump{ right: 10px !important; bottom: 92px !important; }
+html body #btnPlace{ right: 10px !important; bottom: 54px !important; }
+html body #btnMine{ right: 48px !important; bottom: 54px !important; }
+html body #btnDrop{ right: 48px !important; bottom: 92px !important; }
+html body #btnSprint{ right: 10px !important; bottom: 130px !important; }
+html body #btnFly{ right: 48px !important; bottom: 130px !important; }
+
+html body #btnChat,
+html body #btnMode,
+html body #btnQuit{
+  width: 30px !important;
+  height: 30px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+  top: 8px !important;
+}
+html body #btnChat{ right: 8px !important; }
+html body #btnQuit{ right: 42px !important; }
+html body #btnMode{ right: 76px !important; }
+
+html body #slotNameToast,
+html body #slotNameToast.show{
+  bottom: 38px !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}
+html body.inv-open #slotNameToast{
+  bottom: 38px !important;
 }

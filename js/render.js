@@ -514,13 +514,17 @@ export function makeToolIconPlane(toolId, size=.55){
   const t = TOOLS.find(x => x.id === toolId);
   const emoji = t?.icon || '🔧';
   const c = document.createElement('canvas');
-  c.width = c.height = 96;
+  c.width = c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.clearRect(0,0,96,96);
-  ctx.font = '72px serif';
+  ctx.clearRect(0,0,128,128);
+  // soft shadow so icon reads in bright sky
+  ctx.font = '96px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(emoji, 48, 52);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillText(emoji, 66, 70);
+  ctx.fillStyle = '#000';
+  ctx.fillText(emoji, 64, 68);
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = tex.minFilter = THREE.LinearFilter;
   const mat = new THREE.MeshBasicMaterial({

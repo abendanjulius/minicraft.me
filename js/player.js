@@ -66,17 +66,20 @@ armPivot.add(armMesh);
 armPivot.add(fistMesh);
 handGroup.add(armPivot);
 
-const toolModels = {};
-for(const t of TOOLS) if(t.id!=='hand'){
-  const m = makeToolModel(t.id);
-  m.visible = false;
-  handGroup.add(m);
-  toolModels[t.id] = m;
-}
+const toolModels = {}; // unused in FP — kept empty so old refs don't break
 let heldExtra = null;
 function clearHeldExtra(){
-  if(heldExtra){ handGroup.remove(heldExtra); heldExtra = null; }
+  if(heldExtra){
+    handGroup.remove(heldExtra);
+    if(heldExtra.material){
+      heldExtra.material.map?.dispose?.();
+      heldExtra.material.dispose?.();
+    }
+    heldExtra.geometry?.dispose?.();
+    heldExtra = null;
+  }
 }
+
 
 /** Pose the arm for empty / tool / block modes */
 function poseArm(mode){
@@ -95,7 +98,6 @@ function poseArm(mode){
 function updateHeld(){
   const tool = slotTool();
   const held = hotbarSlots[sel.slot];
-  for(const id in toolModels) toolModels[id].visible = false;
   clearHeldExtra();
 
   // Skin-colored arm
@@ -109,13 +111,12 @@ function updateHeld(){
     return;
   }
 
-  // Mining tools — show the same emoji icon as the hotbar
+  // Mining tools — exact same emoji as hotbar icon
   if(held.k==='t'){
     poseArm('tool');
-    for(const id in toolModels) toolModels[id].visible = false;
-    heldExtra = makeToolIconPlane(held.id, 0.52);
-    heldExtra.position.set(0.28, -0.14, -0.48);
-    heldExtra.rotation.set(0.05, 0.35, -0.08);
+    heldExtra = makeToolIconPlane(held.id, 0.58);
+    heldExtra.position.set(0.30, -0.16, -0.50);
+    heldExtra.rotation.set(0, 0.25, 0);
     handGroup.add(heldExtra);
     return;
   }
