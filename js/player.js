@@ -42,6 +42,7 @@ function pickEntity(){
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
 export const state = { playing:false, mineHeld:false, mining:null, paused:false, flying:false, sleeping:false };
+let mineSX = null, mineSY = null;   // mobile: screen pixel the long-press is mining through
 let sleepSeq = null; // {phase, t, bed:{x,y,z}}
 export const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
@@ -244,8 +245,11 @@ export function look(dx,dy){
   view.yaw -= dx; view.pitch -= dy;
   view.pitch = Math.max(-Math.PI/2+.01, Math.min(Math.PI/2-.01, view.pitch));
 }
-export function setMine(b){
+export function setMine(b, sx, sy){
   if(survival.sv.dead){ state.mineHeld=false; state.mining=null; return; }
+  // Remember where the long-press landed so mining targets that pixel (mobile).
+  if(b && sx != null){ mineSX = sx; mineSY = sy; }
+  if(!b){ mineSX = null; mineSY = null; }
   if(b){
     const e = pickEntity();
     if(e){
@@ -405,36 +409,27 @@ function faceAdjacentPlace(hx, hy, hz, dir){
 }
 
 /**
- * Crosshair raycast — voxel DDA (Amanatides–Woo). Blocks are centered on integer
- * coords (Math.round), so cell boundaries sit at n±0.5. Stepping one boundary at
- * a time makes the last empty cell before a hit EXACTLY face-adjacent, so `place`
- * is always on the correct face — no dominant-axis guessing (which mis-placed
- * blocks at diagonal angles). Returns { hit, place, dist }.
+ * Core voxel raycast — DDA (Amanatides–Woo) from an arbitrary origin/direction.
+ * Blocks are centered on integer coords (Math.round), so cell boundaries sit at
+ * n±0.5. Stepping one boundary at a time makes the last empty cell before a hit
+ * EXACTLY face-adjacent, so `place` is always on the correct face. Returns
+ * { hit, place, dist } (place may be null if the origin is already inside solid).
  */
-export function castBlock(maxDist = 8){
-  const dir = new THREE.Vector3(0,0,-1)
-    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'));
-  if(dir.lengthSq() < 1e-10) return null;
-  dir.normalize();
-  // Eye MUST match the camera exactly (main.js sets camera at pos + 1.6), or the
-  // ray diverges from the crosshair — most visibly on the ground at shallow angles.
-  const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.6, player.pos.z);
-
-  let bx = Math.round(eye.x), by = Math.round(eye.y), bz = Math.round(eye.z);
-  const stepX = dir.x >= 0 ? 1 : -1, stepY = dir.y >= 0 ? 1 : -1, stepZ = dir.z >= 0 ? 1 : -1;
+function castRay(ox, oy, oz, dx, dy, dz, maxDist = 8){
+  let bx = Math.round(ox), by = Math.round(oy), bz = Math.round(oz);
+  const stepX = dx >= 0 ? 1 : -1, stepY = dy >= 0 ? 1 : -1, stepZ = dz >= 0 ? 1 : -1;
   const bound = (p, d) => d >= 0 ? (Math.round(p) + 0.5) : (Math.round(p) - 0.5);
-  let tMaxX = dir.x !== 0 ? (bound(eye.x, dir.x) - eye.x) / dir.x : Infinity;
-  let tMaxY = dir.y !== 0 ? (bound(eye.y, dir.y) - eye.y) / dir.y : Infinity;
-  let tMaxZ = dir.z !== 0 ? (bound(eye.z, dir.z) - eye.z) / dir.z : Infinity;
-  const tDX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
-  const tDY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
-  const tDZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tMaxX = dx !== 0 ? (bound(ox, dx) - ox) / dx : Infinity;
+  let tMaxY = dy !== 0 ? (bound(oy, dy) - oy) / dy : Infinity;
+  let tMaxZ = dz !== 0 ? (bound(oz, dz) - oz) / dz : Infinity;
+  const tDX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+  const tDY = dy !== 0 ? Math.abs(1 / dy) : Infinity;
+  const tDZ = dz !== 0 ? Math.abs(1 / dz) : Infinity;
 
   let px = null, py = 0, pz = 0, t = 0;      // last empty cell = place candidate
   for(let i = 0; i < 512; i++){
     const b = getBlock(bx, by, bz);
     const solid = b && b !== 64;             // air (0) & water (64) are pass-through
-    // Ignore a block the camera is sitting inside (first ~0.2 units).
     if(solid && !(t < 0.2 && isSupportBlock(b))){
       return { hit:[bx,by,bz], place: px !== null ? [px,py,pz] : null, dist:t };
     }
@@ -445,6 +440,38 @@ export function castBlock(maxDist = 8){
     if(t > maxDist) break;
   }
   return null;
+}
+
+const REACH = 8;
+
+// Crosshair raycast (desktop): eye MUST match the camera (main.js sets it at
+// pos + 1.6) so the ray coincides with the crosshair, even on the ground.
+export function castBlock(maxDist = REACH){
+  const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'));
+  if(dir.lengthSq() < 1e-10) return null;
+  dir.normalize();
+  return castRay(player.pos.x, player.pos.y + 1.6, player.pos.z, dir.x, dir.y, dir.z, maxDist);
+}
+
+// Tap raycast (mobile): shoot from the ACTUAL camera through the touched pixel,
+// so blocks land under your finger regardless of the pulled-back camera. Clamped
+// to the player's reach (measured from the player, not the camera).
+const _tap = new THREE.Vector3();
+export function castScreen(sx, sy){
+  camera.updateMatrixWorld();
+  const ndcX = (sx / innerWidth) * 2 - 1;
+  const ndcY = -((sy / innerHeight) * 2 - 1);
+  _tap.set(ndcX, ndcY, 0.5).unproject(camera);
+  let dx = _tap.x - camera.position.x, dy = _tap.y - camera.position.y, dz = _tap.z - camera.position.z;
+  const L = Math.hypot(dx, dy, dz);
+  if(L < 1e-6) return null;
+  dx /= L; dy /= L; dz /= L;
+  const r = castRay(camera.position.x, camera.position.y, camera.position.z, dx, dy, dz, REACH + 10);
+  if(!r) return null;
+  // reach from the player body (not the camera, which may be pulled back)
+  const hd = Math.hypot(r.hit[0]-player.pos.x, r.hit[1]-(player.pos.y+0.9), r.hit[2]-player.pos.z);
+  if(hd > REACH + 1.5) return null;
+  return r;
 }
 
 function yawToFacing(yaw){
@@ -475,13 +502,14 @@ function toggleDoorAt(bx,by,bz){
   return true;
 }
 
-export function placeAction(){
+export function placeAction(sx, sy){
   if(survival.sv.dead) return;
   // Talk to nearby MiniCraft folk
   if(villagers.tryTalk(player.pos)){ placeAnim = 1; sfx.chat?.(); return; }
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
-  const r = castBlock();
+  // Tap (mobile) aims through the touched pixel; crosshair (desktop) through center.
+  const r = (sx != null) ? castScreen(sx, sy) : castBlock();
   // Click door / crate / powder keg interactions
   if(r && r.hit){
     const [hx,hy,hz] = r.hit;
@@ -628,7 +656,7 @@ const mineBar = document.getElementById('mineBar');
 const mineFill = mineBar.firstElementChild;
 function updateMining(dt){
   if(!state.mineHeld || invOpen){ state.mining=null; mineBar.style.display='none'; return; }
-  const r = castBlock();
+  const r = (mineSX != null) ? castScreen(mineSX, mineSY) : castBlock();
   if(!r){ state.mining=null; mineBar.style.display='none'; return; }
   const [bx,by,bz] = r.hit;
   let m = state.mining;
@@ -930,7 +958,18 @@ export function update(dt, elapsed){
     mineBar.style.display='none';
   }
 
-  camera.position.copy(player.pos).add(new THREE.Vector3(0,1.6,0));
+  if(isTouch && !state.sleeping){
+    // Modest pull-back + slight lift so you can see the build area and aim taps.
+    // (Placement uses castScreen from this camera, so the ray stays accurate.)
+    const f = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
+    const ex = player.pos.x, ey = player.pos.y + 1.6, ez = player.pos.z;
+    let back = 2.4;
+    const hit = castRay(ex, ey, ez, -f.x, -f.y, -f.z, back + 0.5); // don't clip terrain behind
+    if(hit && hit.dist < back) back = Math.max(0, hit.dist - 0.3);
+    camera.position.set(ex - f.x*back, ey + 1.0 - f.y*back, ez - f.z*back);
+  } else {
+    camera.position.copy(player.pos).add(new THREE.Vector3(0,1.6,0));
+  }
   camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
   if(shake>0){
     camera.position.x += jit(shake);
