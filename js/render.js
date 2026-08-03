@@ -428,15 +428,62 @@ export function makeCharacter(skinLike, withHead=true){
   const armL = limb(-.34, 1.4, .16, .25, sk.shirt, .35, sk.skin); // sleeve + forearm
   const armR = limb( .34, 1.4, .16, .25, sk.shirt, .35, sk.skin);
   g.add(legL, legR, armL, armR);
-  g.add(box(.5,.7,.28, sk.shirt, 0,1.05,0));
+  const torso = box(.5,.7,.28, sk.shirt, 0,1.05,0);
+  g.add(torso);
   let head = null;
   if(withHead){
     head = new THREE.Mesh(new THREE.BoxGeometry(.44,.44,.44), skinTextures(sk, keyOf(skinLike)).headMats);
     head.position.set(0,1.62,0);
     g.add(head);
   }
-  return {g, head, armL, armR, legL, legR, sk};
+  return {g, head, armL, armR, legL, legR, torso, sk, armorG:null};
 }
+
+/** Tint / attach armor meshes so local + remote players show equipped gear */
+export function applyCharacterArmor(parts, armor){
+  if(!parts?.g) return;
+  const a = armor || {};
+  // wipe previous attachments
+  if(parts.armorG){ parts.g.remove(parts.armorG); }
+  parts.armorG = new THREE.Group();
+  parts.g.add(parts.armorG);
+
+  const col = (id, fallback) => (id && ITEMS[id]?.color != null) ? ITEMS[id].color : fallback;
+
+  // Chest → torso recolor
+  if(parts.torso){
+    parts.torso.material.color.setHex(a.chest ? col(a.chest, 0x6B4423) : parts.sk.shirt);
+  }
+  // Legs → upper leg recolor (first child of limb is the thigh box)
+  const pantCol = a.legs ? col(a.legs, 0x5A3A1E) : parts.sk.pants;
+  for(const leg of [parts.legL, parts.legR]){
+    if(!leg) continue;
+    const thigh = leg.children?.[0];
+    if(thigh?.material) thigh.material.color.setHex(pantCol);
+  }
+  // Boots → lower leg / shoe
+  const bootCol = a.feet ? col(a.feet, 0x3E2A18) : 0x2b2b2b;
+  for(const leg of [parts.legL, parts.legR]){
+    if(!leg) continue;
+    const shoeM = leg.children?.[1];
+    if(shoeM?.material) shoeM.material.color.setHex(bootCol);
+  }
+  // Helmet on head
+  if(a.head){
+    const hc = col(a.head, 0x8B5A2B);
+    parts.armorG.add(box(.5,.16,.5, hc, 0, 1.82, 0));
+    parts.armorG.add(box(.52,.12,.2, hc, 0, 1.72, 0.18)); // brim
+  }
+  // Shield on left arm
+  if(a.off){
+    const sc = col(a.off, 0x8B6914);
+    const sh = box(.08,.42,.32, sc, -.48, 1.15, .12);
+    parts.armorG.add(sh);
+    // boss
+    parts.armorG.add(box(.04,.1,.1, 0xc0c0c0, -.54, 1.15, .12));
+  }
+}
+
 
 // ---- Small helpers used by hand, avatars, animals ----
 export function box(w,h,d,color,x,y,z){

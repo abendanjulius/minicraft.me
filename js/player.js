@@ -1,10 +1,10 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
-         chat, openChat } from './ui.js';
+         chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
 import { sfx, toggleMusic } from './audio.js';
 import { gm } from './mode.js';
 import * as net from './net.js';
@@ -180,20 +180,29 @@ function updateHeld(){
   }
 }
 setHeldChangeHook(updateHeld);
+setArmorHook(()=>applyLocalArmor());
 updateHeld(); // initial empty-hand pose
 
 // ---- Visible first-person body — pushed back behind the camera like Minecraft's ----
 let bodyG = null, bArmL = null, bArmR = null, bLegL = null, bLegR = null, bHead = null;
+let bodyParts = null;
 function buildBody(){
   if(bodyG) scene.remove(bodyG);
   // Head included so sleep animation isn't headless; hidden during normal FP
   const c = makeCharacter(skinIdx(), true);
+  bodyParts = c;
   bodyG = c.g; bArmL = c.armL; bArmR = c.armR; bLegL = c.legL; bLegR = c.legR; bHead = c.head;
   if(bHead) bHead.visible = false;
   bodyG.visible = false;
   scene.add(bodyG);
   armMesh.material.color.setHex(c.sk.skin); // first-person arm matches skin
+  applyLocalArmor();
 }
+export function applyLocalArmor(){
+  if(!bodyParts) return;
+  applyCharacterArmor(bodyParts, getArmorSlots?.() || armorSlots);
+}
+
 
 export function setPosYaw(x,y,z,yaw){
   player.pos.set(x,y,z);
@@ -906,5 +915,6 @@ export function netState(){
     blk: slotBlock(),
     item, // non-block held item (food / weapon / material)
     skin: skinIdx(),
+    armor: getArmorSlots?.() || armorSlots,
   };
 }

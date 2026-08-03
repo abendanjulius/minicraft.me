@@ -963,3 +963,25 @@ body.inv-char #invDetail{
   .mcLegL{ left: 12px !important; }
   .mcLegR{ left: 28px !important; }
 }
+
+.mcHelm{
+  position:absolute !important; left:14px !important; top:0 !important;
+  width:36px !important; height:14px !important; z-index:3 !important;
+  border:1px solid #0005 !important;
+}
+.mcShield{
+  position:absolute !important; left:0 !important; top:44px !important;
+  width:10px !important; height:36px !important; z-index:2 !important;
+  border:1px solid #0005 !important;
+}
+.mcBootL, .mcBootR{
+  position:absolute !important; top:118px !important;
+  width:14px !important; height:12px !important; z-index:2 !important;
+}
+.mcBootL{ left:16px !important; }
+.mcBootR{ left:34px !important; }
+@media (max-width:900px){
+  .mcBootL, .mcBootR{ top:100px !important; }
+  .mcBootL{ left:12px !important; }
+  .mcBootR{ left:28px !important; }
+}

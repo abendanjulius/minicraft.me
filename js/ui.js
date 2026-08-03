@@ -135,8 +135,14 @@ const CATS = [
   {id:'guide',  icon:'📖', label:'Guide'},
 ];
 let invCat = 'inv', invPick = null;
+let boxHint = '';
 // head, chest, legs, feet, offhand (shield)
 export const armorSlots = { head:null, chest:null, legs:null, feet:null, off:null };
+let armorHook = null;
+export function setArmorHook(fn){ armorHook = fn; }
+export function getArmorSlots(){ return { ...armorSlots }; }
+function notifyArmor(){ try{ armorHook?.(getArmorSlots()); }catch(e){} }
+
 
 
 function catOf(id){
@@ -146,7 +152,7 @@ function catOf(id){
   }
   const it = ITEMS[id];
   if(!it) return 'nature';
-  if(it.dmg) return 'gear';
+  if(it.dmg || it.slot || it.armor) return 'gear';
   if(it.food || it.heal) return 'food';
   return 'nature';
 }
@@ -219,26 +225,45 @@ function renderCharPane(){
     return `<button type="button" class="armorSlot${eq?' filled':''}" data-armor="${s.key}" title="${s.label}">${inner}</button>`;
   }).join('');
 
-  // Pixel-ish figure using nested divs (always visible)
+  const hx = (id, fb) => {
+    const c = id && ITEMS[id]?.color;
+    if(c == null) return fb;
+    return '#' + (c>>>0).toString(16).padStart(6,'0');
+  };
+  const headC = hx(armorSlots.head, '#c48a5a');
+  const shirtC = hx(armorSlots.chest, '#3d7a4a');
+  const pantC = hx(armorSlots.legs, '#4a3420');
+  const bootC = hx(armorSlots.feet, '#2b2b2b');
+  const helm = armorSlots.head
+    ? `<div class="mcHelm" style="background:${hx(armorSlots.head,'#8B5A2B')}"></div>` : '';
+  const shield = armorSlots.off
+    ? `<div class="mcShield" style="background:${hx(armorSlots.off,'#8B6914')}"></div>` : '';
+  const hint = boxHint ? `<p class="dHint charHint" style="color:#a33">${boxHint}</p>` : '';
+  boxHint = '';
   return `<div class="mcArmorBox">
     <div class="mcArmorInner">
       <div class="mcArmorSlots">${slots}</div>
       <div class="mcArmorView">
         <div class="mcSkin">
+          ${helm}
           <div class="mcHair"></div>
-          <div class="mcHead">
+          <div class="mcHead" style="background:${armorSlots.head ? hx(armorSlots.head,'#8B5A2B') : '#c48a5a'}">
             <div class="mcEye mcEyeL"></div>
             <div class="mcEye mcEyeR"></div>
             <div class="mcMouth"></div>
           </div>
-          <div class="mcTorso"></div>
+          <div class="mcTorso" style="background:${shirtC}"></div>
           <div class="mcArmL"></div>
           <div class="mcArmR"></div>
-          <div class="mcLegL"></div>
-          <div class="mcLegR"></div>
+          <div class="mcLegL" style="background:${pantC}"></div>
+          <div class="mcLegR" style="background:${pantC}"></div>
+          <div class="mcBootL" style="background:${bootC}"></div>
+          <div class="mcBootR" style="background:${bootC}"></div>
+          ${shield}
         </div>
       </div>
     </div>
+    ${hint}
   </div>`;
 }
 
@@ -397,13 +422,19 @@ export function renderInv(){
         e.stopPropagation();
         const key = btn.dataset.armor;
         if(armorSlots[key]){
-          // unequip back to inventory count already there
-          armorSlots[key] = null;
+          armorSlots[key] = null; // unequip
+          notifyArmor();
         } else if(invPick != null){
           const it = ITEMS[invPick];
-          // accept armor-tagged items, or any gear when on gear tab
-          if(it?.armor || invCat==='gear' || (it && (it.icon||'').length)){
+          if(!it || it.slot !== key){
+            // wrong slot — brief hint
+            const need = {head:'helmet',chest:'chestplate',legs:'leggings',feet:'boots',off:'shield'}[key]||key;
+            boxHint = `Only a ${need} fits this slot.`;
+          } else if((inventory[invPick]||0) < 1 && !gm.forge){
+            boxHint = 'You do not have that item.';
+          } else {
             armorSlots[key] = invPick;
+            notifyArmor();
           }
         }
         renderInv();

@@ -159,9 +159,11 @@ export const EXTRA_ITEMS = {
   172:{name:'Zombie Tonic',   icon:'🧉', food:2, heal:8},
   165:{name:"Miner's Stew",   icon:'🥘', food:10, heal:3},
   180:{name:'Spark Striker', icon:'🔥'},
-  181:{name:'Leather Cap',   icon:'🧢', armor:1},
-  182:{name:'Leather Tunic', icon:'🦺', armor:3},
-  183:{name:'Leather Boots', icon:'🥾', armor:1},
+  181:{name:'Leather Cap',    icon:'🧢', armor:1, slot:'head',  color:0x8B5A2B},
+  182:{name:'Leather Tunic',  icon:'🦺', armor:3, slot:'chest', color:0x6B4423},
+  183:{name:'Leather Pants',  icon:'👖', armor:2, slot:'legs',  color:0x5A3A1E},
+  184:{name:'Leather Boots',  icon:'🥾', armor:1, slot:'feet',  color:0x3E2A18},
+  185:{name:'Wood Shield',    icon:'🛡️', armor:0, slot:'off',   color:0x8B6914},
 };
 
 
@@ -303,9 +305,11 @@ R(59,4,[[7,6]],'block','Wooden stairs for roofs and steps'),
 R(60,4,[[3,6]],'block','Stone stairs'),
 R(61,6,[[7,3]],'block','Half-height wood slab'),
 R(62,2,[[7,6]],'block','Click to open/close — floor hatch'),
-R(181,1,[[125,5]],'mat','Leather armor — reduces damage'),
-R(182,1,[[125,8]],'mat','Leather armor — reduces damage'),
-R(183,1,[[125,4]],'mat','Leather armor — reduces damage'),
+R(181,1,[[125,5]],'mat','Helmet — head slot only'),
+R(182,1,[[125,8]],'mat','Chestplate — chest slot only'),
+R(183,1,[[125,6]],'mat','Leggings — legs slot only'),
+R(184,1,[[125,4]],'mat','Boots — feet slot only'),
+R(185,1,[[7,6],[110,1]],'mat','Shield — off-hand slot'),
 R(165,1,[[116,2],[120,1]],'food','Hot fuel for long digs — heals 3 (10)'),
 ];
 

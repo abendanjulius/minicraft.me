@@ -1,13 +1,14 @@
 // survival.js — health, hunger, food, death, achievements
 import { ITEMS, TYPES } from './render.js';
-import { inventory, renderHotbar, renderInv, invOpen, addChat } from './ui.js';
+import { inventory, renderHotbar, renderInv, invOpen, addChat, getArmorSlots } from './ui.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
 function armorPoints(){
   let a = 0;
-  if((inventory[181]||0)>0) a += 1;
-  if((inventory[182]||0)>0) a += 3;
-  if((inventory[183]||0)>0) a += 1;
+  const slots = getArmorSlots?.() || {};
+  for(const id of Object.values(slots)){
+    if(id && ITEMS[id]?.armor) a += ITEMS[id].armor;
+  }
   return a;
 }
 
