@@ -416,7 +416,9 @@ export function castBlock(maxDist = 8){
     .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'));
   if(dir.lengthSq() < 1e-10) return null;
   dir.normalize();
-  const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.62, player.pos.z);
+  // Eye MUST match the camera exactly (main.js sets camera at pos + 1.6), or the
+  // ray diverges from the crosshair — most visibly on the ground at shallow angles.
+  const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.6, player.pos.z);
 
   let bx = Math.round(eye.x), by = Math.round(eye.y), bz = Math.round(eye.z);
   const stepX = dir.x >= 0 ? 1 : -1, stepY = dir.y >= 0 ? 1 : -1, stepZ = dir.z >= 0 ? 1 : -1;
