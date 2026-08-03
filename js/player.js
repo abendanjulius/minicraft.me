@@ -379,12 +379,11 @@ export function jump(b){ keys.Space = b; }
 /** Solid enough to attach a new block to (not air / plants / open doors / water) */
 function isSupportBlock(b){
   if(!b) return false;
-  // walk-through / non-solid: torches, plants, water, open doors, slabs top? keep simple
   if(isWalkThrough(b)) return false;
   return true;
 }
 
-/** True if cell (x,y,z) touches at least one solid block (6-neighbor) */
+/** True if cell touches at least one solid block (6-neighbor) */
 function hasBlockSupport(x, y, z){
   const n = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
   for(const [dx,dy,dz] of n){
@@ -393,101 +392,72 @@ function hasBlockSupport(x, y, z){
   return false;
 }
 
-/** Does placing at cell overlap the player's body? */
+/** Block cells are CENTERED on integers (render uses unit cubes at integer positions). */
 function placeOverlapsPlayer(px, py, pz){
-  // Player AABB roughly 0.6×1.8 centered on pos.xz, feet at pos.y
   const half = 0.35;
   const px0 = player.pos.x - half, px1 = player.pos.x + half;
   const pz0 = player.pos.z - half, pz1 = player.pos.z + half;
-  const py0 = player.pos.y, py1 = player.pos.y + 1.75;
-  // Block cell [n, n+1) in floor space (DDA uses floor coords)
-  const bx0 = px, bx1 = px + 1;
-  const by0 = py, by1 = py + 1;
-  const bz0 = pz, bz1 = pz + 1;
+  const py0 = player.pos.y,       py1 = player.pos.y + 1.75;
+  // Block occupies [n-0.5, n+0.5]
+  const bx0 = px - 0.5, bx1 = px + 0.5;
+  const by0 = py - 0.5, by1 = py + 0.5;
+  const bz0 = pz - 0.5, bz1 = pz + 0.5;
   return !(px1 <= bx0 || px0 >= bx1 || py1 <= by0 || py0 >= by1 || pz1 <= bz0 || pz0 >= bz1);
 }
 
 /**
- * Voxel DDA raycast (Amanatides & Woo).
- * Returns { hit:[x,y,z], place:[x,y,z], dist, face } or null.
- * place = empty cell just before the hit face (where a block would attach).
+ * Raycast against CENTER-indexed unit blocks (Math.round).
+ * place is always the face-adjacent cell opposite the incoming ray — never a diagonal.
  */
 export function castBlock(maxDist = 7){
   const dir = new THREE.Vector3(0,0,-1)
     .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
     .normalize();
+  if(dir.lengthSq() < 1e-8) return null;
   const eye = player.pos.clone().add(new THREE.Vector3(0, 1.62, 0));
 
-  // Start cell
-  let x = Math.floor(eye.x);
-  let y = Math.floor(eye.y);
-  let z = Math.floor(eye.z);
+  let lx = null, ly = null, lz = null;
+  let hit = null;
+  let hitDist = 0;
 
-  const stepX = dir.x > 0 ? 1 : (dir.x < 0 ? -1 : 0);
-  const stepY = dir.y > 0 ? 1 : (dir.y < 0 ? -1 : 0);
-  const stepZ = dir.z > 0 ? 1 : (dir.z < 0 ? -1 : 0);
+  const step = 0.02;
+  for(let t = 0; t <= maxDist; t += step){
+    const wx = eye.x + dir.x * t;
+    const wy = eye.y + dir.y * t;
+    const wz = eye.z + dir.z * t;
+    const bx = Math.round(wx);
+    const by = Math.round(wy);
+    const bz = Math.round(wz);
+    if(bx === lx && by === ly && bz === lz) continue;
+    lx = bx; ly = by; lz = bz;
 
-  const invX = dir.x !== 0 ? 1 / Math.abs(dir.x) : Infinity;
-  const invY = dir.y !== 0 ? 1 / Math.abs(dir.y) : Infinity;
-  const invZ = dir.z !== 0 ? 1 / Math.abs(dir.z) : Infinity;
+    const b = getBlock(bx, by, bz);
+    if(!b || b === 64) continue; // air / water — keep going
 
-  // Distance along ray to first grid boundary
-  let tMaxX = dir.x > 0 ? (Math.floor(eye.x) + 1 - eye.x) * invX
-            : dir.x < 0 ? (eye.x - Math.floor(eye.x)) * invX : Infinity;
-  let tMaxY = dir.y > 0 ? (Math.floor(eye.y) + 1 - eye.y) * invY
-            : dir.y < 0 ? (eye.y - Math.floor(eye.y)) * invY : Infinity;
-  let tMaxZ = dir.z > 0 ? (Math.floor(eye.z) + 1 - eye.z) * invZ
-            : dir.z < 0 ? (eye.z - Math.floor(eye.z)) * invZ : Infinity;
+    // Skip if still inside a solid at the very start (camera embedded)
+    if(t < 0.12 && !isWalkThrough(b)) continue;
 
-  // If exactly on integer boundary going negative, floor already put us in cell; tMax is 0 — nudge
-  if(tMaxX === 0) tMaxX = invX;
-  if(tMaxY === 0) tMaxY = invY;
-  if(tMaxZ === 0) tMaxZ = invZ;
-
-  let prev = null;
-  let dist = 0;
-  let face = 0; // 0=x,1=y,2=z last crossed
-
-  for(let i = 0; i < 64; i++){
-    const b = getBlock(x, y, z);
-    // Treat solid (and also non-walkthrough) as a hit surface you can place against
-    if(b && !isWalkThrough(b)){
-      return { hit:[x,y,z], place: prev, dist, face };
-    }
-    // soft blocks (plants etc.) — still allow targeting through, but can hit for break
-    if(b && b !== 64){ // water: pass through for place ray; other non-solids still "hit" for mining
-      // For placement we want the solid behind; for mining we want this cell
-      // Keep going only through pure empty; stop on any non-air so mining still works
-      if(b !== 10 && b !== 44){ // torch-like / thin — optional pass
-        // plants, leaves-ish walkthrough: count as hit so you can break them
-        if(isWalkThrough(b)){
-          return { hit:[x,y,z], place: prev, dist, face };
-        }
-      }
-    }
-
-    prev = [x, y, z];
-
-    // Step to next voxel
-    if(tMaxX < tMaxY){
-      if(tMaxX < tMaxZ){
-        dist = tMaxX; x += stepX; tMaxX += invX; face = 0;
-      } else {
-        dist = tMaxZ; z += stepZ; tMaxZ += invZ; face = 2;
-      }
-    } else {
-      if(tMaxY < tMaxZ){
-        dist = tMaxY; y += stepY; tMaxY += invY; face = 1;
-      } else {
-        dist = tMaxZ; z += stepZ; tMaxZ += invZ; face = 2;
-      }
-    }
-    if(dist > maxDist) break;
+    // Any other block is a valid target (solid or plant)
+    hit = [bx, by, bz];
+    hitDist = t;
+    break;
   }
-  return null;
+  if(!hit) return null;
+
+  // Place against the face we entered from (dominant axis of ray direction)
+  const [hx, hy, hz] = hit;
+  const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
+  let place;
+  if(ay >= ax && ay >= az){
+    place = [hx, hy - Math.sign(dir.y || -1), hz];
+  } else if(ax >= az){
+    place = [hx - Math.sign(dir.x || 1), hy, hz];
+  } else {
+    place = [hx, hy, hz - Math.sign(dir.z || 1)];
+  }
+
+  return { hit, place, dist: hitDist };
 }
-
-
 
 function yawToFacing(yaw){
   // Door FRONT faces the player (0=+Z, 1=+X, 2=-Z, 3=-X).
