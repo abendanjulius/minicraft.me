@@ -710,10 +710,14 @@ function initTouch(hooks){
     bf.addEventListener('touchstart', e=>{
       e.preventDefault(); e.stopPropagation();
       bf.classList.add('pressed');
-      hooks.fly?.();
-      // active class is toggled by player.toggleFly
-      setTimeout(()=> bf.classList.remove('pressed'), 120);
+      const on = hooks.fly?.();
+      // Ensure toggle class even if player path missed it
+      if(on === true) bf.classList.add('active');
+      else if(on === false) bf.classList.remove('active');
+      setTimeout(()=> bf.classList.remove('pressed'), 150);
     });
+    bf.addEventListener('touchend', ()=> bf.classList.remove('pressed'));
+    bf.addEventListener('touchcancel', ()=> bf.classList.remove('pressed'));
   }
   $('btnInv').addEventListener('touchstart', e=>{ e.preventDefault(); toggleInv(); });
 }
