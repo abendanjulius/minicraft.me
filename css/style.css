@@ -985,3 +985,27 @@ body.inv-char #invDetail{
   .mcBootL{ left:12px !important; }
   .mcBootR{ left:28px !important; }
 }
+
+/* Hotbar item name (Minecraft-style center toast) */
+#slotNameToast{
+  position:fixed; left:50%; bottom:92px; transform:translateX(-50%);
+  background:rgba(0,0,0,.78); color:#fff; padding:5px 14px; border-radius:4px;
+  font-family:monospace; font-size:14px; letter-spacing:.3px;
+  opacity:0; pointer-events:none; z-index:6;
+  transition:opacity .12s ease; white-space:nowrap;
+  text-shadow:1px 1px 0 #000;
+}
+#slotNameToast.show{ opacity:1; }
+
+/* Inventory button as last hotbar cell */
+#hotbar .invSlotBtn{
+  cursor:pointer;
+  background:rgba(0,0,0,.35);
+  border:2px solid rgba(255,255,255,.35);
+}
+#hotbar .invSlotBtn:active{ background:rgba(90,180,60,.35); }
+/* Keep legacy top-right inv as secondary; prefer hotbar one */
+@media (max-width:900px){
+  #touchUI #btnInv{ display:none !important; }
+  #slotNameToast{ bottom:78px; font-size:13px; }
+}

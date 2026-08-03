@@ -49,6 +49,29 @@ export function addToInventory(t){
 }
 export function setHeldChangeHook(fn){ onHeldChange = fn; }
 
+function showSlotName(name){
+  if(!name) return;
+  let el = $('slotNameToast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'slotNameToast';
+    document.body.appendChild(el);
+  }
+  el.textContent = name;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=> el.classList.remove('show'), 1600);
+}
+
+function nameForHotbarSlot(s){
+  if(!s) return '';
+  if(s.k==='t') return toolInfo(s.id).name;
+  if(s.k==='f') return ITEMS[s.id]?.name || '';
+  if(s.k==='b') return TYPES[s.id]?.name || '';
+  return '';
+}
+
+
 // craft.js is injected from main.js so the two modules don't import each other
 let craftApi = null;
 export function setCraftApi(api){ craftApi = api; }
@@ -84,13 +107,46 @@ export function renderHotbar(){
       }
       renderHotbar();
     });
-    d.addEventListener('pointerdown', e=>{ e.stopPropagation(); sel.slot=i; renderHotbar(); });
+    d.addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      // Inventory open: place selected item into this slot (no auto-fill on item click)
+      if(invOpen && (invPick != null || invPickTool)){
+        if(invPickTool){
+          hotbarSlots[i] = {k:'t', id:invPickTool};
+          invPickTool = null;
+        } else {
+          const id = +invPick;
+          hotbarSlots[i] = {k: id>=100 ? 'f' : 'b', id};
+        }
+        sel.slot = i;
+        showSlotName(nameForHotbarSlot(hotbarSlots[i]));
+        renderHotbar();
+        if(invOpen) renderInv();
+        return;
+      }
+      // Normal: select slot + show name toast
+      sel.slot = i;
+      showSlotName(nameForHotbarSlot(hotbarSlots[i]));
+      renderHotbar();
+    });
     hb.appendChild(d);
   });
+  // Inventory button — last icon after the 10 slots
+  const invBtn = document.createElement('div');
+  invBtn.className = 'slot invSlotBtn';
+  invBtn.title = 'Inventory';
+  invBtn.innerHTML = '<span class="ticon">🎒</span>';
+  invBtn.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    toggleInv();
+  });
+  hb.appendChild(invBtn);
+
   // HUD label for what's held
   const t = slotTool(), b = slotBlock();
   const fd = hotbarSlots[sel.slot]?.k==='f' ? hotbarSlots[sel.slot].id : 0;
-  $('toolName').textContent = t!=='hand' ? toolInfo(t).name : fd ? ITEMS[fd].name : (b ? TYPES[b].name : 'Hand');
+  const tn = $('toolName');
+  if(tn) tn.textContent = t!=='hand' ? toolInfo(t).name : fd ? ITEMS[fd].name : (b ? TYPES[b].name : 'Hand');
   onHeldChange?.();
 }
 
@@ -135,6 +191,7 @@ const CATS = [
   {id:'guide',  icon:'📖', label:'Guide'},
 ];
 let invCat = 'inv', invPick = null;
+let invPickTool = null;
 let boxHint = '';
 // head, chest, legs, feet, offhand (shield)
 export const armorSlots = { head:null, chest:null, legs:null, feet:null, off:null };
@@ -380,13 +437,15 @@ export function renderInv(){
       if(t.id==='hand') continue;
       if(q && !matchesSearch(t.name)) continue;
       const d = document.createElement('div');
-      d.className = 'invItem tool' + (hotbarSlots[sel.slot]?.k==='t' && hotbarSlots[sel.slot].id===t.id ? ' sel':'');
+      d.className = 'invItem tool' + (invPickTool===t.id ? ' sel':'');
       d.innerHTML = `<span class="ticon">${t.icon}</span>`;
       d.title = t.name;
       d.addEventListener('pointerdown', e=>{
         e.stopPropagation();
-        hotbarSlots[sel.slot] = {k:'t', id:t.id};
-        renderHotbar();
+        invPick = null;
+        invPickTool = t.id;
+        // Highlight selection only; place by tapping a hotbar slot
+        renderInv();
       });
       grid.appendChild(d);
     }
@@ -409,11 +468,9 @@ export function renderInv(){
     d.addEventListener('pointerdown', e=>{
       e.stopPropagation();
       invPick = id;
-      if(have>0 || gm.forge){
-        hotbarSlots[sel.slot] = {k: id>=100 ? 'f' : 'b', id};
-        if(gm.forge && id>=100) inventory[id] = 999;
-        renderHotbar();
-      }
+      invPickTool = null;
+      // Do NOT auto-add to hotbar — select then tap a hotbar slot to place
+      if(gm.forge && id>=100) inventory[id] = 999;
       renderInv();
     });
     grid.appendChild(d);

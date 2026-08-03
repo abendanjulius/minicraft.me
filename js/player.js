@@ -81,25 +81,14 @@ function clearHeldExtra(){
 /** Pose the arm for empty / tool / block modes */
 function poseArm(mode){
   // mode: 'empty' | 'tool' | 'block' | 'item'
+  // Minecraft-style: empty = hand only; holding anything = item only (no arm)
   if(mode === 'empty'){
     armPivot.visible = true;
     armPivot.position.set(0.18, -0.02, 0.05);
-    // diagonal in from bottom-right, matching Minecraft empty hand
     armPivot.rotation.set(1.15, 0.55, 0.35);
-  } else if(mode === 'block'){
-    // arm mostly tucked; block is the star
-    armPivot.visible = true;
-    armPivot.position.set(0.28, -0.18, 0.12);
-    armPivot.rotation.set(1.0, 0.4, 0.5);
-  } else if(mode === 'tool'){
-    armPivot.visible = true;
-    armPivot.position.set(0.12, -0.05, 0.02);
-    armPivot.rotation.set(0.85, 0.35, 0.25);
   } else {
-    // item / food icon
-    armPivot.visible = true;
-    armPivot.position.set(0.14, -0.06, 0.04);
-    armPivot.rotation.set(0.95, 0.4, 0.3);
+    // Hide the arm — only the held block/tool/item is visible
+    armPivot.visible = false;
   }
 }
 
@@ -126,9 +115,9 @@ function updateHeld(){
     const m = toolModels[held.id];
     if(m){
       m.visible = true;
-      m.position.set(-0.02, 0.12, -0.35);
-      m.rotation.set(-0.9, 0.35, 0.15);
-      m.scale.set(1.35, 1.35, 1.35);
+      m.position.set(0.22, -0.12, -0.45);
+      m.rotation.set(-0.5, 0.55, 0.25);
+      m.scale.set(1.5, 1.5, 1.5);
     }
     return;
   }
@@ -144,17 +133,17 @@ function updateHeld(){
     heldExtra = makeBlockCube(id, thin ? 0.5 : 0.58);
     if(id===61){ // slab — flatten
       heldExtra.scale.set(1, 0.5, 1);
-      heldExtra.position.set(0.08, -0.05, -0.42);
+      heldExtra.position.set(0.28, -0.18, -0.5);
     } else if(id===62||id===63){
       heldExtra.scale.set(1, 0.2, 1);
-      heldExtra.position.set(0.08, 0.0, -0.42);
+      heldExtra.position.set(0.28, -0.12, -0.5);
     } else if(id===11){
       heldExtra.scale.set(0.35, 1, 0.35);
-      heldExtra.position.set(0.05, 0.02, -0.4);
+      heldExtra.position.set(0.26, -0.14, -0.48);
     } else {
-      heldExtra.position.set(0.08, 0.02, -0.42);
+      heldExtra.position.set(0.28, -0.14, -0.5);
     }
-    heldExtra.rotation.set(0.35, -0.85, 0.12);
+    heldExtra.rotation.set(0.25, -0.7, 0.15);
     handGroup.add(heldExtra);
     return;
   }
@@ -168,13 +157,13 @@ function updateHeld(){
       poseArm('tool');
       heldExtra = makeWeaponModel(id);
       heldExtra.scale.set(1.4, 1.4, 1.4);
-      heldExtra.position.set(-0.02, 0.14, -0.32);
-      heldExtra.rotation.set(-0.85, 0.3, 0.1);
+      heldExtra.position.set(0.22, -0.1, -0.45);
+      heldExtra.rotation.set(-0.5, 0.45, 0.2);
     } else {
       poseArm('item');
-      heldExtra = makeHeldItemIcon(id, 0.55);
-      heldExtra.position.set(0.02, 0.14, -0.38);
-      heldExtra.rotation.set(0.1, 0.2, -0.15);
+      heldExtra = makeHeldItemIcon(id, 0.6);
+      heldExtra.position.set(0.26, -0.12, -0.48);
+      heldExtra.rotation.set(0.05, 0.25, -0.1);
     }
     handGroup.add(heldExtra);
   }
