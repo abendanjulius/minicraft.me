@@ -425,26 +425,22 @@ function faceAdjacentPlace(hx, hy, hz, dir){
  * Shared by placeAction (to place) and the update loop (to preview the ghost),
  * so the ghost always shows the true destination cell.
  */
-function resolvePlaceCell(r, flush = true){
+function resolvePlaceCell(r){
   if(!r || !r.hit) return null;
   const [hx,hy,hz] = r.hit;
 
-  // What you point at is what you get: the block lands in the very cell the
-  // crosshair hit, replacing it. No neighbour guessing — the old fallback could
-  // pick an unrelated cell beside the player, which read as "it placed the one
-  // near me". Multi-cell pieces (doors, beds) need free space, so they keep the
-  // classic face-adjacent placement via flush=false.
-  if(flush){
-    if(hy<0 || hy>=WH) return null;
-    if(placeOverlapsPlayer(hx,hy,hz)) return null;
-    return [hx,hy,hz];
-  }
-
+  // Against the face the crosshair entered — top face → on top, side face → on
+  // that side. The DDA's `place` IS that cell: it steps one boundary at a time,
+  // so the last empty cell before the hit is always exactly face-adjacent.
+  // Nothing guesses at neighbours, so a block can never appear off to the side.
   let place = r.place;
   if(!place) place = faceAdjacentPlace(hx, hy, hz, aimDir());
-  let [px,py,pz] = place;
+  const [px,py,pz] = place;
   if(py<0||py>=WH) return null;
-  if(getBlock(px,py,pz)) return null;
+
+  // Must be free (water is replaceable, matching the pass-through raycast)
+  const occ = getBlock(px,py,pz);
+  if(occ && occ !== 64) return null;
 
   // No floating blocks — must touch a solid
   if(!hasBlockSupport(px, py, pz)) return null;
@@ -591,7 +587,7 @@ export function placeAction(){
 
   // Compute / validate place cell against the hit face (shared with the ghost preview)
   const doorStyle = DOOR_STYLES.find(s => s.item === tid);
-  const cell = resolvePlaceCell(r, !doorStyle && tid !== 58);
+  const cell = resolvePlaceCell(r);
   if(!cell) return;
   let [px,py,pz] = cell;
 
@@ -972,10 +968,7 @@ export function update(dt, elapsed){
       let tid = slotBlock();
       if(tid){
         for(const s of DOOR_STYLES){ if(tid>=s.base && tid<s.base+8) tid = s.item; }
-        if(gm.forge || inventory[tid] > 0){
-          const doorStyle = DOOR_STYLES.find(s => s.item === tid);
-          ghost = resolvePlaceCell(r, !doorStyle && tid !== 58);
-        }
+        if(gm.forge || inventory[tid] > 0) ghost = resolvePlaceCell(r);
       }
     }
     updatePlacePreview(r && r.hit ? r.hit : null, ghost);
