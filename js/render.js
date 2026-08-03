@@ -492,8 +492,8 @@ export function box(w,h,d,color,x,y,z){
   return m;
 }
 export function makeToolModel(id){
+  // 3D prop for remote avatars / third-person
   const g = new THREE.Group();
-  // Slightly chunkier so they read in first-person
   if(id==='pick'){
     g.add(box(.06,.48,.06,0x8a5a2b,0,.14,0));
     g.add(box(.42,.08,.08,0xa0a0a0,0,.38,0));
@@ -508,6 +508,27 @@ export function makeToolModel(id){
   }
   return g;
 }
+
+/** First-person tool display — same emoji as the hotbar icon */
+export function makeToolIconPlane(toolId, size=.55){
+  const t = TOOLS.find(x => x.id === toolId);
+  const emoji = t?.icon || '🔧';
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,96,96);
+  ctx.font = '72px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 48, 52);
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide
+  });
+  return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+}
+
 export function makeBlockCube(tid, size=.34){
   const mats = TYPES[tid]?.mats;
   if(!mats){

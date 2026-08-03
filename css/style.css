@@ -591,9 +591,13 @@ body.inv-open #inv{
     pointer-events: auto !important;
   }
   body.inv-open #slotNameToast{
-    bottom: 62px !important;
-    z-index: 13 !important;
-  }
+  position:fixed; left:50%; bottom:44px; transform:translateX(-50%);
+  background:rgba(0,0,0,.78); color:#fff; padding:3px 10px; border-radius:4px;
+  font-family:monospace; font-size:12px; letter-spacing:.2px;
+  opacity:0; pointer-events:none; z-index:6;
+  transition:opacity .12s ease; white-space:nowrap;
+  text-shadow:1px 1px 0 #000;
+}
   /* Smaller hotbar icons on mobile */
   #hotbar .slot{
     width: 32px !important;
@@ -1051,7 +1055,7 @@ body.inv-char #invDetail{
 /* Keep legacy top-right inv as secondary; prefer hotbar one */
 @media (max-width:900px){
   #touchUI #btnInv{ display:none !important; }
-  #slotNameToast{ bottom:78px; font-size:13px; }
+  #slotNameToast{ bottom:44px; font-size:12px; }
 }
 
 
@@ -1097,8 +1101,7 @@ body.inv-char #invDetail{
     opacity: 1 !important;
     display: flex !important;
   }
-  body.inv-open #slotNameToast{
-    bottom: 60px !important;
+  body.inv-open #slotNameToast{ bottom: 44px !important;
     z-index: 21 !important;
   }
   /* Compact icons */
@@ -1166,5 +1169,42 @@ body.inv-char #invDetail{
     right: 0 !important;
     height: auto !important;
     transform: none !important;
+  }
+}
+
+/* v1.12.11 — compact header + touch controls (match hotbar size) */
+#btnChat, #btnMode, #btnQuit{
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 14px !important;
+  border-radius: 6px !important;
+  top: 8px !important;
+}
+#btnChat{ right: 8px !important; }
+#btnQuit{ right: 44px !important; display: flex !important; }
+#btnMode{ right: 80px !important; }
+body:not(.touch) #btnQuit{ right: 44px !important; }
+body:not(.touch) #btnMode{ right: 80px !important; }
+body:not(.touch) #btnChat{ right: 8px !important; }
+
+/* Touch action buttons — same size as hotbar slots */
+.tbtn{
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 14px !important;
+  border-radius: 50% !important;
+}
+#btnJump{ right: 12px !important; bottom: 96px !important; }
+#btnPlace{ right: 12px !important; bottom: 56px !important; }
+#btnMine{ right: 52px !important; bottom: 56px !important; }
+#btnDrop{ right: 52px !important; bottom: 96px !important; }
+#btnSprint{ right: 12px !important; bottom: 136px !important; }
+#btnFly{ right: 52px !important; bottom: 136px !important; }
+
+@media (max-width: 900px){
+  #slotNameToast{
+    bottom: 42px !important;
+    font-size: 11px !important;
+    padding: 2px 8px !important;
   }
 }

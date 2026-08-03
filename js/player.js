@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
@@ -109,16 +109,14 @@ function updateHeld(){
     return;
   }
 
-  // Mining tools
+  // Mining tools — show the same emoji icon as the hotbar
   if(held.k==='t'){
     poseArm('tool');
-    const m = toolModels[held.id];
-    if(m){
-      m.visible = true;
-      m.position.set(0.22, -0.12, -0.45);
-      m.rotation.set(-0.5, 0.55, 0.25);
-      m.scale.set(1.5, 1.5, 1.5);
-    }
+    for(const id in toolModels) toolModels[id].visible = false;
+    heldExtra = makeToolIconPlane(held.id, 0.52);
+    heldExtra.position.set(0.28, -0.14, -0.48);
+    heldExtra.rotation.set(0.05, 0.35, -0.08);
+    handGroup.add(heldExtra);
     return;
   }
 
