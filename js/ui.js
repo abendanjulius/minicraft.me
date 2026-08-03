@@ -622,18 +622,79 @@ function initTouch(hooks){
       if(t.identifier===lookId) lookId=null;
     }
   });
+  // Tap = place, hold = mine (Minecraft PE style) — removes need for Mine/Place buttons
+  let digId = null, digX = 0, digY = 0, digMoved = false, digMining = false, digTimer = null;
+  const HOLD_MS = 300;
+  const MOVE_PX = 14;
+
+  function clearDig(){
+    if(digTimer){ clearTimeout(digTimer); digTimer = null; }
+    if(digMining){ hooks.mine(false); digMining = false; }
+    digId = null; digMoved = false;
+  }
+
   $('game').addEventListener('touchstart', e=>{
     e.preventDefault();
     if(invOpen) return;
     const t = e.changedTouches[0];
+    // ignore if finger started on a UI control
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    if(el && el.closest && el.closest('#hotbar,#touchUI,.tbtn,#btnChat,#btnQuit,#btnMode,#compass,#inv')) return;
+
     if(lookId===null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
+    digId = t.identifier;
+    digX = t.clientX; digY = t.clientY;
+    digMoved = false;
+    digMining = false;
+    if(digTimer) clearTimeout(digTimer);
+    digTimer = setTimeout(()=>{
+      digTimer = null;
+      if(digId != null && !digMoved && !invOpen){
+        digMining = true;
+        hooks.mine(true);
+      }
+    }, HOLD_MS);
   }, {passive:false});
+
+  // extend existing touchmove: detect dig drag vs look
+  document.addEventListener('touchmove', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === digId){
+        if(!digMoved && Math.hypot(t.clientX - digX, t.clientY - digY) > MOVE_PX){
+          digMoved = true;
+          if(digTimer){ clearTimeout(digTimer); digTimer = null; }
+          if(digMining){ hooks.mine(false); digMining = false; }
+        }
+      }
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === digId){
+        const wasMining = digMining;
+        const wasMoved = digMoved;
+        if(digTimer){ clearTimeout(digTimer); digTimer = null; }
+        if(digMining){ hooks.mine(false); digMining = false; }
+        digId = null;
+        // Short tap without much movement → place
+        if(!wasMining && !wasMoved && !invOpen){
+          hooks.place?.();
+        }
+      }
+    }
+  });
+  document.addEventListener('touchcancel', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === digId) clearDig();
+    }
+  });
 
   $('btnJump').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.jump(true); });
   $('btnJump').addEventListener('touchend', ()=>hooks.jump(false));
-  $('btnMine').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.mine(true); });
-  $('btnMine').addEventListener('touchend', ()=>hooks.mine(false));
-  $('btnPlace').addEventListener('touchstart', e=>{ e.preventDefault(); hooks.place(); });
+  // Mine / Place buttons removed — tap & hold on world instead
+  const bm = $('btnMine'); if(bm) bm.style.display = 'none';
+  const bp = $('btnPlace'); if(bp) bp.style.display = 'none';
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
   const sp = $('btnSprint');
   if(sp){

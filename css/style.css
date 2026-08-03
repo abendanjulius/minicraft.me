@@ -1260,3 +1260,16 @@ html body.inv-open #slotNameToast{
   font-size: 12px !important;
   padding: 3px 10px !important;
 }
+
+/* ===== v1.12.14 — hide mine/place; compact remaining controls ===== */
+html body #btnMine,
+html body #btnPlace,
+html body #touchUI #btnMine,
+html body #touchUI #btnPlace{
+  display: none !important;
+}
+/* 2×2 grid: fly/sprint top, drop/jump bottom */
+html body #btnSprint{ right: 14px !important; bottom: 118px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
+html body #btnFly{ right: 72px !important; bottom: 118px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
+html body #btnJump{ right: 14px !important; bottom: 58px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
+html body #btnDrop{ right: 72px !important; bottom: 58px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
