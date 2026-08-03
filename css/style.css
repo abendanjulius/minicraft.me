@@ -1273,3 +1273,46 @@ html body #btnSprint{ right: 14px !important; bottom: 118px !important; width: 5
 html body #btnFly{ right: 72px !important; bottom: 118px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
 html body #btnJump{ right: 14px !important; bottom: 58px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
 html body #btnDrop{ right: 72px !important; bottom: 58px !important; width: 50px !important; height: 50px !important; font-size: 20px !important; }
+
+/* ===== v1.12.15 — diamond control pad (match reference layout, our colors) ===== */
+html body #touchUI .tbtn,
+html body #touchUI #btnFly,
+html body #touchUI #btnSprint,
+html body #touchUI #btnDrop,
+html body #touchUI #btnJump{
+  width: 50px !important;
+  height: 50px !important;
+  min-width: 50px !important;
+  min-height: 50px !important;
+  font-size: 22px !important;
+  border-radius: 50% !important;
+  background: rgba(0,0,0,.42) !important;
+  border: 2px solid rgba(255,255,255,.45) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35) !important;
+}
+/* Diamond: top=fly, left=sprint, right=drop, bottom=jump */
+html body #btnFly{
+  right: 52px !important;
+  bottom: 168px !important;
+}
+html body #btnSprint{
+  right: 100px !important;
+  bottom: 118px !important;
+}
+html body #btnDrop{
+  right: 4px !important;
+  bottom: 118px !important;
+}
+html body #btnJump{
+  right: 52px !important;
+  bottom: 68px !important;
+}
+html body #btnMine,
+html body #btnPlace{
+  display: none !important;
+}
+html body #btnFly.active{
+  background: rgba(80,160,255,.5) !important;
+  border-color: rgba(140,200,255,.85) !important;
+}
