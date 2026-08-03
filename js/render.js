@@ -302,7 +302,31 @@ addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  refreshAimNDC();
 });
+
+// ---- Where the crosshair actually sits on the canvas -----------------------
+// The crosshair is a fixed-position DOM element (visual viewport) while the
+// canvas is sized to innerWidth/innerHeight (layout viewport). On mobile those
+// differ — the collapsing URL bar makes the canvas taller than the visible
+// area — so the projection centre drifts BELOW the drawn crosshair and the aim
+// ray hits a nearer cell than the player is pointing at. Measuring the
+// crosshair against the canvas keeps aim locked to what's on screen.
+const _aimNDC = { x: 0, y: 0 };
+export function aimNDC(){ return _aimNDC; }
+export function refreshAimNDC(){
+  const ch = document.getElementById('crosshair');
+  const cv = renderer.domElement;
+  if(!ch || !cv) return;
+  const c = ch.getBoundingClientRect(), r = cv.getBoundingClientRect();
+  if(!r.width || !r.height) return;
+  _aimNDC.x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
+  _aimNDC.y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
+}
+addEventListener('orientationchange', ()=> setTimeout(refreshAimNDC, 250));
+visualViewport?.addEventListener('resize', refreshAimNDC);
+visualViewport?.addEventListener('scroll', refreshAimNDC);
+setTimeout(refreshAimNDC, 0);
 
 // ---- Textures (procedural 16x16; per-device pixel noise is cosmetic) ----
 function canvasTex(draw){

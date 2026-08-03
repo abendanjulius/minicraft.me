@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
@@ -19,9 +19,24 @@ import * as villagers from './villagers.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
+/**
+ * Ray direction through the CROSSHAIR pixel (not blindly through the canvas
+ * centre). Built analytically from fov/aspect so it never depends on the
+ * camera's matrix being up to date this frame. On mobile the canvas and the
+ * visual viewport can disagree, which used to aim the ray below the crosshair
+ * and target a nearer cell than the player was pointing at.
+ */
+function aimDir(){
+  const n = aimNDC();
+  const t = Math.tan(camera.fov * Math.PI / 360);
+  return new THREE.Vector3(n.x * t * camera.aspect, n.y * t, -1)
+    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
+    .normalize();
+}
+
 // Aim at a nearby entity (animal or zombie) in front of the crosshair
 function pickEntity(){
-  const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ'));
+  const dir = aimDir();
   const eye = player.pos.clone().add(new THREE.Vector3(0,1.6,0));
   const blockHit = castBlock();
   const maxD = blockHit ? blockHit.dist : 3.6;
@@ -46,7 +61,7 @@ let sleepSeq = null; // {phase, t, bed:{x,y,z}}
 export const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
-let shake = 0, wasGround = true, fallV = 0, stepTimer = 0;
+let shake = 0, wasGround = true, fallV = 0, stepTimer = 0, aimTimer = 0;
 export function addShake(v){ shake = Math.min(.4, Math.max(shake, v)); }
 export const skinIdx = ()=>Math.min(SKINS.length-1, Math.max(0, +(localStorage.getItem('mc_skin')||0)));
 
@@ -414,8 +429,7 @@ function resolvePlaceCell(r, flush = true){
   if(!r || !r.hit) return null;
   let place = r.place;
   if(!place){
-    const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
-    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], dir);
+    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], aimDir());
   }
 
   // Flush paving — looking DOWN at a block's top face fills that block's own
@@ -465,10 +479,8 @@ function resolvePlaceCell(r, flush = true){
  * blocks at diagonal angles). Returns { hit, place, dist }.
  */
 export function castBlock(maxDist = 8){
-  const dir = new THREE.Vector3(0,0,-1)
-    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'));
+  const dir = aimDir();
   if(dir.lengthSq() < 1e-10) return null;
-  dir.normalize();
   // Eye MUST match the camera exactly (main.js sets camera at pos + 1.6), or the
   // ray diverges from the crosshair — most visibly on the ground at shallow angles.
   const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.6, player.pos.z);
@@ -964,6 +976,11 @@ export function update(dt, elapsed){
     camera.position.y += jit(shake*.7);
     shake = Math.max(0, shake - dt*1.5);
   }
+
+  // Re-measure the crosshair now and then: mobile browsers slide their URL bar
+  // in and out mid-play, which moves the crosshair relative to the canvas.
+  aimTimer -= dt;
+  if(aimTimer <= 0){ aimTimer = 0.5; refreshAimNDC(); }
 
   // Target outline + ghost placement preview (visual feedback only — the ghost
   // uses the SAME resolver as placeAction, so it shows the true landing cell).
