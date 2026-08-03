@@ -405,8 +405,11 @@ function faceAdjacentPlace(hx, hy, hz, dir){
 }
 
 /**
- * Crosshair raycast — blocks are centered on integer coords (Math.round).
- * Returns { hit, place, dist } where place is face-adjacent empty cell.
+ * Crosshair raycast — voxel DDA (Amanatides–Woo). Blocks are centered on integer
+ * coords (Math.round), so cell boundaries sit at n±0.5. Stepping one boundary at
+ * a time makes the last empty cell before a hit EXACTLY face-adjacent, so `place`
+ * is always on the correct face — no dominant-axis guessing (which mis-placed
+ * blocks at diagonal angles). Returns { hit, place, dist }.
  */
 export function castBlock(maxDist = 8){
   const dir = new THREE.Vector3(0,0,-1)
@@ -415,39 +418,29 @@ export function castBlock(maxDist = 8){
   dir.normalize();
   const eye = new THREE.Vector3(player.pos.x, player.pos.y + 1.62, player.pos.z);
 
-  let lx = NaN, ly = NaN, lz = NaN;
-  let lastEmpty = null;
+  let bx = Math.round(eye.x), by = Math.round(eye.y), bz = Math.round(eye.z);
+  const stepX = dir.x >= 0 ? 1 : -1, stepY = dir.y >= 0 ? 1 : -1, stepZ = dir.z >= 0 ? 1 : -1;
+  const bound = (p, d) => d >= 0 ? (Math.round(p) + 0.5) : (Math.round(p) - 0.5);
+  let tMaxX = dir.x !== 0 ? (bound(eye.x, dir.x) - eye.x) / dir.x : Infinity;
+  let tMaxY = dir.y !== 0 ? (bound(eye.y, dir.y) - eye.y) / dir.y : Infinity;
+  let tMaxZ = dir.z !== 0 ? (bound(eye.z, dir.z) - eye.z) / dir.z : Infinity;
+  const tDX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
 
-  for(let t = 0; t <= maxDist; t += 0.025){
-    const wx = eye.x + dir.x * t;
-    const wy = eye.y + dir.y * t;
-    const wz = eye.z + dir.z * t;
-    const bx = Math.round(wx), by = Math.round(wy), bz = Math.round(wz);
-    if(bx === lx && by === ly && bz === lz) continue;
-    lx = bx; ly = by; lz = bz;
-
+  let px = null, py = 0, pz = 0, t = 0;      // last empty cell = place candidate
+  for(let i = 0; i < 512; i++){
     const b = getBlock(bx, by, bz);
-
-    // Pass through air and water
-    if(!b || b === 64){
-      lastEmpty = [bx, by, bz];
-      continue;
+    const solid = b && b !== 64;             // air (0) & water (64) are pass-through
+    // Ignore a block the camera is sitting inside (first ~0.2 units).
+    if(solid && !(t < 0.2 && isSupportBlock(b))){
+      return { hit:[bx,by,bz], place: px !== null ? [px,py,pz] : null, dist:t };
     }
-
-    // Skip only the first solid cells if camera is inside geometry
-    if(t < 0.2 && isSupportBlock(b)){
-      lastEmpty = null;
-      continue;
-    }
-
-    // Hit a target block (solid or plant/etc.)
-    let place = faceAdjacentPlace(bx, by, bz, dir);
-    // Prefer lastEmpty if it is already face-adjacent to hit
-    if(lastEmpty){
-      const adx = Math.abs(lastEmpty[0]-bx)+Math.abs(lastEmpty[1]-by)+Math.abs(lastEmpty[2]-bz);
-      if(adx === 1) place = lastEmpty;
-    }
-    return { hit:[bx,by,bz], place, dist:t };
+    if(!solid){ px = bx; py = by; pz = bz; }
+    if(tMaxX <= tMaxY && tMaxX <= tMaxZ){ bx += stepX; t = tMaxX; tMaxX += tDX; }
+    else if(tMaxY <= tMaxZ){ by += stepY; t = tMaxY; tMaxY += tDY; }
+    else { bz += stepZ; t = tMaxZ; tMaxZ += tDZ; }
+    if(t > maxDist) break;
   }
   return null;
 }
