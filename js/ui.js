@@ -788,6 +788,31 @@ export function setBanner(text){
   b.textContent = text || '';
   b.style.display = text ? 'block' : 'none';
 }
+
+// Transient slide-in notice (reuses the #toasts rail + .toast styling).
+export function toast(text, ms=3500){
+  const host = $('toasts');
+  if(!host) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = text;
+  host.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 500); }, ms);
+}
+
+// Live save-health pip in the HUD. state: 'ok' | 'warn' | 'fail'
+export function setSaveState(state){
+  const el = $('saveState');
+  if(!el) return;
+  el.className = state==='fail' ? 'sFail' : state==='warn' ? 'sWarn' : 'sOk';
+  el.textContent = state==='fail' ? '⚠ NOT SAVING'
+                 : state==='warn' ? '💾 world large'
+                 : '💾';
+  el.title = state==='fail' ? 'Save failed — storage is full. Export this world now to avoid losing progress.'
+           : state==='warn' ? 'This world is getting large. Export a backup to be safe.'
+           : 'World saved';
+}
 export function setHud(fps, pos){
   $('fps').textContent = fps;
   $('pos').textContent = pos;

@@ -23,6 +23,11 @@ body.inv-open{cursor:default}
 
 /* HUD */
 #hud{position:fixed;top:10px;left:10px;color:#fff;text-shadow:1px 1px 2px #000;font-size:12px;pointer-events:none;z-index:2}
+#saveState{pointer-events:auto}
+#saveState.sOk{opacity:.55}
+#saveState.sWarn{color:#ffd24a;font-weight:bold}
+#saveState.sFail{color:#ff5a4a;font-weight:bold;animation:saveBlink 1s steps(2,start) infinite}
+@keyframes saveBlink{50%{opacity:.35}}
 #banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;z-index:2;pointer-events:none}
 #crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:20px;text-shadow:1px 1px 2px #000;pointer-events:none;z-index:2}
 #mineBar{position:fixed;top:calc(50% + 22px);left:50%;transform:translateX(-50%);width:60px;height:6px;background:rgba(0,0,0,.5);border-radius:3px;z-index:2;display:none;pointer-events:none}

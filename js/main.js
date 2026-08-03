@@ -3,7 +3,7 @@ import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugM
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim, tickWind,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
-import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv } from './ui.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv, toast, setSaveState } from './ui.js';
 import * as craftMod from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
 import * as persist from './persist.js';
@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.12.22'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.12.23'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -219,9 +219,17 @@ function buildWorlds(){
     box.appendChild(card);
   });
 }
-buildWorlds();
-document.body.classList.add('boot-ok');
-const br = $('bootRecover'); if(br) br.style.display = 'none';
+// Populate the world cache from IndexedDB (migrating any legacy localStorage
+// worlds) before listing slots, so the menu never flashes empty.
+persist.init().then(()=>{
+  buildWorlds();
+  document.body.classList.add('boot-ok');
+  const br = $('bootRecover'); if(br) br.style.display = 'none';
+}).catch(err=>{
+  console.error('[MiniCraft] storage init failed', err);
+  buildWorlds(); // show the menu anyway; worst case slots read empty
+  document.body.classList.add('boot-ok');
+});
 
 $('btnImport').addEventListener('click', ()=>$('importFile').click());
 $('importFile').addEventListener('change', e=>{
@@ -272,6 +280,33 @@ function saveWorldNow(){
 }
 addEventListener('beforeunload', saveWorldNow);
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveWorldNow(); });
+
+// Debounced save shortly after a burst of edits, so worst-case loss is a few
+// seconds of building rather than a whole session (IndexedDB writes are async
+// and can't reliably flush on tab-close, so we save continuously instead).
+let editSaveTimer = null;
+function scheduleSaveSoon(){
+  if(editSaveTimer) return;
+  editSaveTimer = setTimeout(()=>{ editSaveTimer = null; saveWorldNow(); }, 2500);
+}
+
+// ---- Save-health indicator (Phase 0) ----
+// Reflect every save in the HUD pip; shout (once per transition) when a world
+// stops saving or nears the storage ceiling, so progress is never lost silently.
+let lastSaveState = 'ok';
+persist.setSaveStatusHook(s=>{
+  const state = !s.ok ? 'fail' : s.near ? 'warn' : 'ok';
+  setSaveState(state);
+  if(state !== lastSaveState){
+    if(state === 'fail'){
+      toast('⚠ Storage full — this world can’t save! Export it now (menu ⬇) to keep your progress.', 9000);
+      addChat('⚙ System', 'Saving failed — storage is full. Quit to the menu and Export this world to back it up.');
+    } else if(state === 'warn'){
+      toast('💾 This world is getting large — export a backup to be safe.', 6000);
+    }
+    lastSaveState = state;
+  }
+});
 
 // ---- Boot the world ----
 let worldSeed = 0;
@@ -344,7 +379,7 @@ function begin(seed, edits, authority, saved){
 }
 
 // ---- Init input & UI ----
-setEditRecorder(persist.recordEdit);
+setEditRecorder((x,y,z,t)=>{ persist.recordEdit(x,y,z,t); scheduleSaveSoon(); });
 playerMod.initControls();
 initUI({
   look: (dx,dy)=>playerMod.look(dx,dy),
