@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.12.23'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.12.24'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -120,6 +120,10 @@ function refreshModeRow(){
 $('modeNight').addEventListener('click', ()=>{ localStorage.setItem('mc_mode','night'); refreshModeRow(); });
 $('modeForge').addEventListener('click', ()=>{ localStorage.setItem('mc_mode','forge'); refreshModeRow(); });
 refreshModeRow();
+
+// ---- Home ↔ Setup navigation ----
+$('btnPlay').addEventListener('click', ()=>{ $('home').style.display='none'; $('menu').style.display='flex'; });
+$('btnBack').addEventListener('click', ()=>{ $('menu').style.display='none'; $('home').style.display='flex'; });
 
 onModeChange(forge=>{
   survival.showVitals(playerMod.state.playing && !forge);

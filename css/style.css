@@ -5,6 +5,15 @@ body.inv-open{cursor:default}
 
 /* Menu */
 #menu{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+
+/* Home / landing screen */
+#home{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:6;color:#fff;text-align:center;padding:24px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.homeLogo{width:min(86vw,440px);height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.28))}
+.playBtn{width:min(72vw,264px);font-size:22px;padding:16px 0;margin-top:4px}
+.backBtn{position:absolute;top:16px;left:16px;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.55);color:#fff;font-family:monospace;font-size:14px;padding:8px 14px;border-radius:6px;cursor:pointer;z-index:2}
+.backBtn:active{transform:translateY(1px)}
+#menu h1.setupTitle{font-size:24px}
+@media (max-height:520px){ .homeLogo{width:min(64vw,340px)} .playBtn{font-size:19px;padding:13px 0} #home{gap:10px} }
 #menu h1{margin:0;font-size:42px;text-shadow:2px 2px 0 #365}
 .tagline{margin:0 0 8px;opacity:.85;font-size:13px}
 #menu input{font-family:monospace;font-size:16px;padding:10px 12px;border:2px solid #365;border-radius:6px;background:rgba(255,255,255,.92);width:220px;text-align:center;text-transform:uppercase}

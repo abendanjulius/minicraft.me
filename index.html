@@ -8,14 +8,44 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=1.12.23">
+<link rel="stylesheet" href="./css/style.css?v=1.12.24">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
 
-<div id="menu">
-  <h1>⛏ MiniCraft</h1>
+<div id="home">
+  <svg class="homeLogo" viewBox="0 0 560 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MiniCraft">
+    <!-- Isometric grass block -->
+    <g stroke="#2b2016" stroke-width="3" stroke-linejoin="round">
+      <path d="M280,100 L350,65 L350,149 L280,184 Z" fill="#855636"/>
+      <path d="M210,65 L280,100 L280,184 L210,149 Z" fill="#6f4a2a"/>
+      <path d="M280,100 L350,65 L350,78 L280,113 Z" fill="#5aa834"/>
+      <path d="M210,65 L280,100 L280,113 L210,78 Z" fill="#4b8f2b"/>
+      <path d="M280,30 L350,65 L280,100 L210,65 Z" fill="#6cbf3f"/>
+    </g>
+    <path d="M280,44 L322,65 L280,86 L238,65 Z" fill="#83d557" opacity="0.9"/>
+    <!-- Wordmark: extruded blocky text -->
+    <g font-family="'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif" font-weight="900" font-size="88" letter-spacing="1" text-anchor="middle">
+      <text x="284" y="318" fill="#2e5522">MiniCraft</text>
+      <text x="283" y="317" fill="#2e5522">MiniCraft</text>
+      <text x="282" y="316" fill="#2e5522">MiniCraft</text>
+      <text x="281" y="315" fill="#2e5522">MiniCraft</text>
+      <text x="280" y="314" fill="#fdfaf0" stroke="#2e5522" stroke-width="3" paint-order="stroke">MiniCraft</text>
+    </g>
+  </svg>
   <p class="tagline">A tiny blocky world in your browser · minicraft.me</p>
+  <button id="btnPlay" class="mbtn playBtn" type="button">▶&nbsp; Play</button>
+  <p id="verLabel"></p>
+  <p id="bootRecover" style="display:none;margin-top:12px;max-width:320px;color:#4a2010;background:#ffe8d6;border:1px solid #e0a060;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.45">
+    Game script failed to load (often an old cached build).<br>
+    <button type="button" id="btnClearCache" style="margin-top:8px;padding:8px 12px;font-family:monospace;cursor:pointer">Clear cache &amp; reload</button>
+  </p>
+</div>
+
+<div id="menu" style="display:none">
+  <button id="btnBack" class="backBtn" type="button">←&nbsp; Back</button>
+  <h1 class="setupTitle">⛏ MiniCraft</h1>
+  <p class="tagline">Set up your game</p>
   <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="off">
   <div id="skinRow"></div>
   <div id="modeRow">
@@ -33,11 +63,6 @@
   WASD/mouse on desktop · joystick + buttons on mobile.</p>
   <button id="btnImport" class="linkBtn">⬆ Import world file</button>
   <input id="importFile" type="file" accept=".json,application/json" style="display:none">
-  <p id="verLabel"></p>
-  <p id="bootRecover" style="display:none;margin-top:12px;max-width:320px;color:#4a2010;background:#ffe8d6;border:1px solid #e0a060;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.45">
-    Game script failed to load (often an old cached build).<br>
-    <button type="button" id="btnClearCache" style="margin-top:8px;padding:8px 12px;font-family:monospace;cursor:pointer">Clear cache &amp; reload</button>
-  </p>
 </div>
 
 <div id="loading">Generating world…</div>
@@ -113,7 +138,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=1.12.23"></script>
+<script type="module" src="./js/main.js?v=1.12.24"></script>
 <script>
 (function(){
   function showRecover(msg){
