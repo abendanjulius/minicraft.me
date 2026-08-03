@@ -560,27 +560,53 @@ body.inv-open #inv{
 /* ===== v1.12.2 — mobile inventory: Minecraft-like full-screen panes ===== */
 /* Landscape / tablet: rail | items | side (craft/character) */
 @media (max-width: 900px), (max-height: 560px){
+  /* Full width/height but leave bottom strip for hotbar (place items into slots) */
   body.inv-open #inv{
     display: grid !important;
-    grid-template-columns: 48px minmax(0, 1.15fr) minmax(160px, 0.95fr) !important;
+    grid-template-columns: 40px minmax(0, 1.15fr) minmax(140px, 0.9fr) !important;
     grid-template-rows: minmax(0, 1fr) !important;
     grid-template-areas: "rail main side" !important;
-    width: 96vw !important;
-    height: 88vh !important;
-    max-width: 96vw !important;
-    max-height: 88vh !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    padding: 8px !important;
-    gap: 8px !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    width: 100vw !important;
+    height: calc(100% - 56px) !important;
+    max-width: 100vw !important;
+    max-height: calc(100% - 56px) !important;
+    padding: 6px !important;
+    gap: 6px !important;
     flex-direction: unset !important;
-    border-radius: 8px !important;
-    box-shadow: 0 10px 40px rgba(0,0,0,.55) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     background: #c6c6c6 !important;
-    border: 3px solid #373737 !important;
+    border: none !important;
+    border-bottom: 2px solid #373737 !important;
     color: #202020 !important;
+    z-index: 5 !important;
   }
+  /* Keep hotbar above inv and fully tappable */
+  body.inv-open #hotbar{
+    z-index: 12 !important;
+    bottom: 4px !important;
+    pointer-events: auto !important;
+  }
+  body.inv-open #slotNameToast{
+    bottom: 62px !important;
+    z-index: 13 !important;
+  }
+  /* Smaller hotbar icons on mobile */
+  #hotbar .slot{
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  #hotbar .slot .sw{ width: 16px !important; height: 16px !important; }
+  #hotbar .slot .ticon{ font-size: 13px !important; }
+  #hotbar .slot .num{ font-size: 8px !important; }
+  #hotbar .slot .cnt{ font-size: 8px !important; }
+  #hotbar{ gap: 3px !important; }
+
   body.inv-open #invRail{
     grid-area: rail !important;
     flex: unset !important;
@@ -611,13 +637,26 @@ body.inv-open #inv{
     gap: 4px !important;
   }
   body.inv-open .invItem{
-    width: 44px !important; height: 44px !important;
-    min-width: 44px !important; min-height: 44px !important;
+    width: 34px !important; height: 34px !important;
+    min-width: 34px !important; min-height: 34px !important;
     background: #8b8b8b !important;
     border: 2px solid #373737 !important;
     border-radius: 2px !important;
     box-shadow: inset 1px 1px 0 #fff3, inset -1px -1px 0 #0004 !important;
   }
+  body.inv-open .invItem .sw{ width: 18px !important; height: 18px !important; }
+  body.inv-open .invItem .ticon{ font-size: 15px !important; }
+  body.inv-open .invItem .cnt{ font-size: 8px !important; }
+  body.inv-open #invGrid{
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)) !important;
+    gap: 3px !important;
+    padding: 4px !important;
+  }
+  body.inv-open .railBtn{
+    width: 34px !important; height: 32px !important; font-size: 14px !important;
+  }
+  body.inv-open #invRail{ width: 40px !important; }
+
   body.inv-open .invItem.sel{ border-color: #fff !important; background: #a0a0a0 !important; }
   body.inv-open #invSide{
     grid-area: side !important;
@@ -659,20 +698,25 @@ body.inv-open #inv{
 /* Narrow portrait phones: stack side under main, still almost full screen */
 @media (max-width: 560px) and (orientation: portrait){
   body.inv-open #inv{
-    grid-template-columns: 44px minmax(0, 1fr) !important;
-    grid-template-rows: minmax(0, 1.2fr) minmax(140px, 0.85fr) !important;
+    grid-template-columns: 36px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1.15fr) minmax(120px, 0.8fr) !important;
     grid-template-areas:
       "rail main"
       "rail side" !important;
-    width: 96vw !important;
-    height: 90vh !important;
-    max-height: 90vh !important;
+    width: 100vw !important;
+    height: calc(100% - 56px) !important;
+    max-height: calc(100% - 56px) !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
   }
   body.inv-open #invSearch{ display: none !important; }
   body.inv-open .invItem{
-    width: 40px !important; height: 40px !important;
-    min-width: 40px !important; min-height: 40px !important;
+    width: 32px !important; height: 32px !important;
+    min-width: 32px !important; min-height: 32px !important;
   }
+  body.inv-open .invItem .sw{ width: 16px !important; height: 16px !important; }
+  body.inv-open .invItem .ticon{ font-size: 14px !important; }
 }
 
 /* Inventory-only: hide empty side on pure inv if no pick — keep for detail */
