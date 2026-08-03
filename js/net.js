@@ -2,7 +2,7 @@
 import { WORLD, seed } from './world.js';
 import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, makeHeldItemIcon, makeWeaponModel, applyCharacterArmor,
          applyEdit, applyEditsBatch, spawnParticles, TYPES, ITEMS, SKINS, day, setDayTime } from './render.js';
-import { setBanner, setPlayers, addChat, setHorde } from './ui.js';
+import { setBanner, setPlayers, addChat, setHorde, startHordeCountdown } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';
 import * as animals from './animals.js';
@@ -152,6 +152,10 @@ function handle(msg, fromConn){
     }
   } else if(msg.t==='kudos'){
     survival.note(msg.what);
+  } else if(msg.t==='horde'){
+    // Host unleashed a horde — every player sees the night fall and the countdown.
+    setDayTime(0.72);
+    startHordeCountdown(10, ()=>{});   // clients don't spawn; host is authoritative
   } else if(msg.t==='chat'){
     addChat(msg.name||'Player', String(msg.text).slice(0,120));
     sfx.chat();
@@ -221,6 +225,10 @@ export function seedEditLog(arr){
 export function reportDeath(pos){
   if(mode==='client'){ safeSendHost({t:'died', x:+pos.x.toFixed(1), y:+pos.y.toFixed(1), z:+pos.z.toFixed(1)}); }
   else mobs.addCorpse(pos.x, pos.y, pos.z);
+}
+// Host tells every client to play the horde countdown (visual only; spawns are host-side).
+export function sendHorde(lvl){
+  if(mode==='host') relay({t:'horde', lvl}, null);
 }
 export function systemMsg(text){
   addChat('📢', text);

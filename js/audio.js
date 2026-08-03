@@ -74,6 +74,10 @@ export const sfx = {
   hurt:  ()=>{ osc({freq:240,end:110,type:'sawtooth',dur:.18,vol:.14}); noise({dur:.1,vol:.14,freq:250,q:1}); },
   eat:   ()=>{ noise({dur:.08,vol:.14,freq:900,q:1.2}); osc({freq:500,end:300,type:'triangle',dur:.12,vol:.09}); },
   zgroan:()=>{ osc({freq:120+Math.random()*40,end:70,type:'sawtooth',dur:.5,vol:.07}); },
+  // Suspense heartbeat (lub-dub) for the horde countdown
+  heartbeat:()=>{ osc({freq:95,end:46,type:'sine',dur:.14,vol:.22}); setTimeout(()=>osc({freq:82,end:40,type:'sine',dur:.17,vol:.16}),170); },
+  // Menacing swell when the horde is unleashed
+  hordeRoar:()=>{ noise({dur:.75,vol:.32,freq:170,q:.5}); osc({freq:160,end:48,type:'sawtooth',dur:.8,vol:.2}); setTimeout(()=>osc({freq:120,end:40,type:'sawtooth',dur:.6,vol:.15}),160); },
   craft: ()=>{ noise({dur:.06,vol:.16,freq:700,q:1.5}); osc({freq:520,end:780,type:'sine',dur:.14,vol:.1}); },
   drip:  ()=>{ osc({freq:1400,end:900,type:'sine',dur:.06,vol:.07}); setTimeout(()=>osc({freq:1100,end:700,type:'sine',dur:.09,vol:.04}),110); },
   ach:   ()=>{ osc({freq:660,end:660,type:'sine',dur:.09,vol:.1}); setTimeout(()=>osc({freq:880,end:880,type:'sine',dur:.16,vol:.1}),90); },

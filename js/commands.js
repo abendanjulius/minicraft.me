@@ -3,7 +3,7 @@
 
 import { WORLD, WH, CENTER, getBlock, setBlock, heightAt, wrapC, biomeAt, BIOME_NAME, DEBUG_MARKERS } from './world.js';
 import { day, setDayTime, rebuildAt, applyEdit, trackTorch, trackDoor, trackBed, trackSpecial, TYPES, ITEMS } from './render.js';
-import { addChat, inventory, hotbarSlots, renderHotbar, renderInv, addToInventory } from './ui.js';
+import { addChat, inventory, hotbarSlots, renderHotbar, renderInv, addToInventory, startHordeCountdown, showCenterNotice } from './ui.js';
 import { gm, setMode } from './mode.js';
 import * as net from './net.js';
 import * as mobs from './mobs.js';
@@ -279,10 +279,30 @@ export function tryCommand(raw){
     }
     case 'horde': {
       if(!needHost()) return true;
-      const lvl = Math.max(1, Math.min(3, +args[0] || 1));
+      const lvl = Math.max(1, Math.min(3, +args[0] || 3));
+      if(gm.forge){
+        showCenterNotice('🌙', 'Nightfall Required',
+          'The horde only stalks at night.<br>Switch to <b>🌙 Nightfall</b> mode, then try <b>/horde</b> again.');
+        reply('The horde only stalks Nightfall — switch to 🌙 Nightfall first.');
+        return true;
+      }
+      mobs.clearZombies?.();                // fresh slate — the wave arrives together
+      setDayTime(0.72);                     // plunge into deep night
       mobs.setIntel?.(lvl);
-      mobs.forceHorde?.(lvl);
-      reply(`Horde signal level ${lvl}.`);
+      mobs.setHordeHold?.(true);            // no spawns until the countdown ends
+      net.systemMsg?.('🌙 The air turns cold… the horde is coming.');
+      net.sendHorde?.(lvl);                 // every connected player sees the countdown too
+      reply(`Horde incoming — Tier ${lvl}. Night falls…`);
+      startHordeCountdown(10, ()=>{
+        mobs.setHordeHold?.(false);         // release natural night spawning
+        // Scale the wave by player count: ~8% more per extra player (never doubled),
+        // spread across everyone and always at a fair distance.
+        const targets = net.getTargets?.(ctx.player.pos) || [{x:ctx.player.pos.x, y:ctx.player.pos.y, z:ctx.player.pos.z}];
+        const players = Math.max(1, targets.length);
+        const total = Math.round((6 + lvl * 2) * (1 + 0.08 * (players - 1)));
+        mobs.surgeBurst?.(targets, total);
+        net.systemMsg?.('🧟 THEY COME. Survive the night!');
+      });
       return true;
     }
     case 'markers': {

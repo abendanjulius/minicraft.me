@@ -3,7 +3,7 @@ import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugM
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim, tickWind,
          updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
-import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv, toast, setSaveState } from './ui.js';
+import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv, toast, setSaveState, clearLoadout } from './ui.js';
 import * as craftMod from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
 import * as persist from './persist.js';
@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.12.26'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.12.27'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -134,10 +134,17 @@ onModeChange(forge=>{
   if(bf){ bf.style.display = (forge && playerMod.state.playing && document.body.classList.contains('touch')) ? 'flex' : 'none';
     bf.classList.toggle('active', playerMod.state.flying); }
   playerMod.onModeMaybeChanged?.();
+  // Game rule: Forge gear never enters survival. Crossing INTO Nightfall (on the
+  // host and every client) resets the carried loadout to a fresh survival start.
+  if(!forge && playerMod.state.playing){
+    clearLoadout();
+    addChat('⚙ System', 'Entered Nightfall — survival loadout reset. Forge gear stays in Forge.');
+  }
 });
 function toggleMode(){
   if(net.mode==='client') return; // host decides for the room
   const toForge = !gm.forge;
+  if(!toForge && !confirm('Enter Nightfall? Survival rules apply and your carried loadout will reset — nothing carries over from Forge.')) return;
   setMode(toForge);
   net.systemMsg(toForge
     ? '🔨 Forge Mode — the horde sleeps. Build freely with unlimited materials.'

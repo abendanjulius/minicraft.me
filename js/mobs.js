@@ -1,5 +1,10 @@
 export let peaceMode = false;
 export function setPeaceMode(v){ peaceMode = !!v; }
+
+// Horde hold: suppress ALL spawning (used during the /horde countdown so the
+// wave appears in one dramatic burst when the timer hits zero, not before).
+let hordeHold = false;
+export function setHordeHold(v){ hordeHold = !!v; }
 // mobs.js — the horde. Host-authoritative zombies with a shared intelligence tier.
 // T0 shamblers · T1 fast + packs · T2 dig soft blocks · T3 hide from the sun (hunt them by day!)
 import { WORLD, WH, topY, getBlock, heightAt, isWalkThrough } from './world.js';
@@ -14,7 +19,11 @@ let intel = 0, killCount = 0;
 let announcer = null; // (text, newIntel) => void
 const EYE_COLORS = [0x3a3a3a, 0xd8c33a, 0xe07b2a, 0xd23434];
 const SOFT = new Set([1,2,5,6,12,19,28,29,30,31,32]); // what T2 can dig through
-const maxZombies = ()=>8 + intel*2;
+// More players → a little more horde, but NOT linear: ~8% extra per extra player
+// (so 2 players isn't double the danger). Set from the target list each host tick.
+let playerCount = 1;
+const playerMul = ()=> 1 + 0.08 * Math.max(0, playerCount - 1);
+const maxZombies = ()=> Math.round((8 + intel*2) * playerMul());
 let caveSpawnT = 5;
 // floor beneath a point (works on the surface AND on cave floors)
 function floorAt(x, yFrom, z){
@@ -93,6 +102,27 @@ function remove(id, poof=true){
   scene.remove(zb.c.holder || zb.c.g);
   zombies.delete(id);
 }
+// Remove every zombie right now (fresh slate before a scripted horde).
+export function clearZombies(){
+  for(const id of [...zombies.keys()]) remove(id, false);
+}
+// Immediate burst when the /horde countdown ends. Spawns `total` zombies spread
+// across all players, always at a FAIR distance (never right on top of anyone),
+// ignoring the spawn timer & torches. Host/solo only.
+const SURGE_MIN = 18, SURGE_SPAN = 12;   // 18–30 blocks away: close enough to matter, far enough to react
+export function surgeBurst(targets, total = 8){
+  if(!authority || !targets || !targets.length) return;
+  playerCount = targets.length;
+  const cap = maxZombies();
+  for(let i = 0; i < total && zombies.size < cap; i++){
+    const t = targets[Math.floor(Math.random() * targets.length)];
+    const a = Math.random() * Math.PI * 2, r = SURGE_MIN + Math.random() * SURGE_SPAN;
+    const sx = t.x + Math.cos(a) * r, sz = t.z + Math.sin(a) * r;
+    const gy = topY(Math.round(sx), Math.round(sz));
+    if(gy > 0) create(sx, gy + .5, sz);
+  }
+  spawnT = 0.6; // keep the pressure coming right after
+}
 export function init(isAuthority){
   authority = isAuthority;
   intel = 0; killCount = 0;
@@ -144,6 +174,7 @@ export function hit(id, dmg){
 
 // ---- host simulation ----
 export function hostTick(dt, dl, targets){
+  if(targets && targets.length) playerCount = targets.length;
   if(peaceMode) return {hurts:[], digs:[]};
 
   const hurts = [], digs = [];
@@ -156,7 +187,7 @@ export function hostTick(dt, dl, targets){
   const night = dl < .12;
 
   // spawning (packs at higher tiers, never near light)
-  if(night && zombies.size < maxZombies() && targets.length){
+  if(!hordeHold && night && zombies.size < maxZombies() && targets.length){
     spawnT -= dt;
     if(spawnT<=0){
       spawnT = intel>=1 ? 2.6 : 3.5;
@@ -172,7 +203,7 @@ export function hostTick(dt, dl, targets){
   }
 
   // underground is always night: zombies spawn in cave darkness at any hour
-  if(zombies.size < maxZombies() && targets.length){
+  if(!hordeHold && zombies.size < maxZombies() && targets.length){
     caveSpawnT -= dt;
     if(caveSpawnT<=0){
       caveSpawnT = 5;

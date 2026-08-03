@@ -2,6 +2,7 @@
 import { TYPES, TOOLS, ITEMS, isTouch } from './render.js';
 import { gm } from './mode.js';
 import { itemBlurb } from './content.js';
+import { sfx } from './audio.js';
 
 export const inventory = {};
 // Slots hold null | {k:'b', id:blockType} | {k:'t', id:toolId}. Tools start in slots 8/9/0.
@@ -199,6 +200,18 @@ let armorHook = null;
 export function setArmorHook(fn){ armorHook = fn; }
 export function getArmorSlots(){ return { ...armorSlots }; }
 function notifyArmor(){ try{ armorHook?.(getArmorSlots()); }catch(e){} }
+
+// Wipe the entire carried loadout (inventory, hotbar, armor). Used when a world
+// crosses from Forge into Nightfall, so unlimited Forge gear can't enter survival.
+export function clearLoadout(){
+  for(const k of Object.keys(inventory)) delete inventory[k];
+  for(let i=0;i<hotbarSlots.length;i++) hotbarSlots[i]=null;
+  armorSlots.head = armorSlots.chest = armorSlots.legs = armorSlots.feet = armorSlots.off = null;
+  sel.slot = 0;
+  renderHotbar();
+  if(invOpen) renderInv();
+  notifyArmor();
+}
 
 /** Only real armor/shield items — never weapons, food, blocks, tools */
 function canEquipInSlot(itemId, slotKey){
@@ -799,6 +812,60 @@ export function toast(text, ms=3500){
   host.appendChild(t);
   requestAnimationFrame(()=>t.classList.add('show'));
   setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 500); }, ms);
+}
+
+// Elegant auto-dismissing center card. body accepts inline HTML (trusted callers).
+let _cnTimer = null;
+export function showCenterNotice(icon, title, body, ms = 4200){
+  const el = $('centerNotice');
+  if(!el) return;
+  el.querySelector('.cnIcon').textContent = icon || '';
+  el.querySelector('.cnTitle').textContent = title || '';
+  el.querySelector('.cnBody').innerHTML = body || '';
+  const card = el.querySelector('.cnCard');
+  card.classList.remove('cnOut');
+  el.style.display = 'flex';
+  card.style.animation = 'none'; void card.offsetWidth; card.style.animation = ''; // restart entrance
+  clearTimeout(_cnTimer);
+  _cnTimer = setTimeout(()=>{
+    card.classList.add('cnOut');
+    setTimeout(()=>{ el.style.display = 'none'; card.classList.remove('cnOut'); }, 420);
+  }, ms);
+}
+
+// Scary center-screen countdown; calls onDone() when it hits zero.
+export function startHordeCountdown(secs = 10, onDone){
+  const el = $('hordeCountdown');
+  if(!el){ onDone?.(); return; }
+  const numEl = el.querySelector('.hcNum');
+  const labelEl = el.querySelector('.hcLabel');
+  const subEl = el.querySelector('.hcSub');
+  el.classList.remove('hcPanic','hcBurst');
+  labelEl.textContent = 'THE HORDE APPROACHES';
+  subEl.textContent = 'brace yourself…';
+  el.style.display = 'flex';
+  let n = secs;
+  numEl.textContent = n;
+  try{ sfx.heartbeat?.(); }catch(e){}
+  const iv = setInterval(()=>{
+    n--;
+    if(n <= 0){
+      clearInterval(iv);
+      numEl.textContent = '';
+      labelEl.textContent = 'THEY’RE HERE';
+      subEl.textContent = '';
+      el.classList.add('hcBurst');
+      try{ sfx.hordeRoar?.(); }catch(e){}
+      setTimeout(()=>{ el.style.display = 'none'; el.classList.remove('hcPanic','hcBurst'); }, 800);
+      try{ onDone?.(); }catch(e){}
+      return;
+    }
+    numEl.textContent = n;
+    // restart the pop animation each tick
+    numEl.style.animation = 'none'; void numEl.offsetWidth; numEl.style.animation = '';
+    try{ sfx.heartbeat?.(); }catch(e){}
+    if(n <= 3){ el.classList.add('hcPanic'); subEl.textContent = 'RUN.'; }
+  }, 1000);
 }
 
 // Live save-health pip in the HUD. state: 'ok' | 'warn' | 'fail'
