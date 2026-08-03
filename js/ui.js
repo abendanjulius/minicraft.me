@@ -143,6 +143,19 @@ export function setArmorHook(fn){ armorHook = fn; }
 export function getArmorSlots(){ return { ...armorSlots }; }
 function notifyArmor(){ try{ armorHook?.(getArmorSlots()); }catch(e){} }
 
+/** Only real armor/shield items — never weapons, food, blocks, tools */
+function canEquipInSlot(itemId, slotKey){
+  const id = +itemId;
+  if(!Number.isFinite(id)) return false;
+  const it = ITEMS[id];
+  if(!it) return false;
+  if(it.dmg) return false;          // swords / weapons
+  if(it.food || it.heal) return false;
+  if(!it.slot) return false;        // must declare a slot
+  if(it.slot !== slotKey) return false;
+  return true;
+}
+
 
 
 function catOf(id){
@@ -414,33 +427,6 @@ export function renderInv(){
         : '<span class="empty-note">Nothing here yet.</span>';
   }
   renderDetail();
-  // Armor slot clicks (character pane)
-  const detail = $('invDetail');
-  if(detail){
-    detail.querySelectorAll('[data-armor]').forEach(btn=>{
-      btn.addEventListener('pointerdown', e=>{
-        e.stopPropagation();
-        const key = btn.dataset.armor;
-        if(armorSlots[key]){
-          armorSlots[key] = null; // unequip
-          notifyArmor();
-        } else if(invPick != null){
-          const it = ITEMS[invPick];
-          if(!it || it.slot !== key){
-            // wrong slot — brief hint
-            const need = {head:'helmet',chest:'chestplate',legs:'leggings',feet:'boots',off:'shield'}[key]||key;
-            boxHint = `Only a ${need} fits this slot.`;
-          } else if((inventory[invPick]||0) < 1 && !gm.forge){
-            boxHint = 'You do not have that item.';
-          } else {
-            armorSlots[key] = invPick;
-            notifyArmor();
-          }
-        }
-        renderInv();
-      });
-    });
-  }
 }
 
 export function setInvCat(cat){ invCat = cat; renderInv(); }
@@ -483,6 +469,57 @@ export function initUI(hooks){
     e.stopPropagation();
     setInvCat(b.dataset.cat);
   });
+  // Single delegated armor-slot handler (strict slot rules)
+  const detail = $('invDetail');
+  if(detail && !detail.dataset.armorBound){
+    detail.dataset.armorBound = '1';
+    detail.addEventListener('pointerdown', e=>{
+      const btn = e.target.closest('[data-armor]');
+      if(!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const key = btn.dataset.armor;
+      if(!key) return;
+
+      // Unequip if slot already filled
+      if(armorSlots[key] != null){
+        armorSlots[key] = null;
+        boxHint = '';
+        notifyArmor();
+        renderInv();
+        return;
+      }
+
+      // Must have a selected inventory item
+      if(invPick == null){
+        boxHint = 'Select an armor piece first.';
+        renderInv();
+        return;
+      }
+
+      // Strict: only matching armor type (blocks swords etc.)
+      if(!canEquipInSlot(invPick, key)){
+        const need = {head:'helmet',chest:'chestplate',legs:'leggings',feet:'boots',off:'shield'}[key]||key;
+        const it = ITEMS[invPick];
+        boxHint = it?.dmg
+          ? 'Weapons cannot go in armor slots.'
+          : `Only a ${need} fits this slot.`;
+        renderInv();
+        return;
+      }
+
+      if((inventory[invPick]||0) < 1 && !gm.forge){
+        boxHint = 'You do not have that item.';
+        renderInv();
+        return;
+      }
+
+      armorSlots[key] = +invPick;
+      boxHint = '';
+      notifyArmor();
+      renderInv();
+    });
+  }
   $('invClose').addEventListener('pointerdown', e=>{ e.stopPropagation(); toggleInv(false); });
   const search = $('invSearch');
   if(search){
