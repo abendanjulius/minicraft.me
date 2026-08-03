@@ -783,42 +783,23 @@ export function makeToolIconPlane(toolId, size=1.1){
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
 
-// ---- Target outline + ghost placement preview ----------------------------
-// A black wireframe on the block under the crosshair (which block you're
-// aiming at) plus a translucent ghost cube at the cell where a new block will
-// land. Pure visual feedback — the placement math is unchanged.
+// ---- Target outline (Minecraft-style) -------------------------------------
+// One crisp wireframe on the block the crosshair is actually pointing at. A
+// translucent ghost cube at the destination cell was tried and removed: a full
+// cube sitting above the aimed block is nearer to the eye at a downward angle,
+// so it projects large and toward the player and reads as the WRONG square.
+// Outlining the aimed block is unambiguous — the block attaches to the face
+// you can see is highlighted.
 const _targetOutline = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002)),
-  new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }));
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004)),
+  new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.85 }));
 _targetOutline.visible = false;
 _targetOutline.renderOrder = 999;
 scene.add(_targetOutline);
 
-// Slightly oversized so it reads as a highlight ON the block when the ghost
-// lands on an occupied cell (flush paving) instead of z-fighting with it.
-const _ghostBox = new THREE.Mesh(
-  new THREE.BoxGeometry(1.03, 1.03, 1.03),
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
-_ghostBox.visible = false;
-_ghostBox.renderOrder = 998;
-scene.add(_ghostBox);
-const _ghostEdges = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.03, 1.03, 1.03)),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }));
-_ghostBox.add(_ghostEdges);
-
-/**
- * hit / place are [x,y,z] block cells (or null). Shows the ghost where the
- * block will land; the black outline marks the aimed block only when it is a
- * DIFFERENT cell (or when nothing is placeable, e.g. holding a tool), so the
- * player never sees two competing highlights on the same square.
- */
-export function updatePlacePreview(hit, place){
-  if(place){ _ghostBox.position.set(place[0], place[1], place[2]); _ghostBox.visible = true; }
-  else _ghostBox.visible = false;
-
-  const same = hit && place && hit[0]===place[0] && hit[1]===place[1] && hit[2]===place[2];
-  if(hit && !same){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
+/** hit is the [x,y,z] block cell under the crosshair, or null. */
+export function updatePlacePreview(hit){
+  if(hit){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
   else _targetOutline.visible = false;
 }
 

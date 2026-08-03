@@ -959,21 +959,12 @@ export function update(dt, elapsed){
   aimTimer -= dt;
   if(aimTimer <= 0){ aimTimer = 0.5; refreshAimNDC(); }
 
-  // Target outline + ghost placement preview (visual feedback only — the ghost
-  // uses the SAME resolver as placeAction, so it shows the true landing cell).
+  // Outline the block the crosshair is pointing at (visual feedback only)
   if(!invOpen && !survival.sv.dead){
     const r = castBlock();
-    let ghost = null;
-    if(r && r.hit){
-      let tid = slotBlock();
-      if(tid){
-        for(const s of DOOR_STYLES){ if(tid>=s.base && tid<s.base+8) tid = s.item; }
-        if(gm.forge || inventory[tid] > 0) ghost = resolvePlaceCell(r);
-      }
-    }
-    updatePlacePreview(r && r.hit ? r.hit : null, ghost);
+    updatePlacePreview(r && r.hit ? r.hit : null);
   } else {
-    updatePlacePreview(null, null);
+    updatePlacePreview(null);
   }
 
   // Body follows player, offset backward so the torso sits behind the camera line
