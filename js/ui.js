@@ -622,66 +622,72 @@ function initTouch(hooks){
       if(t.identifier===lookId) lookId=null;
     }
   });
-  // Tap = place, hold = mine (Minecraft PE style) — removes need for Mine/Place buttons
-  let digId = null, digX = 0, digY = 0, digMoved = false, digMining = false, digTimer = null;
-  const HOLD_MS = 300;
-  const MOVE_PX = 14;
+  // Tap = place, hold = mine (Minecraft PE style)
+  // Finger jitter used to cancel place (MOVE_PX too low) — fixed with looser thresholds.
+  let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
+  let digMining = false, digTimer = null;
+  const HOLD_MS = 280;
+  const PLACE_MOVE_MAX = 48;  // still counts as a "tap" if finger slips less than this
+  const MINE_MOVE_MAX = 28;   // cancel pending hold-to-mine if dragged before HOLD_MS
 
   function clearDig(){
     if(digTimer){ clearTimeout(digTimer); digTimer = null; }
     if(digMining){ hooks.mine(false); digMining = false; }
-    digId = null; digMoved = false;
+    digId = null; digMaxMove = 0;
   }
 
   $('game').addEventListener('touchstart', e=>{
     e.preventDefault();
     if(invOpen) return;
     const t = e.changedTouches[0];
-    // ignore if finger started on a UI control
+    // ignore UI controls (but NOT the canvas itself)
     const el = document.elementFromPoint(t.clientX, t.clientY);
-    if(el && el.closest && el.closest('#hotbar,#touchUI,.tbtn,#btnChat,#btnQuit,#btnMode,#compass,#inv')) return;
+    if(el && el.closest && el.closest('#hotbar,#touchUI .tbtn,#btnChat,#btnQuit,#btnMode,#compass,#inv,#joyZone')) return;
 
     if(lookId===null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
     digId = t.identifier;
     digX = t.clientX; digY = t.clientY;
-    digMoved = false;
+    digStart = performance.now();
+    digMaxMove = 0;
     digMining = false;
     if(digTimer) clearTimeout(digTimer);
     digTimer = setTimeout(()=>{
       digTimer = null;
-      if(digId != null && !digMoved && !invOpen){
+      // Start mining only if we haven't dragged much yet
+      if(digId != null && digMaxMove < MINE_MOVE_MAX && !invOpen){
         digMining = true;
         hooks.mine(true);
       }
     }, HOLD_MS);
   }, {passive:false});
 
-  // extend existing touchmove: detect dig drag vs look
   document.addEventListener('touchmove', e=>{
     for(const t of e.changedTouches){
-      if(t.identifier === digId){
-        if(!digMoved && Math.hypot(t.clientX - digX, t.clientY - digY) > MOVE_PX){
-          digMoved = true;
-          if(digTimer){ clearTimeout(digTimer); digTimer = null; }
-          if(digMining){ hooks.mine(false); digMining = false; }
-        }
+      if(t.identifier !== digId) continue;
+      const dist = Math.hypot(t.clientX - digX, t.clientY - digY);
+      if(dist > digMaxMove) digMaxMove = dist;
+      // If player is clearly looking around before hold fires, cancel pending mine
+      if(!digMining && digMaxMove > MINE_MOVE_MAX && digTimer){
+        clearTimeout(digTimer); digTimer = null;
       }
+      // Once mining has started, allow look — do NOT cancel mine on move
     }
   }, {passive:true});
 
   document.addEventListener('touchend', e=>{
     for(const t of e.changedTouches){
-      if(t.identifier === digId){
-        const wasMining = digMining;
-        const wasMoved = digMoved;
-        if(digTimer){ clearTimeout(digTimer); digTimer = null; }
-        if(digMining){ hooks.mine(false); digMining = false; }
-        digId = null;
-        // Short tap without much movement → place
-        if(!wasMining && !wasMoved && !invOpen){
-          hooks.place?.();
-        }
+      if(t.identifier !== digId) continue;
+      const dt = performance.now() - digStart;
+      const wasMining = digMining;
+      if(digTimer){ clearTimeout(digTimer); digTimer = null; }
+      if(digMining){ hooks.mine(false); digMining = false; }
+      digId = null;
+
+      // PLACE: quick release before hold threshold, allow modest finger jitter
+      if(!wasMining && !invOpen && dt < HOLD_MS + 40 && digMaxMove < PLACE_MOVE_MAX){
+        hooks.place?.();
       }
+      digMaxMove = 0;
     }
   });
   document.addEventListener('touchcancel', e=>{
