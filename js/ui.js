@@ -604,8 +604,6 @@ export function initUI(hooks){
 function initTouch(hooks){
   document.body.classList.add('touch');
   $('touchUI').style.display = 'block';
-  // Tap-to-build aims at the finger, so the center crosshair would be misleading.
-  const _ch = $('crosshair'); if(_ch) _ch.style.display = 'none';
   const joyBase = $('joyBase'), joyStick = $('joyStick');
   let joyId = null, joyCX = 0, joyCY = 0, lookId = null, lookX = 0, lookY = 0;
 
@@ -683,7 +681,7 @@ function initTouch(hooks){
       if(digId == null || invOpen) return;
       if(digMaxMove > MINE_CANCEL) return; // was looking around
       digMining = true;
-      hooks.mine(true, digX, digY);        // mine the block under the finger
+      hooks.mine(true);
     }, HOLD_MS);
   }, {passive:false});
 
@@ -710,10 +708,10 @@ function initTouch(hooks){
       if(digMining){ hooks.mine(false); digMining = false; }
       digId = null;
 
-      // PLACE on quick tap — at the tapped pixel (tolerate finger slop)
+      // PLACE on quick tap (crosshair target) — tolerate finger slop
       if(!wasMining && !invOpen && held < HOLD_MS + 60 && move < PLACE_SLOP){
-        // Defer one frame so the camera matrix from the last move is settled
-        requestAnimationFrame(()=> hooks.place?.(digX, digY));
+        // Defer one frame so look math from last move is settled
+        requestAnimationFrame(()=> hooks.place?.());
       }
     }
   };
