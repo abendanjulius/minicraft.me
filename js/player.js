@@ -54,7 +54,7 @@ export const skinIdx = ()=>Math.min(SKINS.length-1, Math.max(0, +(localStorage.g
 const handGroup = new THREE.Group();
 camera.add(handGroup);
 // Anchor in the lower-right of the view
-handGroup.position.set(0.42, -0.55, -0.55);
+handGroup.position.set(0.38, -0.42, -0.50);
 handGroup.rotation.set(0, 0, 0);
 
 // Bare arm: thick forearm coming in from the corner
@@ -111,12 +111,14 @@ function updateHeld(){
     return;
   }
 
-  // Mining tools — exact same emoji as hotbar icon
+  // Mining tools — same emoji as hotbar, large + held in lower-right
   if(held.k==='t'){
     poseArm('tool');
-    heldExtra = makeToolIconPlane(held.id, 0.58);
-    heldExtra.position.set(0.30, -0.16, -0.50);
-    heldExtra.rotation.set(0, 0.25, 0);
+    heldExtra = makeToolIconPlane(held.id, 1.15);
+    // Offset within handGroup so it sits in the classic FP hold corner
+    heldExtra.position.set(0.05, -0.02, -0.15);
+    // Tilt so it reads as held, not a flat sticker
+    heldExtra.rotation.set(-0.35, 0.55, 0.25);
     handGroup.add(heldExtra);
     return;
   }
@@ -156,13 +158,14 @@ function updateHeld(){
       poseArm('tool');
       heldExtra = makeWeaponModel(id);
       heldExtra.scale.set(1.4, 1.4, 1.4);
-      heldExtra.position.set(0.22, -0.1, -0.45);
-      heldExtra.rotation.set(-0.5, 0.45, 0.2);
+      heldExtra.position.set(0.04, -0.02, -0.16);
+      heldExtra.rotation.set(-0.4, 0.45, 0.2);
+      heldExtra.scale.multiplyScalar(1.4);
     } else {
       poseArm('item');
-      heldExtra = makeHeldItemIcon(id, 0.6);
-      heldExtra.position.set(0.26, -0.12, -0.48);
-      heldExtra.rotation.set(0.05, 0.25, -0.1);
+      heldExtra = makeHeldItemIcon(id, 0.95);
+      heldExtra.position.set(0.04, -0.02, -0.16);
+      heldExtra.rotation.set(-0.2, 0.4, 0.15);
     }
     handGroup.add(heldExtra);
   }
@@ -886,8 +889,8 @@ export function update(dt, elapsed){
   // Keep the hand anchored lower-right; bob lightly while moving
   const bobY = Math.sin(handBob)*0.012;
   const bobX = Math.cos(handBob*0.5)*0.008;
-  handGroup.position.set(0.42 + bobX, -0.55 + bobY + swing*0.04, -0.55 + swing*0.1);
-  handGroup.rotation.set(swing*0.85, swing*0.15, 0);
+  handGroup.position.set(0.38 + bobX, -0.42 + bobY + swing*0.03, -0.50 + swing*0.08);
+  handGroup.rotation.set(swing*0.7, swing*0.12, 0);
 }
 
 // State snapshot for the network
