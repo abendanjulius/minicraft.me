@@ -759,6 +759,36 @@ export function makeToolIconPlane(toolId, size=1.1){
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
 
+// ---- Target outline + ghost placement preview ----------------------------
+// A black wireframe on the block under the crosshair (which block you're
+// aiming at) plus a translucent ghost cube at the cell where a new block will
+// land. Pure visual feedback — the placement math is unchanged.
+const _targetOutline = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002)),
+  new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }));
+_targetOutline.visible = false;
+_targetOutline.renderOrder = 999;
+scene.add(_targetOutline);
+
+const _ghostBox = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.28, depthWrite: false }));
+_ghostBox.visible = false;
+_ghostBox.renderOrder = 998;
+scene.add(_ghostBox);
+const _ghostEdges = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+_ghostBox.add(_ghostEdges);
+
+/** hit / place are [x,y,z] block cells (or null). Positions the outline + ghost. */
+export function updatePlacePreview(hit, place){
+  if(hit){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
+  else _targetOutline.visible = false;
+  if(place){ _ghostBox.position.set(place[0], place[1], place[2]); _ghostBox.visible = true; }
+  else _ghostBox.visible = false;
+}
+
 export function makeBlockCube(tid, size=.34){
   const mats = TYPES[tid]?.mats;
   if(!mats){

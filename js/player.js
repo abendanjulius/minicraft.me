@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
@@ -405,6 +405,46 @@ function faceAdjacentPlace(hx, hy, hz, dir){
 }
 
 /**
+ * Resolve where a placed block will actually land for a given raycast result,
+ * mirroring placeAction's validation exactly. Returns [px,py,pz] or null.
+ * Shared by placeAction (to place) and the update loop (to preview the ghost),
+ * so the ghost always shows the true destination cell.
+ */
+function resolvePlaceCell(r){
+  if(!r || !r.hit) return null;
+  let place = r.place;
+  if(!place){
+    const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
+    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], dir);
+  }
+  let [px,py,pz] = place;
+  if(py<0||py>=WH) return null;
+
+  // If computed place is occupied, try the other faces around the hit
+  if(getBlock(px,py,pz)){
+    const [hx,hy,hz] = r.hit;
+    let found = null;
+    for(const [dx,dy,dz] of [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
+      const cx = hx+dx, cy = hy+dy, cz = hz+dz;
+      if(cy<0||cy>=WH) continue;
+      if(!getBlock(cx,cy,cz) && hasBlockSupport(cx,cy,cz) && !placeOverlapsPlayer(cx,cy,cz)){
+        // prefer the face toward the player eye
+        found = [cx,cy,cz];
+        if(dy === 1 || dy === -1){ found = [cx,cy,cz]; break; }
+        if(!found) found = [cx,cy,cz];
+      }
+    }
+    if(!found) return null;
+    [px,py,pz] = found;
+  }
+
+  // No floating blocks — must touch a solid
+  if(!hasBlockSupport(px, py, pz)) return null;
+  if(placeOverlapsPlayer(px, py, pz)) return null;
+  return [px,py,pz];
+}
+
+/**
  * Crosshair raycast — voxel DDA (Amanatides–Woo). Blocks are centered on integer
  * coords (Math.round), so cell boundaries sit at n±0.5. Stepping one boundary at
  * a time makes the last empty cell before a hit EXACTLY face-adjacent, so `place`
@@ -543,36 +583,10 @@ export function placeAction(){
   }
   if(!gm.forge && !(inventory[tid]>0)) return;
 
-  // Compute / validate place cell against the hit face
-  let place = r.place;
-  if(!place){
-    const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ')).normalize();
-    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], dir);
-  }
-  let [px,py,pz] = place;
-  if(py<0||py>=WH) return;
-
-  // If computed place is occupied, try the other faces around the hit
-  if(getBlock(px,py,pz)){
-    const [hx,hy,hz] = r.hit;
-    let found = null;
-    for(const [dx,dy,dz] of [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
-      const cx = hx+dx, cy = hy+dy, cz = hz+dz;
-      if(cy<0||cy>=WH) continue;
-      if(!getBlock(cx,cy,cz) && hasBlockSupport(cx,cy,cz) && !placeOverlapsPlayer(cx,cy,cz)){
-        // prefer the face toward the player eye
-        found = [cx,cy,cz];
-        if(dy === 1 || dy === -1){ found = [cx,cy,cz]; break; }
-        if(!found) found = [cx,cy,cz];
-      }
-    }
-    if(!found) return;
-    [px,py,pz] = found;
-  }
-
-  // No floating blocks — must touch a solid
-  if(!hasBlockSupport(px, py, pz)) return;
-  if(placeOverlapsPlayer(px, py, pz)) return;
+  // Compute / validate place cell against the hit face (shared with the ghost preview)
+  const cell = resolvePlaceCell(r);
+  if(!cell) return;
+  let [px,py,pz] = cell;
 
   // Place any door style — occupies 2 blocks tall (bottom + top)
   const doorStyle = DOOR_STYLES.find(s => s.item === tid);
@@ -936,6 +950,23 @@ export function update(dt, elapsed){
     camera.position.x += jit(shake);
     camera.position.y += jit(shake*.7);
     shake = Math.max(0, shake - dt*1.5);
+  }
+
+  // Target outline + ghost placement preview (visual feedback only — the ghost
+  // uses the SAME resolver as placeAction, so it shows the true landing cell).
+  if(!invOpen && !survival.sv.dead){
+    const r = castBlock();
+    let ghost = null;
+    if(r && r.hit){
+      let tid = slotBlock();
+      if(tid){
+        for(const s of DOOR_STYLES){ if(tid>=s.base && tid<s.base+8) tid = s.item; }
+        if(gm.forge || inventory[tid] > 0) ghost = resolvePlaceCell(r);
+      }
+    }
+    updatePlacePreview(r && r.hit ? r.hit : null, ghost);
+  } else {
+    updatePlacePreview(null, null);
   }
 
   // Body follows player, offset backward so the torso sits behind the camera line
