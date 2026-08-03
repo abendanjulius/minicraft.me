@@ -376,15 +376,113 @@ export function initControls(){
 
 export function jump(b){ keys.Space = b; }
 
-export function castBlock(){
-  const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(view.pitch,view.yaw,0,'YXZ'));
-  const eye = player.pos.clone().add(new THREE.Vector3(0,1.6,0));
+/** Solid enough to attach a new block to (not air / plants / open doors / water) */
+function isSupportBlock(b){
+  if(!b) return false;
+  // walk-through / non-solid: torches, plants, water, open doors, slabs top? keep simple
+  if(isWalkThrough(b)) return false;
+  return true;
+}
+
+/** True if cell (x,y,z) touches at least one solid block (6-neighbor) */
+function hasBlockSupport(x, y, z){
+  const n = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  for(const [dx,dy,dz] of n){
+    if(isSupportBlock(getBlock(x+dx, y+dy, z+dz))) return true;
+  }
+  return false;
+}
+
+/** Does placing at cell overlap the player's body? */
+function placeOverlapsPlayer(px, py, pz){
+  // Player AABB roughly 0.6×1.8 centered on pos.xz, feet at pos.y
+  const half = 0.35;
+  const px0 = player.pos.x - half, px1 = player.pos.x + half;
+  const pz0 = player.pos.z - half, pz1 = player.pos.z + half;
+  const py0 = player.pos.y, py1 = player.pos.y + 1.75;
+  // Block cell [n, n+1) in floor space (DDA uses floor coords)
+  const bx0 = px, bx1 = px + 1;
+  const by0 = py, by1 = py + 1;
+  const bz0 = pz, bz1 = pz + 1;
+  return !(px1 <= bx0 || px0 >= bx1 || py1 <= by0 || py0 >= by1 || pz1 <= bz0 || pz0 >= bz1);
+}
+
+/**
+ * Voxel DDA raycast (Amanatides & Woo).
+ * Returns { hit:[x,y,z], place:[x,y,z], dist, face } or null.
+ * place = empty cell just before the hit face (where a block would attach).
+ */
+export function castBlock(maxDist = 7){
+  const dir = new THREE.Vector3(0,0,-1)
+    .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
+    .normalize();
+  const eye = player.pos.clone().add(new THREE.Vector3(0, 1.62, 0));
+
+  // Start cell
+  let x = Math.floor(eye.x);
+  let y = Math.floor(eye.y);
+  let z = Math.floor(eye.z);
+
+  const stepX = dir.x > 0 ? 1 : (dir.x < 0 ? -1 : 0);
+  const stepY = dir.y > 0 ? 1 : (dir.y < 0 ? -1 : 0);
+  const stepZ = dir.z > 0 ? 1 : (dir.z < 0 ? -1 : 0);
+
+  const invX = dir.x !== 0 ? 1 / Math.abs(dir.x) : Infinity;
+  const invY = dir.y !== 0 ? 1 / Math.abs(dir.y) : Infinity;
+  const invZ = dir.z !== 0 ? 1 / Math.abs(dir.z) : Infinity;
+
+  // Distance along ray to first grid boundary
+  let tMaxX = dir.x > 0 ? (Math.floor(eye.x) + 1 - eye.x) * invX
+            : dir.x < 0 ? (eye.x - Math.floor(eye.x)) * invX : Infinity;
+  let tMaxY = dir.y > 0 ? (Math.floor(eye.y) + 1 - eye.y) * invY
+            : dir.y < 0 ? (eye.y - Math.floor(eye.y)) * invY : Infinity;
+  let tMaxZ = dir.z > 0 ? (Math.floor(eye.z) + 1 - eye.z) * invZ
+            : dir.z < 0 ? (eye.z - Math.floor(eye.z)) * invZ : Infinity;
+
+  // If exactly on integer boundary going negative, floor already put us in cell; tMax is 0 — nudge
+  if(tMaxX === 0) tMaxX = invX;
+  if(tMaxY === 0) tMaxY = invY;
+  if(tMaxZ === 0) tMaxZ = invZ;
+
   let prev = null;
-  for(let t=0;t<6;t+=.05){
-    const p = eye.clone().addScaledVector(dir,t);
-    const bx=Math.round(p.x), by=Math.round(p.y), bz=Math.round(p.z);
-    if(getBlock(bx,by,bz)) return {hit:[bx,by,bz], place:prev, dist:t};
-    prev = [bx,by,bz];
+  let dist = 0;
+  let face = 0; // 0=x,1=y,2=z last crossed
+
+  for(let i = 0; i < 64; i++){
+    const b = getBlock(x, y, z);
+    // Treat solid (and also non-walkthrough) as a hit surface you can place against
+    if(b && !isWalkThrough(b)){
+      return { hit:[x,y,z], place: prev, dist, face };
+    }
+    // soft blocks (plants etc.) — still allow targeting through, but can hit for break
+    if(b && b !== 64){ // water: pass through for place ray; other non-solids still "hit" for mining
+      // For placement we want the solid behind; for mining we want this cell
+      // Keep going only through pure empty; stop on any non-air so mining still works
+      if(b !== 10 && b !== 44){ // torch-like / thin — optional pass
+        // plants, leaves-ish walkthrough: count as hit so you can break them
+        if(isWalkThrough(b)){
+          return { hit:[x,y,z], place: prev, dist, face };
+        }
+      }
+    }
+
+    prev = [x, y, z];
+
+    // Step to next voxel
+    if(tMaxX < tMaxY){
+      if(tMaxX < tMaxZ){
+        dist = tMaxX; x += stepX; tMaxX += invX; face = 0;
+      } else {
+        dist = tMaxZ; z += stepZ; tMaxZ += invZ; face = 2;
+      }
+    } else {
+      if(tMaxY < tMaxZ){
+        dist = tMaxY; y += stepY; tMaxY += invY; face = 1;
+      } else {
+        dist = tMaxZ; z += stepZ; tMaxZ += invZ; face = 2;
+      }
+    }
+    if(dist > maxDist) break;
   }
   return null;
 }
@@ -485,8 +583,12 @@ export function placeAction(){
   if(!gm.forge && !(inventory[tid]>0)) return;
   const [px,py,pz] = r.place;
   if(py<0||py>=WH) return;
-  const d = new THREE.Vector3(px,py,pz).sub(player.pos);
-  if(Math.abs(d.x)<.9 && Math.abs(d.z)<.9 && d.y>-.5 && d.y<2) return;
+  // Cell must be empty
+  if(getBlock(px,py,pz)) return;
+  // Must attach to an existing solid block (no floating first block in air)
+  if(!hasBlockSupport(px, py, pz)) return;
+  // Don't place inside the player
+  if(placeOverlapsPlayer(px, py, pz)) return;
 
   // Place any door style — occupies 2 blocks tall (bottom + top)
   const doorStyle = DOOR_STYLES.find(s => s.item === tid);
