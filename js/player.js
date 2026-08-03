@@ -427,43 +427,24 @@ function faceAdjacentPlace(hx, hy, hz, dir){
  */
 function resolvePlaceCell(r, flush = true){
   if(!r || !r.hit) return null;
-  let place = r.place;
-  if(!place){
-    place = faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], aimDir());
-  }
+  const [hx,hy,hz] = r.hit;
 
-  // Flush paving — looking DOWN at a block's top face fills that block's own
-  // cell, so the new block sits level with the ground you aimed at instead of
-  // stacking a half-block above the crosshair. Build upward by aiming at a
-  // block's SIDE face, which still places adjacent as usual. Multi-cell pieces
-  // (doors, beds) need free space, so they opt out via flush=false.
+  // What you point at is what you get: the block lands in the very cell the
+  // crosshair hit, replacing it. No neighbour guessing — the old fallback could
+  // pick an unrelated cell beside the player, which read as "it placed the one
+  // near me". Multi-cell pieces (doors, beds) need free space, so they keep the
+  // classic face-adjacent placement via flush=false.
   if(flush){
-    const [hx,hy,hz] = r.hit;
-    if(place[0]===hx && place[2]===hz && place[1]===hy+1 && !placeOverlapsPlayer(hx,hy,hz)){
-      return [hx,hy,hz];
-    }
+    if(hy<0 || hy>=WH) return null;
+    if(placeOverlapsPlayer(hx,hy,hz)) return null;
+    return [hx,hy,hz];
   }
 
+  let place = r.place;
+  if(!place) place = faceAdjacentPlace(hx, hy, hz, aimDir());
   let [px,py,pz] = place;
   if(py<0||py>=WH) return null;
-
-  // If computed place is occupied, try the other faces around the hit
-  if(getBlock(px,py,pz)){
-    const [hx,hy,hz] = r.hit;
-    let found = null;
-    for(const [dx,dy,dz] of [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
-      const cx = hx+dx, cy = hy+dy, cz = hz+dz;
-      if(cy<0||cy>=WH) continue;
-      if(!getBlock(cx,cy,cz) && hasBlockSupport(cx,cy,cz) && !placeOverlapsPlayer(cx,cy,cz)){
-        // prefer the face toward the player eye
-        found = [cx,cy,cz];
-        if(dy === 1 || dy === -1){ found = [cx,cy,cz]; break; }
-        if(!found) found = [cx,cy,cz];
-      }
-    }
-    if(!found) return null;
-    [px,py,pz] = found;
-  }
+  if(getBlock(px,py,pz)) return null;
 
   // No floating blocks — must touch a solid
   if(!hasBlockSupport(px, py, pz)) return null;

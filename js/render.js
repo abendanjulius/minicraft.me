@@ -807,12 +807,19 @@ const _ghostEdges = new THREE.LineSegments(
   new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }));
 _ghostBox.add(_ghostEdges);
 
-/** hit / place are [x,y,z] block cells (or null). Positions the outline + ghost. */
+/**
+ * hit / place are [x,y,z] block cells (or null). Shows the ghost where the
+ * block will land; the black outline marks the aimed block only when it is a
+ * DIFFERENT cell (or when nothing is placeable, e.g. holding a tool), so the
+ * player never sees two competing highlights on the same square.
+ */
 export function updatePlacePreview(hit, place){
-  if(hit){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
-  else _targetOutline.visible = false;
   if(place){ _ghostBox.position.set(place[0], place[1], place[2]); _ghostBox.visible = true; }
   else _ghostBox.visible = false;
+
+  const same = hit && place && hit[0]===place[0] && hit[1]===place[1] && hit[2]===place[2];
+  if(hit && !same){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
+  else _targetOutline.visible = false;
 }
 
 export function makeBlockCube(tid, size=.34){
