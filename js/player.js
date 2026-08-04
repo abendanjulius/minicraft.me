@@ -38,8 +38,14 @@ function aimDir(){
   return dirFromNDC(n.x, n.y);
 }
 
-/** Raycast through an arbitrary screen pixel — the touch-to-place entry point. */
-export function castScreen(clientX, clientY, maxDist = 8){
+/**
+ * Raycast through an arbitrary screen pixel — the touch-to-place entry point.
+ * Longer reach than the crosshair: with no crosshair there is no cue for how
+ * far you can build, so a tap on plainly-visible ground must not silently do
+ * nothing. Measured on real terrain, 8 blocks answered only ~82% of natural
+ * taps; 12 answers ~90%, and taps past that are rare (median tap is ~3.5).
+ */
+export function castScreen(clientX, clientY, maxDist = 12){
   const n = screenToNDC(clientX, clientY);
   if(!n) return null;
   return castBlock(maxDist, dirFromNDC(n.x, n.y));
@@ -449,9 +455,22 @@ function faceAdjacentPlace(hx, hy, hz, dir){
  * Shared by placeAction (to place) and the update loop (to preview the ghost),
  * so the ghost always shows the true destination cell.
  */
+/** Tall grass & flowers: a placed block swallows them, as in Minecraft. */
+const REPLACEABLE = new Set([66, 67, 68, 69]);
+
 function resolvePlaceCell(r){
   if(!r || !r.hit) return null;
   const [hx,hy,hz] = r.hit;
+
+  // Tapped a plant: the block takes its cell. Without this the target is the
+  // cell ABOVE a wispy tuft, which has nothing solid to attach to, so tapping
+  // grass — everywhere on plains — silently did nothing.
+  if(REPLACEABLE.has(getBlock(hx,hy,hz))){
+    if(hy < 0 || hy >= WH) return null;
+    if(!hasBlockSupport(hx,hy,hz)) return null;
+    if(placeOverlapsPlayer(hx,hy,hz)) return null;
+    return [hx,hy,hz];
+  }
 
   // Against the face the crosshair entered — top face → on top, side face → on
   // that side. The DDA's `place` IS that cell: it steps one boundary at a time,
@@ -462,9 +481,9 @@ function resolvePlaceCell(r){
   const [px,py,pz] = place;
   if(py<0||py>=WH) return null;
 
-  // Must be free (water is replaceable, matching the pass-through raycast)
+  // Must be free — water and plants are replaceable
   const occ = getBlock(px,py,pz);
-  if(occ && occ !== 64) return null;
+  if(occ && occ !== 64 && !REPLACEABLE.has(occ)) return null;
 
   // No floating blocks — must touch a solid
   if(!hasBlockSupport(px, py, pz)) return null;

@@ -640,7 +640,6 @@ function initTouch(hooks){
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
   let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
-  let lastTapX = null, lastTapY = null;   // where the 🧱 button re-places
   // Touch-to-place: you tap the block you want, so there is no crosshair.
   // A drag is looking and NEVER places, however it ends. TAP_SLOP is finger
   // jitter only — past it the gesture is a look, permanently.
@@ -719,7 +718,6 @@ function initTouch(hooks){
       // TAP_SLOP was a look, so it never places no matter how it ended.
       if(!wasMining && !invOpen && held < HOLD_MS && move < TAP_SLOP){
         const tx = t.clientX, ty = t.clientY;
-        lastTapX = tx; lastTapY = ty;
         requestAnimationFrame(()=> hooks.place?.(tx, ty));
       }
     }
@@ -736,15 +734,9 @@ function initTouch(hooks){
     el.addEventListener('touchcancel', up);
   }
   bindPress($('btnJump'), ()=>hooks.jump(true), ()=>hooks.jump(false));
-  // Mining stays a hold-on-world gesture, but placing gets a dedicated button:
-  // tap detection on the world surface can miss, and a button never does.
+  // No mine/place buttons: you tap the block you want, and hold to dig it.
   const bm = $('btnMine'); if(bm) bm.style.display = 'none';
-  // 🧱 repeats a placement at the last spot you tapped — handy for stacking
-  // without re-aiming. Falls back to screen centre before your first tap.
-  bindPress($('btnPlace'), ()=>{
-    if(lastTapX === null) hooks.place?.(innerWidth/2, innerHeight/2);
-    else hooks.place?.(lastTapX, lastTapY);
-  }, null);
+  const bp = $('btnPlace'); if(bp) bp.style.display = 'none';
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
   bindPress($('btnSprint'), ()=>hooks.sprint?.(true), ()=>hooks.sprint?.(false));
   bindPress($('btnDrop'), ()=>hooks.drop?.(), null);
