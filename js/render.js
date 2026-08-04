@@ -299,7 +299,7 @@ export function updateDayNight(dt, focus){
   return dl;
 }
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth / Math.max(1, innerHeight);   // never NaN
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   refreshAimNDC();
@@ -319,19 +319,9 @@ export function refreshAimNDC(){
   const cv = renderer.domElement;
   if(!ch || !cv) return;
   const c = ch.getBoundingClientRect(), r = cv.getBoundingClientRect();
-  if(!r.width || !r.height || !c.width || !c.height) return;
-  // Only skip genuinely degenerate layouts (a collapsed visual viewport puts
-  // top:50% at the screen corner). Never second-guess the magnitude of a real
-  // measurement: the canvas/viewport mismatch this corrects for can be large,
-  // and clamping it silently reverts to centre-of-canvas aiming — the very
-  // offset bug this exists to fix.
-  const vv = window.visualViewport;
-  if(vv && (vv.width < 1 || vv.height < 1)) return;
-  const x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
-  const y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
-  if(!Number.isFinite(x) || !Number.isFinite(y)) return;
-  _aimNDC.x = x;
-  _aimNDC.y = y;
+  if(!r.width || !r.height) return;
+  _aimNDC.x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
+  _aimNDC.y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
 }
 addEventListener('orientationchange', ()=> setTimeout(refreshAimNDC, 250));
 visualViewport?.addEventListener('resize', refreshAimNDC);
@@ -800,10 +790,6 @@ export function makeToolIconPlane(toolId, size=1.1){
 // above is nearer to the eye at a downward angle, so it projects large and
 // toward the player and reads as the wrong square. Slightly oversized and
 // depth-write-free so it wraps the block instead of z-fighting its faces.
-//
-// Do NOT re-litigate this into a face-oriented quad: orienting a plane by the
-// hit normal reads as a vertical pane on flat ground and misrepresents where
-// the block lands. A box on the aimed block is the shape that tested right.
 const _hlGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
 const _targetHighlight = new THREE.Mesh(_hlGeo,
   new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
@@ -814,18 +800,10 @@ _targetHighlight.add(new THREE.LineSegments(
   new THREE.EdgesGeometry(_hlGeo),
   new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })));
 
-const HL_OK = 0x9fd6ff, HL_BLOCKED = 0xff8a8a;
-
-/**
- * hit is the [x,y,z] block cell under the crosshair, or null. `blocked` turns
- * the highlight light red — a creature is standing where the block would land,
- * so placeAction will refuse it.
- */
-export function updatePlacePreview(hit, blocked){
+/** hit is the [x,y,z] block cell under the crosshair, or null. */
+export function updatePlacePreview(hit){
   if(hit){ _targetHighlight.position.set(hit[0], hit[1], hit[2]); _targetHighlight.visible = true; }
   else _targetHighlight.visible = false;
-  _targetHighlight.material.color.setHex(blocked ? HL_BLOCKED : HL_OK);
-  _targetHighlight.material.opacity = blocked ? 0.42 : 0.3;
 }
 
 export function makeBlockCube(tid, size=.34){
