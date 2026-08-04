@@ -412,6 +412,36 @@ function placeOverlapsPlayer(px, py, pz){
   return !(px1 <= px-0.5 || px0 >= px+0.5 || py1 <= py-0.5 || py0 >= py+0.5 || pz1 <= pz-0.5 || pz0 >= pz+0.5);
 }
 
+/**
+ * Is a creature standing in this cell? You can't build inside a pig. Entity
+ * positions are logical feet positions, same space as block coords.
+ */
+function placeOverlapsEntity(px, py, pz){
+  const overlaps = (pos, half, height)=>
+    !(pos.x + half <= px-0.5 || pos.x - half >= px+0.5 ||
+      pos.y + height <= py-0.5 || pos.y      >= py+0.5 ||
+      pos.z + half <= pz-0.5 || pos.z - half >= pz+0.5);
+  for(const a of animals)
+    if(a.alive && a.g.visible && overlaps(a.g.position, 0.45, 1.1)) return true;
+  for(const zb of zombies.values())
+    if(zb.c.g.visible && overlaps(zb.c.g.position, 0.4, 1.8)) return true;
+  for(const v of villagers.villagers || [])
+    if(v.g?.visible && overlaps(v.g.position, 0.4, 1.8)) return true;
+  return false;
+}
+
+/** The cell a block would go in, before any validity checks. */
+function candidatePlaceCell(r){
+  if(!r || !r.hit) return null;
+  return r.place || faceAdjacentPlace(r.hit[0], r.hit[1], r.hit[2], aimDir());
+}
+
+/** True when a creature is sitting where the block would land. */
+function placeBlockedByEntity(r){
+  const c = candidatePlaceCell(r);
+  return !!c && placeOverlapsEntity(c[0], c[1], c[2]);
+}
+
 function faceAdjacentPlace(hx, hy, hz, dir){
   const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
   if(ay >= ax && ay >= az) return [hx, hy - (dir.y >= 0 ? 1 : -1), hz];
@@ -445,6 +475,7 @@ function resolvePlaceCell(r){
   // No floating blocks — must touch a solid
   if(!hasBlockSupport(px, py, pz)) return null;
   if(placeOverlapsPlayer(px, py, pz)) return null;
+  if(placeOverlapsEntity(px, py, pz)) return null;   // never build inside a creature
   return [px,py,pz];
 }
 
@@ -959,12 +990,13 @@ export function update(dt, elapsed){
   aimTimer -= dt;
   if(aimTimer <= 0){ aimTimer = 0.5; refreshAimNDC(); }
 
-  // Outline the block the crosshair is pointing at (visual feedback only)
+  // Highlight the block the crosshair is pointing at — red when a creature is
+  // standing where the block would land (visual feedback only)
   if(!invOpen && !survival.sv.dead){
     const r = castBlock();
-    updatePlacePreview(r && r.hit ? r.hit : null);
+    updatePlacePreview(r && r.hit ? r.hit : null, placeBlockedByEntity(r));
   } else {
-    updatePlacePreview(null);
+    updatePlacePreview(null, false);
   }
 
   // Body follows player, offset backward so the torso sits behind the camera line

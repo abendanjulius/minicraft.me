@@ -800,10 +800,18 @@ _targetHighlight.add(new THREE.LineSegments(
   new THREE.EdgesGeometry(_hlGeo),
   new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })));
 
-/** hit is the [x,y,z] block cell under the crosshair, or null. */
-export function updatePlacePreview(hit){
+const HL_OK = 0x9fd6ff, HL_BLOCKED = 0xff8a8a;
+
+/**
+ * hit is the [x,y,z] block cell under the crosshair, or null. `blocked` turns
+ * the highlight light red to say "a creature is standing here — you can't
+ * build into it", matching placeAction's refusal.
+ */
+export function updatePlacePreview(hit, blocked){
   if(hit){ _targetHighlight.position.set(hit[0], hit[1], hit[2]); _targetHighlight.visible = true; }
   else _targetHighlight.visible = false;
+  _targetHighlight.material.color.setHex(blocked ? HL_BLOCKED : HL_OK);
+  _targetHighlight.material.opacity = blocked ? 0.42 : 0.3;
 }
 
 export function makeBlockCube(tid, size=.34){
