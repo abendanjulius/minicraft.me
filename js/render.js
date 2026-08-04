@@ -338,9 +338,59 @@ visualViewport?.addEventListener('scroll', refreshAimNDC);
 setTimeout(refreshAimNDC, 0);
 
 // ---- Textures (procedural 16x16; per-device pixel noise is cosmetic) ----
+/**
+ * Art direction: "soft bevel". Applied to EVERY generated texture so the whole
+ * world shares one look, rather than styling 38 generators by hand.
+ *   1. Clump — pull each pixel toward its 4x4 cell average. The generators emit
+ *      per-pixel random noise, which reads as static and shimmers at distance;
+ *      clumping turns it into grain that looks like material.
+ *   2. Chamfer — lighten the top/left edge, darken the bottom/right. Gives every
+ *      block a soft bevel so individual blocks stay readable in a big flat wall.
+ * Fully transparent pixels are skipped so cut-outs (glass, leaves, torch) keep
+ * their shape and don't bleed dark edges.
+ */
+const TEX_CELL = 4, TEX_CLUMP = 0.55, TEX_EDGE_HI = 13, TEX_EDGE_LO = 15;
+function styleTexture(g){
+  const img = g.getImageData(0, 0, 16, 16), d = img.data;
+  const n = 16 / TEX_CELL;
+  for(let cy = 0; cy < n; cy++) for(let cx = 0; cx < n; cx++){
+    let r = 0, gg = 0, b = 0, cnt = 0;
+    for(let y = cy*TEX_CELL; y < (cy+1)*TEX_CELL; y++)
+      for(let x = cx*TEX_CELL; x < (cx+1)*TEX_CELL; x++){
+        const i = (y*16 + x)*4;
+        if(d[i+3] === 0) continue;               // ignore holes
+        r += d[i]; gg += d[i+1]; b += d[i+2]; cnt++;
+      }
+    if(!cnt) continue;
+    r /= cnt; gg /= cnt; b /= cnt;
+    for(let y = cy*TEX_CELL; y < (cy+1)*TEX_CELL; y++)
+      for(let x = cx*TEX_CELL; x < (cx+1)*TEX_CELL; x++){
+        const i = (y*16 + x)*4;
+        if(d[i+3] === 0) continue;
+        d[i]   += (r  - d[i])   * TEX_CLUMP;
+        d[i+1] += (gg - d[i+1]) * TEX_CLUMP;
+        d[i+2] += (b  - d[i+2]) * TEX_CLUMP;
+      }
+  }
+  for(let y = 0; y < 16; y++) for(let x = 0; x < 16; x++){
+    const i = (y*16 + x)*4;
+    if(d[i+3] === 0) continue;
+    let e = 0;
+    if(x === 0  || y === 0 ) e += TEX_EDGE_HI;
+    if(x === 15 || y === 15) e -= TEX_EDGE_LO;
+    if(!e) continue;
+    d[i]   = Math.max(0, Math.min(255, d[i]   + e));
+    d[i+1] = Math.max(0, Math.min(255, d[i+1] + e));
+    d[i+2] = Math.max(0, Math.min(255, d[i+2] + e));
+  }
+  g.putImageData(img, 0, 0);
+}
+
 function canvasTex(draw){
   const c = document.createElement('canvas'); c.width = c.height = 16;
-  draw(c.getContext('2d'));
+  const g = c.getContext('2d');
+  draw(g);
+  styleTexture(g);
   const t = new THREE.CanvasTexture(c);
   t.magFilter = t.minFilter = THREE.NearestFilter;
   return {t, url:c.toDataURL()};
@@ -349,25 +399,25 @@ const rgb=(r,g,b,a=1)=>`rgba(${Math.min(255,Math.max(0,r|0))},${Math.min(255,Mat
 const pix=(g,fn)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const c=fn(x,y);if(c){g.fillStyle=c;g.fillRect(x,y,1,1);}}};
 export const jit=n=>(Math.random()-.5)*n;
 
-const grassTop = canvasTex(g=>pix(g,()=>{const d=jit(30);return rgb(92+d,171+d,60+d)}));
-const dirtTex  = canvasTex(g=>pix(g,()=>{const d=jit(24);return rgb(134+d,96+d,67+d)}));
+const grassTop = canvasTex(g=>pix(g,()=>{const d=jit(30);return rgb(74+d,163+d,96+d)}));
+const dirtTex  = canvasTex(g=>pix(g,()=>{const d=jit(24);return rgb(120+d,88+d,74+d)}));
 const capDepth = Array.from({length:16},()=>3+Math.floor(Math.random()*2));
-const grassSide= canvasTex(g=>pix(g,(x,y)=>{const d=jit(24);return y<capDepth[x]?rgb(92+d,171+d,60+d):rgb(134+d,96+d,67+d)}));
-const stoneTex = canvasTex(g=>pix(g,()=>{const d=jit(26),s=Math.random()<.08?-25:0;return rgb(128+d+s,128+d+s,131+d+s)}));
+const grassSide= canvasTex(g=>pix(g,(x,y)=>{const d=jit(24);return y<capDepth[x]?rgb(74+d,163+d,96+d):rgb(120+d,88+d,74+d)}));
+const stoneTex = canvasTex(g=>pix(g,()=>{const d=jit(26),s=Math.random()<.08?-25:0;return rgb(122+d+s,130+d+s,142+d+s)}));
 const logSide  = canvasTex(g=>pix(g,(x,y)=>{
   const bark=(x%4===0||x%7===0)?-32:0,d=jit(16);
   const knot=(x>=6&&x<=9&&y>=6&&y<=9)?-25:0;
-  return rgb(105+bark+d+knot, 80+bark+d+knot, 46+bark+d+knot);
+  return rgb(100+bark+d+knot, 78+bark+d+knot, 58+bark+d+knot);
 }));
-const logTop   = canvasTex(g=>pix(g,(x,y)=>{const r=Math.max(Math.abs(x-7.5),Math.abs(y-7.5)),ring=Math.floor(r)%2===0?12:-14,d=jit(10);return rgb(160+ring+d,130+ring+d,85+ring+d)}));
+const logTop   = canvasTex(g=>pix(g,(x,y)=>{const r=Math.max(Math.abs(x-7.5),Math.abs(y-7.5)),ring=Math.floor(r)%2===0?12:-14,d=jit(10);return rgb(156+ring+d,126+ring+d,92+ring+d)}));
 const leafTex  = canvasTex(g=>pix(g,(x,y)=>{
   const d=jit(36), hole=Math.random()<.12?-50:0;
   // slight mottling so leaves don't look like solid plastic cubes
   const mott=((x*3+y*5)&7)===0?-18:0;
-  return rgb(48+d+hole+mott, 118+d+hole+mott, 36+d+hole+mott);
+  return rgb(44+d+hole+mott, 116+d+hole+mott, 66+d+hole+mott);
 }));
-const sandTex  = canvasTex(g=>pix(g,()=>{const d=jit(20);return rgb(218+d,204+d,150+d)}));
-const plankTex = canvasTex(g=>pix(g,(x,y)=>{const seam=(y%4===3)?-40:0,off=((y>>2)%2)*8,end=((x+off)%8===7)?-30:0,d=jit(14);return rgb(178+seam+end+d,138+seam+end+d,90+seam+end+d)}));
+const sandTex  = canvasTex(g=>pix(g,()=>{const d=jit(20);return rgb(214+d,197+d,157+d)}));
+const plankTex = canvasTex(g=>pix(g,(x,y)=>{const seam=(y%4===3)?-40:0,off=((y>>2)%2)*8,end=((x+off)%8===7)?-30:0,d=jit(14);return rgb(168+seam+end+d,130+seam+end+d,94+seam+end+d)}));
 const brickTex = canvasTex(g=>pix(g,(x,y)=>{const my=y%4===3,off=((y>>2)%2)*4,mx=(x+off)%8===7;if(my||mx)return rgb(188,188,188);const d=jit(20);return rgb(150+d,70+d,60+d)}));
 const glassTex = canvasTex(g=>{g.clearRect(0,0,16,16);pix(g,(x,y)=>{if(x===0||y===0||x===15||y===15)return rgb(200,225,235,.9);if((x+y)%7===0&&x>2&&x<13)return rgb(230,245,255,.5);return rgb(200,230,245,.13)})});
 const torchTex = canvasTex(g=>{g.clearRect(0,0,16,16);pix(g,(x,y)=>{
