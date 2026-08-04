@@ -640,8 +640,11 @@ function initTouch(hooks){
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
   let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
-  const HOLD_MS = 320;
-  const PLACE_SLOP = 70;   // px — finger jitter still counts as tap
+  // A deliberate aiming tap is slower and draggier than a flick, and the SAME
+  // finger both looks and places — so a tight window silently ate placements
+  // (the crosshair highlight looked right, the tap just never reached place).
+  const HOLD_MS = 450;
+  const PLACE_SLOP = 110;  // px — finger jitter / aim-then-lift still counts as tap
   const MINE_CANCEL = 36;  // px — drag this much before HOLD cancels pending mine start
 
   function digClear(stopMine){
@@ -664,8 +667,10 @@ function initTouch(hooks){
     // only primary finger for dig
     const t = e.changedTouches[0];
     if(isUiTouch(t.clientX, t.clientY)) return;
-    // right-ish side preferred but allow full canvas except left joystick zone
-    if(t.clientX < innerWidth * 0.38) return;
+    // Keep clear of the joystick, but no further: isUiTouch already rejects
+    // #joyZone and the rest of the HUD, and a 38% dead strip made most of a
+    // landscape phone unable to place at all.
+    if(t.clientX < innerWidth * 0.22) return;
 
     e.preventDefault();
     if(lookId === null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
