@@ -320,15 +320,16 @@ export function refreshAimNDC(){
   if(!ch || !cv) return;
   const c = ch.getBoundingClientRect(), r = cv.getBoundingClientRect();
   if(!r.width || !r.height || !c.width || !c.height) return;
+  // Only skip genuinely degenerate layouts (a collapsed visual viewport puts
+  // top:50% at the screen corner). Never second-guess the magnitude of a real
+  // measurement: the canvas/viewport mismatch this corrects for can be large,
+  // and clamping it silently reverts to centre-of-canvas aiming — the very
+  // offset bug this exists to fix.
+  const vv = window.visualViewport;
+  if(vv && (vv.width < 1 || vv.height < 1)) return;
   const x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
   const y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
   if(!Number.isFinite(x) || !Number.isFinite(y)) return;
-  // The crosshair is CSS-centred, so the canvas/visual-viewport mismatch we're
-  // correcting for is only ever a few percent. A large offset means the layout
-  // is mid-transition (a 0-height visual viewport puts top:50% at the corner,
-  // reading as NDC -1,1) — keep the last good value rather than flinging the
-  // aim ray into a corner.
-  if(Math.abs(x) > 0.5 || Math.abs(y) > 0.5) return;
   _aimNDC.x = x;
   _aimNDC.y = y;
 }
