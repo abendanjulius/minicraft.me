@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.12.44'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.12.45'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -395,8 +395,8 @@ playerMod.initControls();
 initUI({
   look: (dx,dy)=>playerMod.look(dx,dy),
   jump: b=>playerMod.jump(b),
-  mine: b=>playerMod.setMine(b),
-  place: ()=>playerMod.placeAction(),
+  mine: (b,sx,sy)=>playerMod.setMine(b,sx,sy),
+  place: (sx,sy)=>(sx===undefined ? playerMod.placeAction() : playerMod.placeAtScreen(sx,sy)),
   drop: ()=>playerMod.dropHeld(),
   sprint: (on)=>{ playerMod.keys.sprint = !!on; },
   fly: ()=>playerMod.toggleFly(),

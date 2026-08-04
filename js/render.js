@@ -323,6 +323,15 @@ export function refreshAimNDC(){
   _aimNDC.x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
   _aimNDC.y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
 }
+/** Screen pixel (touch/mouse client coords) -> canvas NDC, or null if unusable. */
+export function screenToNDC(clientX, clientY){
+  const r = renderer.domElement.getBoundingClientRect();
+  if(!r.width || !r.height) return null;
+  return {
+    x:  ((clientX - r.left) / r.width ) * 2 - 1,
+    y: -((((clientY - r.top ) / r.height) * 2 - 1)),
+  };
+}
 addEventListener('orientationchange', ()=> setTimeout(refreshAimNDC, 250));
 visualViewport?.addEventListener('resize', refreshAimNDC);
 visualViewport?.addEventListener('scroll', refreshAimNDC);

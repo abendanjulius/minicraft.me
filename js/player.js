@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC } from './render.js';
+         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
@@ -26,19 +26,35 @@ const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' 
  * visual viewport can disagree, which used to aim the ray below the crosshair
  * and target a nearer cell than the player was pointing at.
  */
-function aimDir(){
-  const n = aimNDC();
+function dirFromNDC(nx, ny){
   const t = Math.tan(camera.fov * Math.PI / 360);
-  return new THREE.Vector3(n.x * t * camera.aspect, n.y * t, -1)
+  return new THREE.Vector3(nx * t * camera.aspect, ny * t, -1)
     .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
     .normalize();
 }
 
+function aimDir(){
+  const n = aimNDC();
+  return dirFromNDC(n.x, n.y);
+}
+
+/** Raycast through an arbitrary screen pixel — the touch-to-place entry point. */
+export function castScreen(clientX, clientY, maxDist = 8){
+  const n = screenToNDC(clientX, clientY);
+  if(!n) return null;
+  return castBlock(maxDist, dirFromNDC(n.x, n.y));
+}
+
+/** Place the held block at the pixel the player tapped. */
+export function placeAtScreen(clientX, clientY){
+  placeAction(castScreen(clientX, clientY));
+}
+
 // Aim at a nearby entity (animal or zombie) in front of the crosshair
-function pickEntity(){
-  const dir = aimDir();
+function pickEntity(dirIn, blockHitIn){
+  const dir = dirIn || aimDir();
   const eye = player.pos.clone().add(new THREE.Vector3(0,1.6,0));
-  const blockHit = castBlock();
+  const blockHit = blockHitIn !== undefined ? blockHitIn : castBlock();
   const maxD = blockHit ? blockHit.dist : 3.6;
   let best = null, bestT = Math.min(3.6, maxD);
   const consider = (kind, eid, pos)=>{
@@ -56,7 +72,7 @@ function pickEntity(){
 
 export const player = { pos:new THREE.Vector3(CENTER, 20, CENTER), vel:new THREE.Vector3(), onGround:false };
 export const view = { yaw:0, pitch:0 };
-export const state = { playing:false, mineHeld:false, mining:null, paused:false, flying:false, sleeping:false };
+export const state = { playing:false, mineHeld:false, mining:null, mineTarget:null, paused:false, flying:false, sleeping:false };
 let sleepSeq = null; // {phase, t, bed:{x,y,z}}
 export const keys = {};
 let usingLock = false, dragging = false, mouseDown = null;
@@ -259,10 +275,14 @@ export function look(dx,dy){
   view.yaw -= dx; view.pitch -= dy;
   view.pitch = Math.max(-Math.PI/2+.01, Math.min(Math.PI/2-.01, view.pitch));
 }
-export function setMine(b){
-  if(survival.sv.dead){ state.mineHeld=false; state.mining=null; return; }
+/** sx,sy: optional screen pixel (touch). Mining then locks onto the block under
+ *  the finger, so dragging to look afterwards doesn't slide the dig elsewhere. */
+export function setMine(b, sx, sy){
+  if(survival.sv.dead){ state.mineHeld=false; state.mining=null; state.mineTarget=null; return; }
+  const atPixel = b && sx !== undefined && sy !== undefined;
   if(b){
-    const e = pickEntity();
+    const r = atPixel ? castScreen(sx, sy) : castBlock();
+    const e = pickEntity(atPixel && r ? r.dir : undefined, r);
     if(e){
       const held = hotbarSlots[sel.slot];
       const wDmg = (held?.k==='f' && ITEMS[held.id]?.dmg) || 0;
@@ -272,7 +292,11 @@ export function setMine(b){
       sfx.punch();
       return;             // a punch, not a mining hold
     }
-  }
+    if(atPixel){
+      state.mineTarget = r && r.hit ? r.hit.slice() : null;
+      if(!state.mineTarget){ state.mineHeld = false; state.mining = null; return; } // nothing under the finger
+    } else state.mineTarget = null;
+  } else state.mineTarget = null;
   state.mineHeld = b;
   if(!b) state.mining = null;
 }
@@ -434,7 +458,7 @@ function resolvePlaceCell(r){
   // so the last empty cell before the hit is always exactly face-adjacent.
   // Nothing guesses at neighbours, so a block can never appear off to the side.
   let place = r.place;
-  if(!place) place = faceAdjacentPlace(hx, hy, hz, aimDir());
+  if(!place) place = faceAdjacentPlace(hx, hy, hz, r.dir || aimDir());
   const [px,py,pz] = place;
   if(py<0||py>=WH) return null;
 
@@ -455,8 +479,8 @@ function resolvePlaceCell(r){
  * is always on the correct face — no dominant-axis guessing (which mis-placed
  * blocks at diagonal angles). Returns { hit, place, dist }.
  */
-export function castBlock(maxDist = 8){
-  const dir = aimDir();
+export function castBlock(maxDist = 8, dirOverride){
+  const dir = dirOverride || aimDir();
   if(dir.lengthSq() < 1e-10) return null;
   // Eye MUST match the camera exactly (main.js sets camera at pos + 1.6), or the
   // ray diverges from the crosshair — most visibly on the ground at shallow angles.
@@ -478,7 +502,7 @@ export function castBlock(maxDist = 8){
     const solid = b && b !== 64;             // air (0) & water (64) are pass-through
     // Ignore a block the camera is sitting inside (first ~0.2 units).
     if(solid && !(t < 0.2 && isSupportBlock(b))){
-      return { hit:[bx,by,bz], place: px !== null ? [px,py,pz] : null, dist:t };
+      return { hit:[bx,by,bz], place: px !== null ? [px,py,pz] : null, dist:t, dir };
     }
     if(!solid){ px = bx; py = by; pz = bz; }
     if(tMaxX <= tMaxY && tMaxX <= tMaxZ){ bx += stepX; t = tMaxX; tMaxX += tDX; }
@@ -517,13 +541,14 @@ function toggleDoorAt(bx,by,bz){
   return true;
 }
 
-export function placeAction(){
+/** rIn: an optional pre-computed raycast (touch-to-place passes the tapped ray). */
+export function placeAction(rIn){
   if(survival.sv.dead) return;
   // Talk to nearby MiniCraft folk
   if(villagers.tryTalk(player.pos)){ placeAnim = 1; sfx.chat?.(); return; }
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
-  const r = castBlock();
+  const r = rIn || castBlock();
   // Click door / crate / powder keg interactions
   if(r && r.hit){
     const [hx,hy,hz] = r.hit;
@@ -644,9 +669,16 @@ const mineBar = document.getElementById('mineBar');
 const mineFill = mineBar.firstElementChild;
 function updateMining(dt){
   if(!state.mineHeld || invOpen){ state.mining=null; mineBar.style.display='none'; return; }
-  const r = castBlock();
-  if(!r){ state.mining=null; mineBar.style.display='none'; return; }
-  const [bx,by,bz] = r.hit;
+  let bx, by, bz;
+  if(state.mineTarget){
+    // Touch: keep digging the block the finger went down on, even while looking
+    [bx,by,bz] = state.mineTarget;
+    if(!getBlock(bx,by,bz)){ state.mining=null; mineBar.style.display='none'; return; }
+  } else {
+    const r = castBlock();
+    if(!r){ state.mining=null; mineBar.style.display='none'; return; }
+    [bx,by,bz] = r.hit;
+  }
   let m = state.mining;
   if(!m || m.x!==bx || m.y!==by || m.z!==bz){
     const t = getBlock(bx,by,bz);
@@ -962,8 +994,9 @@ export function update(dt, elapsed){
   aimTimer -= dt;
   if(aimTimer <= 0){ aimTimer = 0.5; refreshAimNDC(); }
 
-  // Outline the block the crosshair is pointing at (visual feedback only)
-  if(!invOpen && !survival.sv.dead){
+  // Outline the block under the crosshair. Touch has no crosshair — you tap the
+  // block you want — so a centre-screen outline would be pointing at nothing.
+  if(!isTouch && !invOpen && !survival.sv.dead){
     const r = castBlock();
     updatePlacePreview(r && r.hit ? r.hit : null);
   } else {

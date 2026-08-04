@@ -640,12 +640,14 @@ function initTouch(hooks){
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
   let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
-  // Tap-only placement: a drag is aiming, never a place. The slop is just
-  // finger jitter, not an aim-then-lift allowance — use the 🧱 button when you
-  // want to place without worrying about the gesture at all.
+  let lastTapX = null, lastTapY = null;   // where the 🧱 button re-places
+  // Touch-to-place: you tap the block you want, so there is no crosshair.
+  // A drag is looking and NEVER places, however it ends. TAP_SLOP is finger
+  // jitter only — past it the gesture is a look, permanently.
   const HOLD_MS = 450;
-  const PLACE_SLOP = 24;   // px — jitter tolerance only; a real drag never places
+  const TAP_SLOP = 12;     // px — beyond this the gesture is a drag, not a tap
   const MINE_CANCEL = 36;  // px — drag this much before HOLD cancels pending mine start
+  $('crosshair')?.style.setProperty('display', 'none', 'important');
 
   function digClear(stopMine){
     if(digTimer){ clearTimeout(digTimer); digTimer = null; }
@@ -686,7 +688,7 @@ function initTouch(hooks){
       if(digId == null || invOpen) return;
       if(digMaxMove > MINE_CANCEL) return; // was looking around
       digMining = true;
-      hooks.mine(true);
+      hooks.mine(true, digX, digY);        // dig the block under the finger
     }, HOLD_MS);
   }, {passive:false});
 
@@ -713,10 +715,12 @@ function initTouch(hooks){
       if(digMining){ hooks.mine(false); digMining = false; }
       digId = null;
 
-      // PLACE on quick tap (crosshair target) — tolerate finger slop
-      if(!wasMining && !invOpen && held < HOLD_MS + 60 && move < PLACE_SLOP){
-        // Defer one frame so look math from last move is settled
-        requestAnimationFrame(()=> hooks.place?.());
+      // PLACE only on a clean tap — at the pixel that was tapped. Any drag past
+      // TAP_SLOP was a look, so it never places no matter how it ended.
+      if(!wasMining && !invOpen && held < HOLD_MS && move < TAP_SLOP){
+        const tx = t.clientX, ty = t.clientY;
+        lastTapX = tx; lastTapY = ty;
+        requestAnimationFrame(()=> hooks.place?.(tx, ty));
       }
     }
   };
@@ -735,7 +739,12 @@ function initTouch(hooks){
   // Mining stays a hold-on-world gesture, but placing gets a dedicated button:
   // tap detection on the world surface can miss, and a button never does.
   const bm = $('btnMine'); if(bm) bm.style.display = 'none';
-  bindPress($('btnPlace'), ()=>hooks.place?.(), null);   // shown via CSS
+  // 🧱 repeats a placement at the last spot you tapped — handy for stacking
+  // without re-aiming. Falls back to screen centre before your first tap.
+  bindPress($('btnPlace'), ()=>{
+    if(lastTapX === null) hooks.place?.(innerWidth/2, innerHeight/2);
+    else hooks.place?.(lastTapX, lastTapY);
+  }, null);
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
   bindPress($('btnSprint'), ()=>hooks.sprint?.(true), ()=>hooks.sprint?.(false));
   bindPress($('btnDrop'), ()=>hooks.drop?.(), null);
