@@ -783,27 +783,24 @@ export function makeToolIconPlane(toolId, size=1.1){
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
 
-// ---- Target highlight -----------------------------------------------------
-// A translucent blue box wrapping the block the crosshair is pointing at, with
-// crisp edges for definition. Identical on desktop and mobile. It sits on the
-// AIMED block (never the destination cell): a box floating in the empty cell
-// above is nearer to the eye at a downward angle, so it projects large and
-// toward the player and reads as the wrong square. Slightly oversized and
-// depth-write-free so it wraps the block instead of z-fighting its faces.
-const _hlGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
-const _targetHighlight = new THREE.Mesh(_hlGeo,
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
-_targetHighlight.visible = false;
-_targetHighlight.renderOrder = 998;
-scene.add(_targetHighlight);
-_targetHighlight.add(new THREE.LineSegments(
-  new THREE.EdgesGeometry(_hlGeo),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })));
+// ---- Target outline (Minecraft-style) -------------------------------------
+// One crisp wireframe on the block the crosshair is actually pointing at. A
+// translucent ghost cube at the destination cell was tried and removed: a full
+// cube sitting above the aimed block is nearer to the eye at a downward angle,
+// so it projects large and toward the player and reads as the WRONG square.
+// Outlining the aimed block is unambiguous — the block attaches to the face
+// you can see is highlighted.
+const _targetOutline = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004)),
+  new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.85 }));
+_targetOutline.visible = false;
+_targetOutline.renderOrder = 999;
+scene.add(_targetOutline);
 
 /** hit is the [x,y,z] block cell under the crosshair, or null. */
 export function updatePlacePreview(hit){
-  if(hit){ _targetHighlight.position.set(hit[0], hit[1], hit[2]); _targetHighlight.visible = true; }
-  else _targetHighlight.visible = false;
+  if(hit){ _targetOutline.position.set(hit[0], hit[1], hit[2]); _targetOutline.visible = true; }
+  else _targetOutline.visible = false;
 }
 
 export function makeBlockCube(tid, size=.34){
