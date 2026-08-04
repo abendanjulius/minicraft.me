@@ -1,5 +1,5 @@
 // sw.js — cache app shell; JS always network-first so broken deploys can recover
-const CACHE = 'minicraft-v119';
+const CACHE = 'minicraft-v120';
 const CORE = [
   './', './index.html', './css/style.css', './manifest.json',
   './js/main.js', './js/world.js', './js/render.js', './js/player.js',
@@ -24,10 +24,13 @@ self.addEventListener('fetch', e=>{
   if(e.request.method!=='GET') return;
   const url = e.request.url;
 
-  // Always network for version beacon + all JS modules (prevents stuck broken main)
+  // Always network for version beacon + all JS modules (prevents stuck broken main).
+  // 'no-cache' forces revalidation with the server: module imports carry no ?v=
+  // query, so the browser's own HTTP cache would otherwise keep serving a stale
+  // module for the host's max-age even though we ask for the network.
   if(url.includes('version.json') || url.includes('/js/') || url.endsWith('.js')){
     e.respondWith(
-      fetch(e.request).then(res=>{
+      fetch(e.request, { cache: 'no-cache' }).then(res=>{
         if(res.ok){
           const copy = res.clone();
           caches.open(CACHE).then(c=>c.put(e.request, copy));

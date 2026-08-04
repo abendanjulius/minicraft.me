@@ -319,9 +319,18 @@ export function refreshAimNDC(){
   const cv = renderer.domElement;
   if(!ch || !cv) return;
   const c = ch.getBoundingClientRect(), r = cv.getBoundingClientRect();
-  if(!r.width || !r.height) return;
-  _aimNDC.x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
-  _aimNDC.y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
+  if(!r.width || !r.height || !c.width || !c.height) return;
+  const x =  ((c.left + c.width  / 2 - r.left) / r.width ) * 2 - 1;
+  const y = -((((c.top + c.height / 2 - r.top ) / r.height) * 2 - 1));
+  if(!Number.isFinite(x) || !Number.isFinite(y)) return;
+  // The crosshair is CSS-centred, so the canvas/visual-viewport mismatch we're
+  // correcting for is only ever a few percent. A large offset means the layout
+  // is mid-transition (a 0-height visual viewport puts top:50% at the corner,
+  // reading as NDC -1,1) — keep the last good value rather than flinging the
+  // aim ray into a corner.
+  if(Math.abs(x) > 0.5 || Math.abs(y) > 0.5) return;
+  _aimNDC.x = x;
+  _aimNDC.y = y;
 }
 addEventListener('orientationchange', ()=> setTimeout(refreshAimNDC, 250));
 visualViewport?.addEventListener('resize', refreshAimNDC);
@@ -784,42 +793,50 @@ export function makeToolIconPlane(toolId, size=1.1){
 }
 
 // ---- Target highlight -----------------------------------------------------
-// A translucent blue box wrapping the block the crosshair is pointing at, with
-// crisp edges for definition. Identical on desktop and mobile. It sits on the
-// AIMED block (never the destination cell): a box floating in the empty cell
-// above is nearer to the eye at a downward angle, so it projects large and
-// toward the player and reads as the wrong square.
+// A flat translucent square laid on the FACE the crosshair hit, with a crisp
+// border. Always the same shape everywhere — that is the whole point.
 //
-// depthTest is OFF so the FULL cube always reads as a cube. The highlight sits
-// inside the block, so with depth testing its side faces are buried in flush
-// neighbours — on open ground you'd see only the top face (flat), on a ledge
-// the whole box. Ignoring depth keeps the shape consistent everywhere. The
-// first-person hand still covers it: the hand is opaque, and opaque geometry
-// renders before the transparent pass while writing depth.
-const _hlGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+// A full cube was tried twice and abandoned: the highlight sits inside the
+// block, so its side faces are buried in flush neighbours (flat top face on
+// open ground, whole box only on a ledge), and forcing it through with
+// depthTest didn't hold up in practice. The hit face, by contrast, is the face
+// the ray entered — it is by definition exposed and facing the player, so a
+// quad sitting just in front of it is always fully visible and always reads as
+// the same flat square. It also marks the face the new block attaches to.
+const _hlGeo = new THREE.PlaneGeometry(1, 1);
 const _targetHighlight = new THREE.Mesh(_hlGeo,
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.26,
-                                depthWrite: false, depthTest: false }));
+  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.34,
+                                depthWrite: false, side: THREE.DoubleSide }));
 _targetHighlight.visible = false;
 _targetHighlight.renderOrder = 998;
 scene.add(_targetHighlight);
-_targetHighlight.add(new THREE.LineSegments(
-  new THREE.EdgesGeometry(_hlGeo),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75,
-                                depthWrite: false, depthTest: false })));
+const _hlBorder = new THREE.LineLoop(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.5,-0.5,0), new THREE.Vector3(0.5,-0.5,0),
+    new THREE.Vector3(0.5,0.5,0),   new THREE.Vector3(-0.5,0.5,0)]),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
+_targetHighlight.add(_hlBorder);
 
 const HL_OK = 0x9fd6ff, HL_BLOCKED = 0xff8a8a;
+const _hlLook = new THREE.Vector3();
 
 /**
- * hit is the [x,y,z] block cell under the crosshair, or null. `blocked` turns
- * the highlight light red to say "a creature is standing here — you can't
- * build into it", matching placeAction's refusal.
+ * hit is the [x,y,z] block cell under the crosshair (or null) and normal is the
+ * unit face the ray entered, e.g. [0,1,0] for a top face. `blocked` turns the
+ * highlight light red — a creature is standing where the block would land, so
+ * placeAction will refuse it.
  */
-export function updatePlacePreview(hit, blocked){
-  if(hit){ _targetHighlight.position.set(hit[0], hit[1], hit[2]); _targetHighlight.visible = true; }
-  else _targetHighlight.visible = false;
+export function updatePlacePreview(hit, blocked, normal){
+  if(!hit){ _targetHighlight.visible = false; return; }
+  const n = normal || [0,1,0];
+  // Float just off the face so it never z-fights the block surface
+  _targetHighlight.position.set(hit[0] + n[0]*0.504, hit[1] + n[1]*0.504, hit[2] + n[2]*0.504);
+  _hlLook.set(_targetHighlight.position.x + n[0], _targetHighlight.position.y + n[1],
+              _targetHighlight.position.z + n[2]);
+  _targetHighlight.lookAt(_hlLook);   // plane faces +Z, so aim it along the normal
+  _targetHighlight.visible = true;
   _targetHighlight.material.color.setHex(blocked ? HL_BLOCKED : HL_OK);
-  _targetHighlight.material.opacity = blocked ? 0.42 : 0.3;
+  _hlBorder.material.color.setHex(blocked ? 0xffdede : 0xffffff);
 }
 
 export function makeBlockCube(tid, size=.34){
