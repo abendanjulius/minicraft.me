@@ -1414,3 +1414,28 @@ html body #touchUI #btnFly.active:active{
   background: rgba(90, 165, 255, 0.85) !important;
   transform: scale(0.95) !important;
 }
+
+/* ===== v1.12.44 — Place button restored =====
+   Tap detection on the world surface can miss; a dedicated button never does.
+   Sits left of the diamond pad, clear of jump (right:52) and sprint (bottom:118). */
+html body #btnPlace,
+html body #touchUI #btnPlace{
+  display: flex !important;
+  right: 116px !important;
+  bottom: 56px !important;
+  width: 58px !important;
+  height: 58px !important;
+  min-width: 58px !important;
+  min-height: 58px !important;
+  font-size: 24px !important;
+  border-radius: 50% !important;
+  background: rgba(0,0,0,.42) !important;
+  border: 2px solid rgba(255,255,255,.45) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35) !important;
+  z-index: 4 !important;
+}
+html body #touchUI #btnPlace.pressed,
+html body #touchUI #btnPlace:active{
+  background: rgba(255,255,255,.32) !important;
+}

@@ -847,6 +847,9 @@ function updateSleep(dt){
 
 
 export function update(dt, elapsed){
+  // Clear the target outline on every path that skips the highlight update
+  // below, or it hangs frozen in the world with no crosshair on it.
+  if(!state.playing || state.paused || state.sleeping) updatePlacePreview(null);
   if(!state.playing) return;
   if(state.paused) return;
   if(state.sleeping){

@@ -640,11 +640,11 @@ function initTouch(hooks){
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
   let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
-  // A deliberate aiming tap is slower and draggier than a flick, and the SAME
-  // finger both looks and places — so a tight window silently ate placements
-  // (the crosshair highlight looked right, the tap just never reached place).
+  // Tap-only placement: a drag is aiming, never a place. The slop is just
+  // finger jitter, not an aim-then-lift allowance — use the 🧱 button when you
+  // want to place without worrying about the gesture at all.
   const HOLD_MS = 450;
-  const PLACE_SLOP = 110;  // px — finger jitter / aim-then-lift still counts as tap
+  const PLACE_SLOP = 24;   // px — jitter tolerance only; a real drag never places
   const MINE_CANCEL = 36;  // px — drag this much before HOLD cancels pending mine start
 
   function digClear(stopMine){
@@ -732,9 +732,10 @@ function initTouch(hooks){
     el.addEventListener('touchcancel', up);
   }
   bindPress($('btnJump'), ()=>hooks.jump(true), ()=>hooks.jump(false));
-  // Mine / Place buttons removed — tap & hold on world instead
+  // Mining stays a hold-on-world gesture, but placing gets a dedicated button:
+  // tap detection on the world surface can miss, and a button never does.
   const bm = $('btnMine'); if(bm) bm.style.display = 'none';
-  const bp = $('btnPlace'); if(bp) bp.style.display = 'none';
+  bindPress($('btnPlace'), ()=>hooks.place?.(), null);   // shown via CSS
   $('btnDrop')?.addEventListener('touchstart', e=>{ e.preventDefault(); hooks.drop?.(); });
   bindPress($('btnSprint'), ()=>hooks.sprint?.(true), ()=>hooks.sprint?.(false));
   bindPress($('btnDrop'), ()=>hooks.drop?.(), null);
