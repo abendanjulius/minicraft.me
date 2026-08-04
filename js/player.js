@@ -995,18 +995,13 @@ export function update(dt, elapsed){
   aimTimer -= dt;
   if(aimTimer <= 0){ aimTimer = 0.5; refreshAimNDC(); }
 
-  // Highlight the face the crosshair is pointing at — red when a creature is
+  // Highlight the block the crosshair is pointing at — red when a creature is
   // standing where the block would land (visual feedback only)
   if(!invOpen && !survival.sv.dead){
     const r = castBlock();
-    let normal = null;
-    if(r && r.hit){
-      const c = candidatePlaceCell(r);   // the cell across the hit face
-      if(c) normal = [c[0]-r.hit[0], c[1]-r.hit[1], c[2]-r.hit[2]];
-    }
-    updatePlacePreview(r && r.hit ? r.hit : null, placeBlockedByEntity(r), normal);
+    updatePlacePreview(r && r.hit ? r.hit : null, placeBlockedByEntity(r));
   } else {
-    updatePlacePreview(null, false, null);
+    updatePlacePreview(null, false);
   }
 
   // Body follows player, offset backward so the torso sits behind the camera line

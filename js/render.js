@@ -794,50 +794,38 @@ export function makeToolIconPlane(toolId, size=1.1){
 }
 
 // ---- Target highlight -----------------------------------------------------
-// A flat translucent square laid on the FACE the crosshair hit, with a crisp
-// border. Always the same shape everywhere — that is the whole point.
+// A translucent blue box wrapping the block the crosshair is pointing at, with
+// crisp edges for definition. Identical on desktop and mobile. It sits on the
+// AIMED block (never the destination cell): a box floating in the empty cell
+// above is nearer to the eye at a downward angle, so it projects large and
+// toward the player and reads as the wrong square. Slightly oversized and
+// depth-write-free so it wraps the block instead of z-fighting its faces.
 //
-// A full cube was tried twice and abandoned: the highlight sits inside the
-// block, so its side faces are buried in flush neighbours (flat top face on
-// open ground, whole box only on a ledge), and forcing it through with
-// depthTest didn't hold up in practice. The hit face, by contrast, is the face
-// the ray entered — it is by definition exposed and facing the player, so a
-// quad sitting just in front of it is always fully visible and always reads as
-// the same flat square. It also marks the face the new block attaches to.
-const _hlGeo = new THREE.PlaneGeometry(1, 1);
+// Do NOT re-litigate this into a face-oriented quad: orienting a plane by the
+// hit normal reads as a vertical pane on flat ground and misrepresents where
+// the block lands. A box on the aimed block is the shape that tested right.
+const _hlGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
 const _targetHighlight = new THREE.Mesh(_hlGeo,
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.34,
-                                depthWrite: false, side: THREE.DoubleSide }));
+  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
 _targetHighlight.visible = false;
 _targetHighlight.renderOrder = 998;
 scene.add(_targetHighlight);
-const _hlBorder = new THREE.LineLoop(
-  new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-0.5,-0.5,0), new THREE.Vector3(0.5,-0.5,0),
-    new THREE.Vector3(0.5,0.5,0),   new THREE.Vector3(-0.5,0.5,0)]),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
-_targetHighlight.add(_hlBorder);
+_targetHighlight.add(new THREE.LineSegments(
+  new THREE.EdgesGeometry(_hlGeo),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })));
 
 const HL_OK = 0x9fd6ff, HL_BLOCKED = 0xff8a8a;
-const _hlLook = new THREE.Vector3();
 
 /**
- * hit is the [x,y,z] block cell under the crosshair (or null) and normal is the
- * unit face the ray entered, e.g. [0,1,0] for a top face. `blocked` turns the
- * highlight light red — a creature is standing where the block would land, so
- * placeAction will refuse it.
+ * hit is the [x,y,z] block cell under the crosshair, or null. `blocked` turns
+ * the highlight light red — a creature is standing where the block would land,
+ * so placeAction will refuse it.
  */
-export function updatePlacePreview(hit, blocked, normal){
-  if(!hit){ _targetHighlight.visible = false; return; }
-  const n = normal || [0,1,0];
-  // Float just off the face so it never z-fights the block surface
-  _targetHighlight.position.set(hit[0] + n[0]*0.504, hit[1] + n[1]*0.504, hit[2] + n[2]*0.504);
-  _hlLook.set(_targetHighlight.position.x + n[0], _targetHighlight.position.y + n[1],
-              _targetHighlight.position.z + n[2]);
-  _targetHighlight.lookAt(_hlLook);   // plane faces +Z, so aim it along the normal
-  _targetHighlight.visible = true;
+export function updatePlacePreview(hit, blocked){
+  if(hit){ _targetHighlight.position.set(hit[0], hit[1], hit[2]); _targetHighlight.visible = true; }
+  else _targetHighlight.visible = false;
   _targetHighlight.material.color.setHex(blocked ? HL_BLOCKED : HL_OK);
-  _hlBorder.material.color.setHex(blocked ? 0xffdede : 0xffffff);
+  _targetHighlight.material.opacity = blocked ? 0.42 : 0.3;
 }
 
 export function makeBlockCube(tid, size=.34){

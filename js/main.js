@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '1.12.41'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '1.12.42'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
