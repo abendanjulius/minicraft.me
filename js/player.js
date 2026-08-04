@@ -29,7 +29,12 @@ const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' 
 function aimDir(){
   const n = aimNDC();
   const t = Math.tan(camera.fov * Math.PI / 360);
-  return new THREE.Vector3(n.x * t * camera.aspect, n.y * t, -1)
+  const a = camera.aspect;
+  // Degenerate viewport (0-height canvas mid-rotation) would give a NaN aspect
+  // and silently kill every raycast — fall back to straight ahead.
+  const x = (Number.isFinite(n.x) && Number.isFinite(a)) ? n.x * t * a : 0;
+  const y = Number.isFinite(n.y) ? n.y * t : 0;
+  return new THREE.Vector3(x, y, -1)
     .applyEuler(new THREE.Euler(view.pitch, view.yaw, 0, 'YXZ'))
     .normalize();
 }

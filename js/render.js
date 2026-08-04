@@ -299,7 +299,7 @@ export function updateDayNight(dt, focus){
   return dl;
 }
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect = innerWidth / Math.max(1, innerHeight);   // never NaN
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   refreshAimNDC();
@@ -788,17 +788,25 @@ export function makeToolIconPlane(toolId, size=1.1){
 // crisp edges for definition. Identical on desktop and mobile. It sits on the
 // AIMED block (never the destination cell): a box floating in the empty cell
 // above is nearer to the eye at a downward angle, so it projects large and
-// toward the player and reads as the wrong square. Slightly oversized and
-// depth-write-free so it wraps the block instead of z-fighting its faces.
+// toward the player and reads as the wrong square.
+//
+// depthTest is OFF so the FULL cube always reads as a cube. The highlight sits
+// inside the block, so with depth testing its side faces are buried in flush
+// neighbours — on open ground you'd see only the top face (flat), on a ledge
+// the whole box. Ignoring depth keeps the shape consistent everywhere. The
+// first-person hand still covers it: the hand is opaque, and opaque geometry
+// renders before the transparent pass while writing depth.
 const _hlGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
 const _targetHighlight = new THREE.Mesh(_hlGeo,
-  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.3, depthWrite: false }));
+  new THREE.MeshBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.26,
+                                depthWrite: false, depthTest: false }));
 _targetHighlight.visible = false;
 _targetHighlight.renderOrder = 998;
 scene.add(_targetHighlight);
 _targetHighlight.add(new THREE.LineSegments(
   new THREE.EdgesGeometry(_hlGeo),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })));
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75,
+                                depthWrite: false, depthTest: false })));
 
 const HL_OK = 0x9fd6ff, HL_BLOCKED = 0xff8a8a;
 
