@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#101838">
-<title>MiniCraft — build together</title>
+<title>Eldercube — reclaim the night</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.0.3">
+<link rel="stylesheet" href="./css/style.css?v=2.1.0">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -43,7 +43,7 @@
   <div class="homeGlow" aria-hidden="true"></div>
 
   <div class="homeMain">
-    <svg class="homeLantern" viewBox="0 0 80 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MiniCraft">
+    <svg class="homeLantern" viewBox="0 0 80 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Eldercube">
       <line x1="40" y1="0" x2="40" y2="14" stroke="#2b3550" stroke-width="4"/>
       <g stroke="#0d1224" stroke-width="4" stroke-linejoin="round">
         <rect x="33" y="12" width="14" height="10" rx="3" fill="#39445e"/>
@@ -57,10 +57,10 @@
     <div class="homeCol">
       <svg class="homeWord" viewBox="0 0 300 78" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <g font-family="'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif" font-weight="900" font-size="52" text-anchor="middle">
-          <text x="151" y="46" fill="#14102a">MiniCraft</text>
-          <text x="150" y="44" fill="#ffe6bd" stroke="#2a1d3d" stroke-width="3" paint-order="stroke">MiniCraft</text>
+          <text x="151" y="46" fill="#14102a">Eldercube</text>
+          <text x="150" y="44" fill="#ffe6bd" stroke="#2a1d3d" stroke-width="3" paint-order="stroke">Eldercube</text>
         </g>
-        <text x="150" y="70" text-anchor="middle" font-family="monospace" font-size="15" fill="#ffca8a" opacity=".8">survive the night</text>
+        <text x="150" y="70" text-anchor="middle" font-family="monospace" font-size="15" fill="#ffca8a" opacity=".8">reclaim the night</text>
       </svg>
   <p class="tagline">A tiny blocky world in your browser · minicraft.me</p>
   <button id="btnPlay" class="mbtn playBtn" type="button">▶&nbsp; Play</button>
@@ -101,7 +101,7 @@
   <div class="homeGlow" aria-hidden="true"></div>
 
   <button id="btnBack" class="backBtn" type="button">←&nbsp; Back</button>
-  <h1 class="setupTitle"><span class="setupLamp" aria-hidden="true">🏮</span> MiniCraft</h1>
+  <h1 class="setupTitle"><span class="setupLamp" aria-hidden="true">🏮</span> Eldercube</h1>
   <p class="tagline">Set up your game</p>
   <!-- Two columns in landscape so the form fits without scrolling; stacks in portrait -->
   <div class="setupCols">
@@ -216,7 +216,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.0.3"></script>
+<script type="module" src="./js/main.js?v=2.1.0"></script>
 <script>
 (function(){
   function showRecover(msg){
@@ -247,7 +247,7 @@
   }
   document.getElementById('btnClearCache')?.addEventListener('click', clearAndReload);
   window.addEventListener('error', function(e){
-    try { console.error('[minicraft]', e && e.message, e && e.filename); } catch(_){}
+    try { console.error('[eldercube]', e && e.message, e && e.filename); } catch(_){}
   });
   window.addEventListener('unhandledrejection', function(){ showRecover('Load error'); });
   // Only show recovery if the world list never appeared (real load failure)

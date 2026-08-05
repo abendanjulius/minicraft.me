@@ -142,7 +142,7 @@ export function exportWorld(i){
   const blob = new Blob([JSON.stringify(d)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'minicraft-' + (d.name||'world').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.json';
+  a.download = 'eldercube-' + (d.name||'world').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.json';
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
 }
@@ -167,7 +167,7 @@ export function importWorld(file, cb){
         cache[slot] = null; // roll back so the menu doesn't show a phantom world
         cb(false, 'Could not save the imported world (storage error).');
       }
-    }catch(e){ cb(false, 'That file is not a valid MiniCraft world.'); }
+    }catch(e){ cb(false, 'That file is not a valid Eldercube world.'); }
   };
   r.onerror = ()=>cb(false, 'Could not read the file.');
   r.readAsText(file);

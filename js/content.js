@@ -299,7 +299,7 @@ R(78,1,[[9,4],[110,2]],'block','Glass door — see-through panes in a wood frame
 R(86,1,[[126,6]],'block','Iron door — heavy metal with a barred window'),
 R(56,1,[[7,8]],'block','Stash items — click to open'),
 R(57,1,[[120,4],[7,4]],'block','Unstable powder keg — ignite with a Spark Striker'),
-R(180,1,[[119,1],[126,1]],'mat','Ignites Powder Kegs — MiniCraft firestarter'),
+R(180,1,[[119,1],[126,1]],'mat','Ignites Powder Kegs — Eldercube firestarter'),
 R(58,1,[[7,3],[12,3]],'block','Set your respawn point — click a placed bed'),
 R(59,4,[[7,6]],'block','Wooden stairs for roofs and steps'),
 R(60,4,[[3,6]],'block','Stone stairs'),

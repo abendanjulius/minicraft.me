@@ -362,7 +362,7 @@ function fillChunk(cx, cz, chunk){
   }
 
 
-  // ---- MiniCraft villages (biome-unique, deterministic) ----
+  // ---- Eldercube villages (biome-unique, deterministic) ----
   // Chance per chunk; builds a small settlement that fits in this chunk.
   {
     const vrng = mulberry32((seed ^ 0x71a9e) + cx * 374761 + cz * 668265);

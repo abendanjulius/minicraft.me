@@ -1,4 +1,4 @@
-// villagers.js — MiniCraft-unique village folk (not Minecraft clones)
+// villagers.js — Eldercube-unique village folk (not Minecraft clones)
 import { villageSites, topY, surfaceY, feetY, WORLD, wrapC } from './world.js';
 import { scene, box, VIEW, wrapShift, wrapDist } from './render.js';
 import { addChat, inventory, addToInventory, renderHotbar } from './ui.js';

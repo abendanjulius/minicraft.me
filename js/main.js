@@ -39,7 +39,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.0.3'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.1.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -237,7 +237,7 @@ persist.init().then(()=>{
   document.body.classList.add('boot-ok');
   const br = $('bootRecover'); if(br) br.style.display = 'none';
 }).catch(err=>{
-  console.error('[MiniCraft] storage init failed', err);
+  console.error('[Eldercube] storage init failed', err);
   buildWorlds(); // show the menu anyway; worst case slots read empty
   document.body.classList.add('boot-ok');
 });
@@ -382,7 +382,7 @@ function begin(seed, edits, authority, saved){
       playerMod.relock();
     }
   } catch(err){
-    console.error('[MiniCraft] boot failed', err);
+    console.error('[Eldercube] boot failed', err);
     const loadEl = document.getElementById('loading');
     if(loadEl) loadEl.innerHTML = 'Failed to load world.<br><small style="opacity:.8">'+((err&&err.message)||err)+'</small><br><small>Try a New World or hard-refresh</small>';
   }

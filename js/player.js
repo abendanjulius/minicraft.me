@@ -563,7 +563,7 @@ function toggleDoorAt(bx,by,bz){
 /** rIn: an optional pre-computed raycast (touch-to-place passes the tapped ray). */
 export function placeAction(rIn){
   if(survival.sv.dead) return;
-  // Talk to nearby MiniCraft folk
+  // Talk to nearby Eldercube folk
   if(villagers.tryTalk(player.pos)){ placeAnim = 1; sfx.chat?.(); return; }
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }

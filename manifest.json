@@ -1,6 +1,6 @@
 {
-  "name": "MiniCraft",
-  "short_name": "MiniCraft",
+  "name": "Eldercube",
+  "short_name": "Eldercube",
   "description": "A tiny blocky multiplayer world in your browser.",
   "start_url": "./",
   "scope": "./",

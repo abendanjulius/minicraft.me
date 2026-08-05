@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# release.sh — one-command MiniCraft release.
+# release.sh — one-command Eldercube release.
 #
 # Bumps the version string in every place it must change, auto-increments the
 # service-worker cache name, verifies they all agree, then commits. Pushing is
