@@ -22,6 +22,9 @@ import * as chests from './chests.js';
 import * as keg from './keg.js';
 import * as villagers from './villagers.js';
 import { tryCommand, setCommandContext } from './commands.js';
+import * as claim from './claim.js';
+import * as keepstones from './keepstones.js';
+import * as eldercube from './eldercube.js';
 
 const $ = id=>document.getElementById(id);
 chests.setChestChangeHook(()=>net.sendChests?.());
@@ -39,7 +42,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.1.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.2.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -287,6 +290,12 @@ function saveWorldNow(){
     intel: mobs.getIntel(),
     hp: sv.hp, hunger: sv.hunger,
     chests: chests.serialize(),
+    claim: claim.serialize(),
+    keeps: keepstones.serialize(),
+    // Ground items are persisted so a loose Elder Cube survives a reload — it is
+    // the one item in the game that must never be lost.
+    drops: drops.serialize(),
+    vault: eldercube.vaultRecord(),
   });
 }
 addEventListener('beforeunload', saveWorldNow);
@@ -333,6 +342,17 @@ function begin(seed, edits, authority, saved){
     generateWorld(seed);
     setLoad('Applying builds…');
     for(const [x,y,z,t] of edits){ setBlock(x,y,z,t); trackTorch(x,y,z,0,t); trackDoor(x,y,z,0,t); trackBed(x,y,z,0,t); trackSpecial(x,y,z,0,t); }
+    // Cut the Elder Cube's vault before meshing, so the chamber is part of the
+    // first geometry build. Keyed on the stored vault record rather than on
+    // `saved` being null — persist.create() hands back a populated record, so a
+    // brand-new world already looks saved and would never get one.
+    eldercube.markVault(saved?.vault || null);
+    let freshVault = null;
+    if(authority && !eldercube.vaultRecord()){
+      setLoad('Cutting the vault…');
+      freshVault = eldercube.createVault(seed, (x,y,z,t)=>persist.recordEdit(x,y,z,t));
+      eldercube.markVault(freshVault);
+    }
     setLoad('Placing markers…');
     placeDebugMarkers(); // TEMP test pillars
     setLoad('Meshing terrain…');
@@ -355,6 +375,8 @@ function begin(seed, edits, authority, saved){
     $('btnMode').style.display = (net.mode==='client') ? 'none' : 'flex';
     $('btnMode').textContent = gm.forge ? '🔨' : '🌙';
     playerMod.spawn();
+    claim.clear();
+    keepstones.clear();
     if(saved){
       if(saved.pos) playerMod.setPosYaw(saved.pos[0], saved.pos[1]+.5, saved.pos[2], saved.yaw);
       restoreInv(saved.inv, saved.slots);
@@ -363,7 +385,14 @@ function begin(seed, edits, authority, saved){
       if(saved.chests) chests.applyRemote(saved.chests);
       setHordeHud(saved.intel||0);
       survival.restore(saved.hp, saved.hunger);
+      claim.restore(saved.claim);
+      keepstones.restore(saved.keeps);
+      if(saved.drops) drops.applyRemote(saved.drops);
+      // NB: the vault record is set earlier, before meshing — do not re-set it
+      // here or a freshly cut vault gets wiped back to null.
     }
+    // Lay the one Cube in the vault — after drops.init(), which wipes drops.
+    if(freshVault) eldercube.layAt(freshVault.x, freshVault.y + 1, freshVault.z);
     playerMod.state.playing = true;
     document.body.classList.add('playing');
     $('loading').style.display = 'none';
@@ -587,6 +616,11 @@ function loop(now){
     }
     mobs.commonTick(dt, elapsed, playerMod.player.pos);
     drops.commonTick(dt, elapsed, playerMod.player.pos);
+    mobs.setCubePressure(keepstones.sieging() ? 2 : (inventory[186] > 0 ? 1 : 0));
+    keepstones.tick(dt, playerMod.player.pos.x, playerMod.player.pos.z, s=>{
+      addChat('⚙', `The Keepstone goes quiet. ${claim.claimedPercent().toFixed(2)}% of the world is claimed for good.`);
+      survival.note('keepfull');
+    });
     if(isAuthority) keg.tick(dt, playerMod.player.pos, (edits)=>net.syncEdits(edits));
     // auto-pickup when close
     pickupCd = (pickupCd||0) - dt;

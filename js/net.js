@@ -288,6 +288,7 @@ export function sendPickup(x,y,z){
     if(got){
       for(let i=0;i<(got.n||1);i++) addToInventory(got.item);
       sfx.place();
+      if(got.item===186) survival.note('cube');
     }
     return;
   }

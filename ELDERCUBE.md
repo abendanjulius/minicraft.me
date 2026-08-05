@@ -1,7 +1,12 @@
 # Eldercube — design
 
-Status: **design agreed, not implemented.** This describes the endgame the rename
-is named after. Nothing in `js/` implements it yet.
+Status: **core loop implemented.** Find the Cube → craft a Keepstone → socket it →
+hold the siege → the ground is claimed for good → move on. Built and verified:
+`js/claim.js`, `js/keepstones.js`, `js/eldercube.js`, `js/map.js`, plus the spawn
+gate in `js/mobs.js` and the socket interaction in `js/player.js`.
+
+Not built yet: the Bearer chase (§6), the four faction shards (§7), village ally
+states (§9), host-authoritative Cube ownership (§10) and the endings (§11).
 
 Convention: **Eldercube** (one word) is the game. **Elder Cube** (two words) is the
 artifact inside it.
@@ -292,15 +297,28 @@ flavour:
 
 Rough ascending cost:
 
-1. Claim bitmap + `claimed(x,z)` + the one-clause spawn gate — *small*
-2. Keepstone block, recipe, socket interaction — *small*, `trackSpecial()`
-   (`js/render.js:1403`) already exists as the registry for special placed blocks
-3. Elder Cube item, deep-dark placement, carry costs — *small*
-4. Siege escalation while socketed — *medium*, tuning-heavy
-5. Map screen — *small*, the bitmap renders directly
+1. ✅ Claim bitmap + `claimed(x,z)` + the one-clause spawn gate
+2. ✅ Keepstone block (id 43), recipe, socket interaction
+3. ✅ Elder Cube item (186), vault placement in the deep dark, carry costs
+4. ✅ Siege escalation while socketed (`setCubePressure` in `js/mobs.js`)
+5. ✅ Map screen — **Tab**, not M (M is already the music toggle)
 6. Bearer flee behaviour on Cube drop — *medium*
 7. Village ally states — *small*, reuses `trades`/`gift`/`lines`
 8. Host-authoritative Cube ownership in `net.js` — *medium*, **required before
    multiplayer ships**
 9. Four shards / faction quests — *large*
 10. Endings — *large*
+
+## 14. Implementation notes worth keeping
+
+Three constraints found the hard way while building this:
+
+- **Block ids must be under 100.** `js/ui.js` classifies `id >= 100` as a
+  non-placeable item, so a block above that can never be placed. `43` was the
+  only free slot in the block range — hence Keepstone = 43, Elder Cube = item 186.
+- **A brand-new world already looks saved.** `persist.create()` returns a
+  populated record, so `if(!saved)` never fires. Vault creation is keyed on a
+  stored `vault` record instead.
+- **The vault ceiling must be 4 above the plinth.** `drops.commonTick` looks for
+  a floor starting 2 blocks *above* an item; in a shorter chamber the Cube finds
+  the ceiling and drifts up through the roof.

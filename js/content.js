@@ -99,6 +99,12 @@ export const EXTRA_BLOCKS = {
   100:{name:'Acacia Leaves', tex:['speckle',0x88a838,0x6a8820], hard:.3, pc:0x88a838, tool:'axe', transparent:1},
   101:{name:'Dark Leaves',   tex:['speckle',0x1e4a28,0x0e2a18], hard:.3, pc:0x1e4a28, tool:'axe', transparent:1},
 };
+// Keepstone — the pedestal you socket the Elder Cube into. Repeatable: you will
+// build dozens. Dark stone shot through with crystal.
+// NOTE: block ids MUST stay under 100 — ui.js classifies `id>=100` as a
+// non-placeable item, so a block up there can never be placed. 43 is the only
+// free slot in the block range.
+EXTRA_BLOCKS[43] = {name:'Keepstone', tex:['speckle',0x5c6270,0x9fe8ff], hard:3.5, pc:0x5c6270, tool:'pick'};
 
 
 
@@ -123,6 +129,7 @@ export const EXTRA_ITEMS = {
   126:{name:'Iron Ingot',   icon:'🥈'},
   127:{name:'Rope',         icon:'🪢'},
   128:{name:'Tar',          icon:'🛢️'},
+  186:{name:'Elder Cube',   icon:'💠'},
   130:{name:'Zombie Essence',icon:'🧪'},
   131:{name:'Bone',         icon:'🦴'},
   132:{name:'Red Dye',      icon:'🔴'},
@@ -301,6 +308,7 @@ R(56,1,[[7,8]],'block','Stash items — click to open'),
 R(57,1,[[120,4],[7,4]],'block','Unstable powder keg — ignite with a Spark Striker'),
 R(180,1,[[119,1],[126,1]],'mat','Ignites Powder Kegs — Eldercube firestarter'),
 R(58,1,[[7,3],[12,3]],'block','Set your respawn point — click a placed bed'),
+R(43,1,[[122,2],[126,2],[3,8]],'block','Pedestal for the Elder Cube — socket it to claim ground for good'),
 R(59,4,[[7,6]],'block','Wooden stairs for roofs and steps'),
 R(60,4,[[3,6]],'block','Stone stairs'),
 R(61,6,[[7,3]],'block','Half-height wood slab'),
@@ -336,6 +344,8 @@ export const EXTRA_GUIDE = [
   {id:131,where:'Zombies drop bones.', uses:'Bone blocks, knives, clubs.'},
   {id:10, where:'Craft (Stick + Log) or tar batch.', uses:'Place to light the dark. Zombies will not spawn nearby.'},
   {id:40, where:'Craft from Iron Ingot + Torch.', uses:'Bright caged flame — better than a torch.'},
+  {id:186,where:'Lying in the deep dark, below the crystal layer. There is exactly one.', uses:'Socket into a Keepstone. It lights your way — it does NOT protect you.'},
+  {id:43, where:'Craft from Crystal Shards + Iron Ingots + Stone.', uses:'Place it, then click it holding the Elder Cube. Defend it while it claims.'},
   {id:41, where:'Craft from Crystal Shards + Glass.', uses:'Cool crystal glow, very bright.'},
   {id:42, where:'Craft from Logs + Coal + Stone.', uses:'Cozy campfire light.'},
   {id:11, where:'Craft from Sticks + Planks.', uses:'Fence for pens and yards.'},

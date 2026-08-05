@@ -4,7 +4,7 @@ import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, make
          makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
-         chat, openChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
+         chat, openChat, addChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
 import { sfx, toggleMusic } from './audio.js';
 import { gm } from './mode.js';
 import * as net from './net.js';
@@ -16,6 +16,8 @@ import * as drops from './drops.js';
 import * as chests from './chests.js';
 import * as keg from './keg.js';
 import * as villagers from './villagers.js';
+import * as keepstones from './keepstones.js';
+import * as claimMap from './map.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
@@ -368,6 +370,7 @@ export function initControls(){
     // Pause / unpause
     if(e.code==='Escape' && state.playing){
       e.preventDefault();
+      if(claimMap.isOpen()){ claimMap.close(); return; }
       if(invOpen){ toggleInv(false); return; }
       setPaused(!state.paused);
       return;
@@ -385,6 +388,11 @@ export function initControls(){
     if(e.code==='KeyQ' && state.playing && !invOpen){ e.preventDefault(); dropHeld(); }
     if(e.code==='KeyT' && state.playing) nextToolSlot();
     if(e.code==='KeyM') toggleMusic();
+    // Claim map. Tab, not M — M is already the music toggle.
+    if(e.code==='Tab' && state.playing){
+      e.preventDefault();
+      claimMap.toggle(player.pos.x, player.pos.z);
+    }
     // Forge fly toggle
     if(e.code==='KeyF' && state.playing && gm.forge){
       toggleFly();
@@ -607,6 +615,39 @@ export function placeAction(rIn){
       sfx.place();
       return;
     }
+    // Keepstone: socket the Elder Cube to start claiming, or pull it back out.
+    // Carrying the Cube does nothing — this click is the only thing that arms it.
+    if(hit===43){
+      const h = hotbarSlots[sel.slot];
+      const st = keepstones.get(hx,hy,hz) || keepstones.place(hx,hy,hz);
+      if(st.socketed){
+        if(keepstones.unsocket(hx,hy,hz)){
+          addToInventory(186, 1);
+          renderHotbar();
+          addChat('⚙', keepstones.isDone(st)
+            ? 'You lift the Elder Cube. This ground is claimed for good.'
+            : 'You lift the Elder Cube. The stone goes dark.');
+          placeAnim = 1; sfx.place();
+        }
+        return;
+      }
+      if(keepstones.isDone(st)){
+        addChat('⚙', 'This Keepstone has finished its work.');
+        return;
+      }
+      if(h?.k==='f' && h.id===186 && inventory[186] > 0){
+        keepstones.socket(hx,hy,hz);
+        inventory[186]--;
+        if(inventory[186] <= 0){ delete inventory[186]; hotbarSlots[sel.slot] = null; }
+        renderHotbar();
+        survival.note('socket');
+        addChat('⚙', 'The Elder Cube settles into the stone. Hold this ground.');
+        placeAnim = 1; sfx.place();
+        return;
+      }
+      addChat('⚙', 'The cradle is empty. It wants the Elder Cube.');
+      return;
+    }
     // Spark Striker on Powder Keg
     const held = hotbarSlots[sel.slot];
     if(hit===57 && held?.k==='f' && held.id===180){
@@ -676,6 +717,7 @@ export function placeAction(rIn){
     return;
   }
   applyEdit(px,py,pz,tid,false);
+  if(tid===43) keepstones.place(px,py,pz); // empty cradle, waiting for the Cube
   if(!gm.forge) inventory[tid]--;
   placeAnim = 1;
   sfx.place();
@@ -748,6 +790,14 @@ function updateMining(dt){
           if(p) net.sendDrop(p);
         }
         addToInventory(56);
+      } else if(old===43){
+        // Mining a Keepstone that still holds the Cube must hand the Cube back —
+        // it is the one object in the world that can never be destroyed.
+        if(keepstones.remove(bx,by,bz)){
+          addToInventory(186);
+          addChat('⚙', 'You pry the Elder Cube loose as the stone comes apart.');
+        }
+        addToInventory(43);
       } else if(ORE_YIELD[old]){
         const n = 1 + (Math.random()<.45 ? 1 : 0);
         for(let i=0;i<n;i++) addToInventory(ORE_YIELD[old]);
@@ -775,6 +825,12 @@ function collide(pos){
 
 function startSleep(bx, by, bz){
   if(state.sleeping || state.paused || survival.sv.dead) return;
+  // The Cube is what the night wants. Carry it and every night gets fought,
+  // never skipped — this is one of the three costs that make socketing matter.
+  if(inventory[186] > 0){
+    addChat('⚙', 'You cannot sleep. The Elder Cube will not let the night pass.');
+    return;
+  }
   state.sleeping = true;
   state.flying = false;
   for(const k in keys) keys[k] = false;

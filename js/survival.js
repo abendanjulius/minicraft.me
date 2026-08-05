@@ -49,6 +49,9 @@ const ACH = [
   {id:'dayhunt1',name:'Daywalker Hunter',    goal:'Slay a hiding zombie in daylight'},
   {id:'cave1',  name:'Spelunker',      goal:'Descend into a cave'},
   {id:'ore1',   name:'Motherlode',     goal:'Mine Crystal Ore in the deep dark'},
+  {id:'cube1',  name:'The Last Light', goal:'Find the Elder Cube'},
+  {id:'keep1',  name:'Cradle',         goal:'Socket the Elder Cube into a Keepstone'},
+  {id:'keepfull',name:'Reclaimed',     goal:'Fill a Keepstone’s claim to its edge'},
 ];
 const unlocked = new Set(JSON.parse(localStorage.getItem('mc_ach')||'[]'));
 let placedCount = +(localStorage.getItem('mc_placed')||0);
@@ -94,6 +97,9 @@ export function note(what, arg){
   if(what==='recover'){ unlock('recover1'); toast('🕯 Body recovered — the horde learns nothing.'); }
   if(what==='bed'){ unlock('bed'); toast('🛏 Respawn point set'); }
   if(what==='sleep'){ unlock('sleep'); toast('😴 Slept till dawn'); }
+  if(what==='cube'){ unlock('cube1'); toast('💠 The Elder Cube — it lights your way, it will not protect you'); }
+  if(what==='socket'){ unlock('keep1'); toast('💠 Seated. Hold this ground.'); }
+  if(what==='keepfull'){ unlock('keepfull'); toast('🕯 Claimed for good — the night cannot return here'); }
 }
 
 // ---- Vitals UI ----

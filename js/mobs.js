@@ -11,6 +11,7 @@ import { WORLD, WH, topY, getBlock, heightAt, isWalkThrough } from './world.js';
 import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDist, box, wrapShift, wrapDist, placeWrapped } from './render.js';
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
+import { claimed } from './claim.js';
 
 export const zombies = new Map(); // id -> zombie
 export const corpses = new Map(); // id -> {mesh, x,y,z, feed}
@@ -23,7 +24,13 @@ const SOFT = new Set([1,2,5,6,12,19,28,29,30,31,32]); // what T2 can dig through
 // (so 2 players isn't double the danger). Set from the target list each host tick.
 let playerCount = 1;
 const playerMul = ()=> 1 + 0.08 * Math.max(0, playerCount - 1);
-const maxZombies = ()=> Math.round((8 + intel*2) * playerMul());
+// Elder Cube pressure: 0 none · 1 someone is carrying it · 2 a Keepstone is
+// mid-claim. Push the dark back and the dark pushes harder — this is the cost
+// that keeps the Cube from being a free win.
+let pressure = 0;
+export function setCubePressure(v){ pressure = v|0; }
+export const getCubePressure = ()=>pressure;
+const maxZombies = ()=> Math.round((8 + intel*2 + pressure*3) * playerMul());
 let caveSpawnT = 5;
 // floor beneath a point (works on the surface AND on cave floors)
 function floorAt(x, yFrom, z){
@@ -186,18 +193,18 @@ export function hostTick(dt, dl, targets){
   }
   const night = dl < .12;
 
-  // spawning (packs at higher tiers, never near light)
+  // spawning (packs at higher tiers, never near light, never on claimed ground)
   if(!hordeHold && night && zombies.size < maxZombies() && targets.length){
     spawnT -= dt;
     if(spawnT<=0){
-      spawnT = intel>=1 ? 2.6 : 3.5;
+      spawnT = (intel>=1 ? 2.6 : 3.5) * (pressure===2 ? .5 : pressure===1 ? .75 : 1);
       const t = targets[Math.floor(Math.random()*targets.length)];
       const pack = intel>=3 ? 3 : intel>=1 ? 2 : 1;
       for(let i=0;i<pack && zombies.size<maxZombies();i++){
         const a = Math.random()*Math.PI*2, r = 16+Math.random()*14;
         const x = t.x+Math.cos(a)*r, z = t.z+Math.sin(a)*r;
         const gy = topY(Math.round(x), Math.round(z));
-        if(gy>0 && nearestTorchDist(x,z) > 10) create(x, gy+.5, z);
+        if(gy>0 && nearestTorchDist(x,z) > 10 && !claimed(x,z)) create(x, gy+.5, z);
       }
     }
   }
