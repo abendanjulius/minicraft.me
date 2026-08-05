@@ -7,8 +7,42 @@ body.inv-open{cursor:default}
 #menu{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 
 /* Home / landing screen */
-#home{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:6;color:#fff;text-align:center;padding:24px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Night scene home screen — layers stack: sky (bg) > stars > ridge > warm glow > content */
+#home{position:fixed;inset:0;background:linear-gradient(#0e1533 0%,#1a2657 45%,#2d3f78 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:6;color:#fff;text-align:center;padding:24px;overflow:hidden}
+/* Stars as CSS dots: percentage positions with a fixed radius, so they stay
+   round and spread at any aspect ratio (an SVG layer either stretched them
+   into dashes or cropped them away entirely). */
+.homeStars{position:absolute;inset:0;pointer-events:none;
+  background-image:
+    radial-gradient(circle 2px at 8% 12%, rgba(234,241,255,.90) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 19% 31%, rgba(234,241,255,.65) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 31% 8%,  rgba(234,241,255,.55) 99%, transparent 100%),
+    radial-gradient(circle 2px at 44% 22%,   rgba(234,241,255,.50) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 57% 9%,  rgba(234,241,255,.55) 99%, transparent 100%),
+    radial-gradient(circle 2px at 72% 17%,   rgba(234,241,255,.70) 99%, transparent 100%),
+    radial-gradient(circle 2px at 88% 10%,   rgba(234,241,255,.90) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 94% 28%, rgba(234,241,255,.60) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 5% 38%,  rgba(234,241,255,.55) 99%, transparent 100%),
+    radial-gradient(circle 1.6px at 66% 34%, rgba(234,241,255,.45) 99%, transparent 100%)}
+.homeRidge{position:absolute;left:0;right:0;bottom:0;height:26%;pointer-events:none}
+.homeRidge svg{width:100%;height:100%;display:block}
+/* The blend: one warm pool of light painted over sky AND ridge together */
+.homeGlow{position:absolute;inset:0;pointer-events:none;background:radial-gradient(48% 76% at 68% 38%,rgba(255,208,140,.80) 0%,rgba(255,168,85,.36) 44%,rgba(255,154,74,0) 100%)}
+.homeMain{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;max-width:100%}
+.homeCol{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:100%}
+.homeLantern{width:min(26vw,120px);height:auto;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}
+.homeWord{width:min(86vw,420px);height:auto}
 .homeLogo{width:min(86vw,440px);height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.28))}
+/* Landscape (how the game actually runs): put the lantern beside the wordmark
+   so the short viewport isn't fighting a tall stack. */
+@media (orientation:landscape) and (max-height:560px){
+  #home{padding:10px}
+  .homeMain{flex-direction:row;gap:4%;align-items:center}
+  .homeLantern{width:min(11vw,74px)}
+  .homeWord{width:min(46vw,290px)}
+  .homeCol{gap:7px}
+  .homeRidge{height:30%}
+}
 .playBtn{width:min(72vw,264px);font-size:22px;padding:16px 0;margin-top:4px}
 .backBtn{position:absolute;top:16px;left:16px;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.55);color:#fff;font-family:monospace;font-size:14px;padding:8px 14px;border-radius:6px;cursor:pointer;z-index:2}
 .backBtn:active{transform:translateY(1px)}
