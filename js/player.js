@@ -17,6 +17,7 @@ import * as chests from './chests.js';
 import * as keg from './keg.js';
 import * as villagers from './villagers.js';
 import * as keepstones from './keepstones.js';
+import * as eldercube from './eldercube.js';
 import * as claimMap from './map.js';
 
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
@@ -104,6 +105,36 @@ const fistMesh = box(0.26, 0.22, 0.22, 0xdba97c, 0, -0.02, -0.42);
 armPivot.add(armMesh);
 armPivot.add(fistMesh);
 handGroup.add(armPivot);
+
+// ---- Off-hand: the Elder Cube ----
+// The Cube is carried in the LEFT hand and stays there regardless of the hotbar,
+// so the right hand is free to hold a weapon and fight. It is why you cannot
+// build while carrying it: that hand is full.
+const offHandGroup = new THREE.Group();
+camera.add(offHandGroup);
+offHandGroup.position.set(-0.34, -0.40, -0.62);
+let cubeInHand = null;
+export const carryingCube = ()=> (inventory[186] || 0) > 0;
+
+function updateOffHand(dt){
+  const carrying = carryingCube();
+  if(carrying && !cubeInHand){
+    cubeInHand = makeHeldItemIcon(186, 0.52);
+    cubeInHand.rotation.set(-0.15, 0.35, 0.1);
+    offHandGroup.add(cubeInHand);
+  } else if(!carrying && cubeInHand){
+    offHandGroup.remove(cubeInHand);
+    cubeInHand.material?.map?.dispose?.();
+    cubeInHand.material?.dispose?.();
+    cubeInHand.geometry?.dispose?.();
+    cubeInHand = null;
+  }
+  if(cubeInHand){
+    // a slow turn and a shallow float, so it reads as alive rather than stuck on
+    cubeInHand.rotation.y += dt * 0.9;
+    cubeInHand.position.y = Math.sin(performance.now() / 700) * 0.015;
+  }
+}
 
 const toolModels = {}; // unused in FP — kept empty so old refs don't break
 let heldExtra = null;
@@ -623,6 +654,7 @@ export function placeAction(rIn){
       if(st.socketed){
         if(keepstones.unsocket(hx,hy,hz)){
           addToInventory(186, 1);
+          eldercube.setCubeOwner(net.myPeerId(), net.myPlayerName());
           renderHotbar();
           addChat('⚙', keepstones.isDone(st)
             ? 'You lift the Elder Cube. This ground is claimed for good.'
@@ -639,6 +671,7 @@ export function placeAction(rIn){
         keepstones.socket(hx,hy,hz);
         inventory[186]--;
         if(inventory[186] <= 0){ delete inventory[186]; hotbarSlots[sel.slot] = null; }
+        eldercube.setCubeOwner(null); // it belongs to the stone now, not a person
         renderHotbar();
         survival.note('socket');
         addChat('⚙', 'The Elder Cube settles into the stone. Hold this ground.');
@@ -662,6 +695,12 @@ export function placeAction(rIn){
   let tid = slotBlock();
   if(!tid){
     // Holding a tool / empty — interact already handled above; nothing to place
+    return;
+  }
+  // Your left hand is full of Elder Cube. You can still fight — a weapon goes in
+  // the right hand — but you cannot build until you set the Cube down.
+  if(carryingCube()){
+    addChat('⚙', 'Your hands are full. Socket the Elder Cube before you build.');
     return;
   }
   // Normalize door state ids back to item ids
@@ -1102,6 +1141,7 @@ export function update(dt, elapsed){
 
   // First-person hand animation (idle bob + mine/place swing)
   const movingNow = Math.abs(player.vel.x)+Math.abs(player.vel.z) > .5;
+  updateOffHand(dt);
   handBob += dt * (movingNow ? 8 : 2.2);
   let swing = 0;
   if(state.mineHeld && !invOpen && !state.sleeping){

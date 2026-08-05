@@ -16,6 +16,29 @@ let vault = null;
 export const vaultRecord = () => vault;
 export function markVault(site){ vault = site ? {x:site.x, y:site.y, z:site.z} : null; }
 
+// ---- Ownership -------------------------------------------------------------
+// There is one Cube, so there is at most one owner. Whoever digs it out of the
+// vault holds it; they can hand it on, and every consequence travels with it
+// (no building, no sleeping, and the horde reading you as the one to hunt).
+//
+// The host is the authority. A client never grants itself the Cube — it asks,
+// and the host either transfers ownership or refuses. That is what stops two
+// Elder Cubes existing, which would unravel the whole premise.
+//
+// null = nobody holds it: it is loose in the world, or seated in a Keepstone.
+let owner = null;      // peer id, or SOLO for single-player
+let ownerName = '';
+export const SOLO = '@local';
+
+export const cubeOwner = () => owner;
+export const cubeOwnerName = () => ownerName;
+export const heldBySomeone = () => owner !== null;
+export function setCubeOwner(id, name){
+  owner = id || null;
+  ownerName = id ? (name || '') : '';
+}
+export const ownedByMe = myId => owner !== null && (owner === SOLO || owner === myId);
+
 /** Vault sits below the crystal layer (ores stop at y 9). */
 const VAULT_Y = 5;
 const R = 3; // chamber half-width

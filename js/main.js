@@ -42,7 +42,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.2.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.3.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -296,6 +296,8 @@ function saveWorldNow(){
     // the one item in the game that must never be lost.
     drops: drops.serialize(),
     vault: eldercube.vaultRecord(),
+    cubeOwner: eldercube.cubeOwner(),
+    cubeOwnerName: eldercube.cubeOwnerName(),
   });
 }
 addEventListener('beforeunload', saveWorldNow);
@@ -388,6 +390,7 @@ function begin(seed, edits, authority, saved){
       claim.restore(saved.claim);
       keepstones.restore(saved.keeps);
       if(saved.drops) drops.applyRemote(saved.drops);
+      eldercube.setCubeOwner(saved.cubeOwner || null, saved.cubeOwnerName || '');
       // NB: the vault record is set earlier, before meshing — do not re-set it
       // here or a freshly cut vault gets wiped back to null.
     }

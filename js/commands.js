@@ -9,6 +9,9 @@ import * as net from './net.js';
 import * as mobs from './mobs.js';
 import * as survival from './survival.js';
 import * as persist from './persist.js';
+import * as eldercube from './eldercube.js';
+import * as keepstones from './keepstones.js';
+import * as claim from './claim.js';
 import * as villagers from './villagers.js';
 
 /** @type {null | (() => any)} */
@@ -177,9 +180,28 @@ export function tryCommand(raw){
       reply('Fully healed.');
       return true;
     }
+    case 'cube': {
+      // /cube            — who holds the Elder Cube, and how much is reclaimed
+      // /cube give <who> — hand it on, penalties and all
+      const sub = (args[0]||'').toLowerCase();
+      if(sub === 'give'){
+        const who = args.slice(1).join(' ').trim();
+        if(!who){ reply('Usage: /cube give <player name>'); return true; }
+        if(!(inventory[186] > 0)){ reply('You are not carrying the Elder Cube.'); return true; }
+        net.requestCubeGive(who);
+        return true;
+      }
+      const holder = eldercube.cubeOwnerName();
+      if(inventory[186] > 0) reply('You are carrying the Elder Cube. You cannot build or sleep until you set it down.');
+      else if(eldercube.heldBySomeone()) reply(`${holder||'Another player'} is carrying the Elder Cube.`);
+      else if(keepstones.activeStone()) reply('The Elder Cube is seated in a Keepstone.');
+      else reply('The Elder Cube lies somewhere in the world.');
+      reply(`${claim.claimedPercent().toFixed(3)}% of the world is claimed (${claim.claimedCells()} cells).`);
+      return true;
+    }
     case 'help':
     case 'commands': {
-      reply('Local: /where /fly /home /tp /heal');
+      reply('Local: /where /fly /home /tp /heal /cube');
       reply('Host: /flat /day /night /time /fill /give /clear /god /peace /killmobs /horde /markers /chunk /gm /skip /seed');
       return true;
     }

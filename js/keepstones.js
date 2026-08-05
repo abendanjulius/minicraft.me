@@ -6,8 +6,8 @@
 // tops out the stone goes dormant and you carry the Cube to the next site.
 //
 // There is exactly one Cube per world, so at most one Keepstone is ever active.
-import { scene, box, placeWrapped } from './render.js';
-import { wrapC } from './world.js';
+import { scene, box, placeWrapped, rebuildAt } from './render.js';
+import { wrapC, CH } from './world.js';
 import * as claim from './claim.js';
 
 export const MAX_RADIUS = 24;   // world blocks — the disc a single stone can reach
@@ -62,6 +62,29 @@ export function unsocket(x, y, z){
 
 export const isDone = s => s.radius >= MAX_RADIUS;
 
+/**
+ * Re-mesh only the chunks the disc newly reached, so the warm claimed skin
+ * appears as the ring sweeps outward. Rebuilding the whole disc every step
+ * would re-run buildChunk on the same inner chunks ~24 times per siege.
+ */
+function remeshRing(x, z, prevR, newR){
+  const outer = Math.ceil(newR), inner = Math.floor(prevR);
+  const seen = new Set();
+  for(let dz = -outer; dz <= outer; dz++){
+    for(let dx = -outer; dx <= outer; dx++){
+      const d = Math.hypot(dx, dz);
+      if(d > outer) continue;
+      // skip the interior that was already claimed and meshed last step
+      if(d < inner - CH) continue;
+      const wx = wrapC(x + dx), wz = wrapC(z + dz);
+      const k = (wx >> 4) + ',' + (wz >> 4);
+      if(seen.has(k)) continue;
+      seen.add(k);
+      rebuildAt(wx, wz);
+    }
+  }
+}
+
 // ---- visuals ---------------------------------------------------------------
 function makeMesh(s){
   if(s.mesh) return;
@@ -94,9 +117,11 @@ export function tick(dt, px, pz, onFull){
     s.radius = Math.min(MAX_RADIUS, s.radius + dt / SECS_PER_BLOCK);
     if(Math.floor(s.radius) > Math.floor(prev)){
       claim.claimDisc(s.x, s.z, s.radius);
+      remeshRing(s.x, s.z, prev, s.radius);
     }
     if(isDone(s) && prev < MAX_RADIUS){
       claim.claimDisc(s.x, s.z, MAX_RADIUS); // make sure the rim is filled
+      remeshRing(s.x, s.z, prev, MAX_RADIUS);
       onFull?.(s);
     }
   }

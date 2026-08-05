@@ -1,7 +1,8 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk } from './world.js';
+import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, topY } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
+import { claimed, claimedCells } from './claim.js';
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 export const VIEW = isTouch ? 56 : 120;
@@ -951,6 +952,7 @@ function isCustomMeshBlock(t){
     || t===64; // water — surface faces only (not glass cubes)
 }
 let waterFaceMat = null; // top sheet
+let claimFaceMat = null; // warm skin over claimed ground
 let waterSideMat = null;
 export function tickWaterAnim(dt){
   const tex = waterFaceMat?.userData?.flowTex;
@@ -1083,6 +1085,49 @@ export function buildChunk(cx,cz){
       });
       im.instanceMatrix.needsUpdate = true;
       im.renderOrder = 3;
+      scene.add(im);
+      list.push(im);
+    }
+  }
+  // ---- Claimed ground — a warm skin over reclaimed surface ----
+  // The payoff of permanence has to be visible underfoot, not only on the map.
+  // Built as a separate translucent top-face layer (same trick as water above)
+  // rather than by tinting block materials: those are shared across every chunk,
+  // so touching them would change how the whole world renders.
+  // Costs nothing until something is actually claimed.
+  if(claimedCells() > 0){
+    const tops = [];
+    // One skin per claimed column, on the surface only — claiming is a surface
+    // idea, and cave floors in a claimed column must not light up underground.
+    for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
+      const x = x0+lx, z = z0+lz;
+      if(!claimed(x, z)) continue;
+      const y = topY(x, z);
+      if(y < 0) continue;
+      const t = getBlock(x, y, z);
+      if(!t || t === 64 || isCustomMeshBlock(t)) continue;
+      tops.push([x,y,z]);
+    }
+    if(tops.length){
+      if(!claimFaceMat){
+        claimFaceMat = new THREE.MeshBasicMaterial({
+          color: 0xffc067, transparent: true, opacity: 0.30,
+          depthWrite: false, side: THREE.FrontSide,
+        });
+      }
+      const pgeo = new THREE.PlaneGeometry(1.0, 1.0);
+      const im = new THREE.InstancedMesh(pgeo, claimFaceMat, tops.length);
+      const orient = new THREE.Object3D();
+      tops.forEach((p, i)=>{
+        // 2 cm clear of the block face: flush to the eye, but far enough that it
+        // wins the depth test at range instead of z-fighting into invisibility.
+        orient.position.set(p[0], p[1] + 0.52, p[2]);
+        orient.rotation.set(-Math.PI/2, 0, 0);
+        orient.updateMatrix();
+        im.setMatrixAt(i, orient.matrix);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      im.renderOrder = 2;
       scene.add(im);
       list.push(im);
     }

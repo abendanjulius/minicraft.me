@@ -13,7 +13,24 @@ import * as keg from './keg.js';
 import * as survival from './survival.js';
 import { MOB_DROPS } from './content.js';
 import { gm, setMode } from './mode.js';
-import { addToInventory } from './ui.js';
+import { addToInventory, inventory, hotbarSlots, renderHotbar } from './ui.js';
+import * as eldercube from './eldercube.js';
+
+export const myPeerId = ()=> (mode==='solo' ? eldercube.SOLO : (peer?.id || eldercube.SOLO));
+export const myPlayerName = ()=> myName;
+
+/** Host-side: record who holds the Cube and tell the room. */
+function setCubeHolder(id, name){
+  eldercube.setCubeOwner(id, name);
+  if(mode==='host') relay({t:'cubeowner', id, name}, null);
+}
+
+/** Ask the host to hand the Cube to another player by name. */
+export function requestCubeGive(toName){
+  if(mode==='solo'){ addChat('⚙', 'Nobody else is here to take it.'); return; }
+  if(mode==='host') handle({t:'cubegive', id0:peer?.id, to:toName}, null);
+  else safeSendHost({t:'cubegive', id0:peer?.id, to:toName});
+}
 
 export let mode = 'solo';           // 'solo' | 'host' | 'client'
 let peer = null, conns = [];        // host: all client conns; client: [hostConn]
@@ -143,13 +160,50 @@ function handle(msg, fromConn){
   } else if(msg.t==='keg' && mode==='client'){
     keg.ignite(msg.x,msg.y,msg.z);
   } else if(msg.t==='pickup' && mode==='host'){
-    const got = drops.tryPickup(msg.x, msg.y, msg.z);
-    if(got){
-      sendToPeer(msg.id0, {t:'give', item:got.item});
-      // if stack n>1, give rest
-      for(let i=1;i<(got.n||1);i++) sendToPeer(msg.id0, {t:'give', item:got.item});
-      relay({t:'drops', list:drops.serialize()}, null);
+    // Host is the authority on the Elder Cube. If someone already holds it, a
+    // second pickup is refused and the drop is put back — otherwise a duplicate
+    // Cube could exist, and there is only ever one.
+    const peek = drops.tryPickup(msg.x, msg.y, msg.z);
+    if(peek){
+      if(peek.item===186 && eldercube.heldBySomeone()){
+        drops.spawn(186, 1, msg.x, msg.y, msg.z);
+        relay({t:'drops', list:drops.serialize()}, null);
+        sendToPeer(msg.id0, {t:'chat', id:'sys', name:'⚙',
+          text:`${eldercube.cubeOwnerName()||'Someone'} already carries the Elder Cube.`});
+      } else {
+        if(peek.item===186) setCubeHolder(msg.id0, remotes.get(msg.id0)?.name || 'Someone');
+        sendToPeer(msg.id0, {t:'give', item:peek.item});
+        for(let i=1;i<(peek.n||1);i++) sendToPeer(msg.id0, {t:'give', item:peek.item});
+        relay({t:'drops', list:drops.serialize()}, null);
+      }
     }
+  } else if(msg.t==='cubegive' && mode==='host'){
+    // Hand-off: only the current holder can pass it on, and everything that
+    // comes with the Cube travels to the new holder.
+    if(eldercube.cubeOwner() !== msg.id0){
+      sendToPeer(msg.id0, {t:'chat', id:'sys', name:'⚙', text:'You are not carrying the Elder Cube.'});
+    } else {
+      const target = [...remotes.entries()].find(([,r]) => (r.name||'').toLowerCase() === String(msg.to||'').toLowerCase());
+      const toId = (String(msg.to||'').toLowerCase() === myName.toLowerCase()) ? 'me' : target?.[0];
+      if(!toId){
+        sendToPeer(msg.id0, {t:'chat', id:'sys', name:'⚙', text:`No player here called "${msg.to}".`});
+      } else {
+        sendToPeer(msg.id0, {t:'takecube'});
+        sendToPeer(toId, {t:'give', item:186});
+        const toName = toId==='me' ? myName : (target[1].name||'Someone');
+        setCubeHolder(toId==='me' ? (peer?.id||eldercube.SOLO) : toId, toName);
+        // systemMsg, not a bare relay: relay() only reaches peers, so the host
+        // would hand the Cube over and see no confirmation at all.
+        systemMsg(`The Elder Cube passes to ${toName}. Its burdens go with it.`);
+      }
+    }
+  } else if(msg.t==='takecube'){
+    // The host says the Cube has left our hands.
+    if(inventory[186]){ delete inventory[186]; }
+    for(let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]?.id===186) hotbarSlots[i]=null;
+    renderHotbar();
+  } else if(msg.t==='cubeowner'){
+    eldercube.setCubeOwner(msg.id, msg.name);
   } else if(msg.t==='kudos'){
     survival.note(msg.what);
   } else if(msg.t==='horde'){
@@ -288,14 +342,22 @@ export function sendPickup(x,y,z){
     if(got){
       for(let i=0;i<(got.n||1);i++) addToInventory(got.item);
       sfx.place();
-      if(got.item===186) survival.note('cube');
+      if(got.item===186){ eldercube.setCubeOwner(eldercube.SOLO, myName); survival.note('cube'); }
     }
     return;
   }
   if(mode==='host'){
     const got = drops.tryPickup(x,y,z);
     if(got){
+      if(got.item===186 && eldercube.heldBySomeone()){
+        // Someone else already carries it — put it straight back down.
+        drops.spawn(186, 1, x, y, z);
+        relay({t:'drops', list:drops.serialize()}, null);
+        addChat('⚙', `${eldercube.cubeOwnerName()||'Someone'} already carries the Elder Cube.`);
+        return;
+      }
       for(let i=0;i<(got.n||1);i++) addToInventory(got.item);
+      if(got.item===186){ setCubeHolder(peer?.id || eldercube.SOLO, myName); survival.note('cube'); }
       relay({t:'drops', list:drops.serialize()}, null);
     }
   } else {
