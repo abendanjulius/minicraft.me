@@ -1462,3 +1462,32 @@ html body #touchUI #btnFly.active:active{
   background: rgba(90, 165, 255, 0.85) !important;
   transform: scale(0.95) !important;
 }
+
+/* ===== v2.0.3 — setup fits a landscape phone without scrolling =====
+   Portrait keeps the single stacked column. Landscape splits into two columns
+   (identity | worlds) and trims the chrome, because ~390px of height cannot
+   hold a 586px stack. */
+.setupCols{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%}
+.setupCol{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%}
+
+@media (orientation:landscape) and (max-height:560px){
+  #menu{gap:4px;padding:6px 14px;justify-content:center}
+  #menu h1.setupTitle{font-size:19px;margin:0}
+  #menu .tagline{font-size:10px;margin:0}
+  .setupCols{flex-direction:row;align-items:flex-start;justify-content:center;gap:26px}
+  .setupCol{gap:7px}
+  #menu input{font-size:14px;padding:7px 10px;width:190px}
+  #skinRow{gap:6px;margin:0}
+  .skinBtn{width:40px;height:52px}
+  #modeRow{gap:6px;margin:0}
+  .modeBtn{width:104px;font-size:11px;padding:5px 3px;line-height:1.35}
+  .modeBtn small{font-size:8px}
+  #worlds{width:min(46vw,300px);gap:5px}
+  .worldCard{padding:5px 8px;font-size:12px}
+  .joinRow .mbtn{padding:7px 0}
+  #menuStatus,#menuError{min-height:0;font-size:11px;margin:0}
+  /* the controls hint is repeated in the pause menu — drop it here */
+  #menu .hint{display:none}
+  .linkBtn{margin:0}
+  .backBtn{top:8px;left:8px;padding:5px 10px;font-size:12px}
+}

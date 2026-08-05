@@ -8,7 +8,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.0.2">
+<link rel="stylesheet" href="./css/style.css?v=2.0.3">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -103,19 +103,26 @@
   <button id="btnBack" class="backBtn" type="button">←&nbsp; Back</button>
   <h1 class="setupTitle"><span class="setupLamp" aria-hidden="true">🏮</span> MiniCraft</h1>
   <p class="tagline">Set up your game</p>
-  <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="off">
-  <div id="skinRow"></div>
-  <div id="modeRow">
-    <button id="modeNight" class="modeBtn">🌙 Nightfall<br><small>survive the horde</small></button>
-    <button id="modeForge" class="modeBtn">🔨 Forge<br><small>pure creation</small></button>
+  <!-- Two columns in landscape so the form fits without scrolling; stacks in portrait -->
+  <div class="setupCols">
+    <div class="setupCol">
+      <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="off">
+      <div id="skinRow"></div>
+      <div id="modeRow">
+        <button id="modeNight" class="modeBtn">🌙 Nightfall<br><small>survive the horde</small></button>
+        <button id="modeForge" class="modeBtn">🔨 Forge<br><small>pure creation</small></button>
+      </div>
+    </div>
+    <div class="setupCol">
+      <div id="worlds"></div>
+      <div class="joinRow">
+        <input id="codeInput" maxlength="6" placeholder="ROOM CODE" autocomplete="off">
+        <button id="btnJoin" class="mbtn">Join</button>
+      </div>
+      <p id="menuStatus"></p>
+      <p id="menuError"></p>
+    </div>
   </div>
-  <div id="worlds"></div>
-  <div class="joinRow">
-    <input id="codeInput" maxlength="6" placeholder="ROOM CODE" autocomplete="off">
-    <button id="btnJoin" class="mbtn">Join</button>
-  </div>
-  <p id="menuStatus"></p>
-  <p id="menuError"></p>
   <p class="hint">Host shares the room code · friends join from any device.<br>
   WASD/mouse on desktop · joystick + buttons on mobile.</p>
   <button id="btnImport" class="linkBtn">⬆ Import world file</button>
@@ -209,7 +216,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.0.2"></script>
+<script type="module" src="./js/main.js?v=2.0.3"></script>
 <script>
 (function(){
   function showRecover(msg){
