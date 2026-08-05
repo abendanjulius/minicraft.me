@@ -4,7 +4,21 @@ body.inv-open{cursor:default}
 #game{position:fixed;inset:0}
 
 /* Menu */
-#menu{position:fixed;inset:0;background:linear-gradient(#87ceeb,#5a9fd4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#menu{position:fixed;inset:0;background:linear-gradient(#0e1533 0%,#1a2657 45%,#2d3f78 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:5;text-align:center;gap:10px;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+/* Setup shares the home screen's night scene. Layers are fixed so they stay put
+   while the form scrolls; content is lifted above them. */
+#menu > .homeStars, #menu > .homeRidge, #menu > .homeGlow{position:fixed}
+#menu > *:not(.homeStars):not(.homeRidge):not(.homeGlow):not(.backBtn){position:relative;z-index:1}
+#menu h1.setupTitle{color:#ffe6bd;text-shadow:2px 2px 0 #2a1d3d}
+.setupLamp{filter:drop-shadow(0 0 10px rgba(255,190,110,.75))}
+#menu .tagline{color:#ffca8a;opacity:.85}
+#menu input{border-color:#2a3a6b;background:rgba(255,255,255,.94);color:#16203f}
+#menu .hint{color:#cfe0ff;opacity:.75}
+.linkBtn{color:#ffca8a}
+/* Cards/buttons keep their light faces (they hold dark text) but get a night-side border */
+.modeBtn{border-color:#2a3a6b}
+.modeBtn.active{border-color:#ffd79a;box-shadow:0 0 0 2px #ffb066}
+.worldCard{border-color:#2a3a6b}
 
 /* Home / landing screen */
 /* Night scene home screen — layers stack: sky (bg) > stars > ridge > warm glow > content */
