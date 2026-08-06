@@ -246,9 +246,17 @@ const iconOf = id => id>=100
   : `<div class="sw" style="background-image:url(${TYPES[id]?.icon})"></div>`;
 const nameOf = id => (id>=100 ? ITEMS[id]?.name : TYPES[id]?.name) || 'Unknown';
 
+// The Eldercube arc is a Nightfall mechanic: reclaiming ground from a sleeping
+// horde, with infinite blocks in hand, would be theatre. So in Forge the
+// Keepstone (43) and the Elder Cube (186) are absent from every palette AND
+// from the click-to-stock path — Forge hands out 999 of anything id>=100, which
+// on the Cube would mint 999 of a thing there is only ever one of.
+const arcLocked = id => gm.forge && (id === 43 || id === 186);
+
 function idsForCat(cat){
   const all = [...Object.keys(TYPES).map(Number), ...Object.keys(ITEMS).map(Number)];
   const hideVariant = id => {
+    if(arcLocked(id)) return true;
     if(id===63 || id===65) return true;
     // hide non-item door state ids (keep base item ids 48,70,78,86)
     if(id>=49 && id<=55) return true;
@@ -270,12 +278,14 @@ function idsForCat(cat){
     for(const g of guide){
       if(seen.has(g.id)) continue;
       if(!(TYPES[g.id] || ITEMS[g.id])) continue;
+      if(arcLocked(g.id)) continue; // the guide is a way in too — close it in Forge
       seen.add(g.id);
       ids.push(g.id);
     }
     return ids;
   }
   return all.filter(id => {
+    if(hideVariant(id)) return false; // incl. the Eldercube arc while in Forge
     if((id>=49 && id<=55) || id===63) return false; // door/trapdoor state variants
     return catOf(id) === cat;
   });
@@ -426,7 +436,7 @@ function renderDetail(){
   box.querySelector('.dAssign').addEventListener('click', e=>{
     e.stopPropagation();
     hotbarSlots[sel.slot] = {k: id>=100 ? 'f' : 'b', id};
-    if(gm.forge && id>=100) inventory[id] = 999;
+    if(gm.forge && id>=100 && !arcLocked(id)) inventory[id] = 999;
     renderHotbar();
   });
 }
@@ -483,7 +493,7 @@ export function renderInv(){
       invPick = id;
       invPickTool = null;
       // Do NOT auto-add to hotbar — select then tap a hotbar slot to place
-      if(gm.forge && id>=100) inventory[id] = 999;
+      if(gm.forge && id>=100 && !arcLocked(id)) inventory[id] = 999;
       renderInv();
     });
     grid.appendChild(d);

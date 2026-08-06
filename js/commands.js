@@ -12,6 +12,7 @@ import * as persist from './persist.js';
 import * as eldercube from './eldercube.js';
 import * as keepstones from './keepstones.js';
 import * as claim from './claim.js';
+import * as drops from './drops.js';
 import * as villagers from './villagers.js';
 
 /** @type {null | (() => any)} */
@@ -191,6 +192,33 @@ export function tryCommand(raw){
         net.requestCubeGive(who);
         return true;
       }
+      if(sub === 'get'){
+        // Testing shortcut: summon the ONE Cube to your hand rather than mint a
+        // second. It is moved, never copied — the invariant still holds.
+        if(!needHost()) return true;
+        if(gm.forge){ reply('Not in Forge. The Elder Cube only exists in Nightfall.'); return true; }
+        if(inventory[186] > 0){ reply('You are already carrying it.'); return true; }
+        if(eldercube.heldBySomeone()){
+          reply(`${eldercube.cubeOwnerName()||'Another player'} is carrying it — ask them for it.`);
+          return true;
+        }
+        const seated = keepstones.activeStone();
+        if(seated){
+          reply(`It is seated in a Keepstone at ${seated.x}, ${seated.z}. Pull it out there.`);
+          return true;
+        }
+        // Loose in the world: pick it up from wherever it lies.
+        const loose = drops.serialize().find(d => d[1] === 186);
+        if(loose) drops.removeById(loose[0]);
+        addToInventory(186);
+        eldercube.setCubeOwner(net.myPeerId(), net.myPlayerName());
+        renderHotbar(); renderInv?.();
+        reply(loose
+          ? 'The Elder Cube is in your hands. You cannot build or sleep while you hold it.'
+          : 'The Elder Cube answers. You cannot build or sleep while you hold it.');
+        survival.note('cube');
+        return true;
+      }
       const holder = eldercube.cubeOwnerName();
       if(inventory[186] > 0) reply('You are carrying the Elder Cube. You cannot build or sleep until you set it down.');
       else if(eldercube.heldBySomeone()) reply(`${holder||'Another player'} is carrying the Elder Cube.`);
@@ -199,9 +227,20 @@ export function tryCommand(raw){
       reply(`${claim.claimedPercent().toFixed(3)}% of the world is claimed (${claim.claimedCells()} cells).`);
       return true;
     }
+    case 'keepstone':
+    case 'keepstones': {
+      if(!needHost()) return true;
+      if(gm.forge){ reply('Not in Forge. Keepstones only mean something in Nightfall.'); return true; }
+      const n = Math.max(1, Math.min(16, +args[0] || 1));
+      for(let i=0;i<n;i++) addToInventory(43);
+      renderHotbar(); renderInv?.();
+      reply(`Gave ${n}× Keepstone. Place one, then click it holding the Elder Cube.`);
+      return true;
+    }
     case 'help':
     case 'commands': {
       reply('Local: /where /fly /home /tp /heal /cube');
+      reply('Testing: /cube get · /keepstone [n]  (Nightfall only)');
       reply('Host: /flat /day /night /time /fill /give /clear /god /peace /killmobs /horde /markers /chunk /gm /skip /seed');
       return true;
     }

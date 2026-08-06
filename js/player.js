@@ -649,6 +649,12 @@ export function placeAction(rIn){
     // Keepstone: socket the Elder Cube to start claiming, or pull it back out.
     // Carrying the Cube does nothing — this click is the only thing that arms it.
     if(hit===43){
+      // Nightfall only. Claiming ground from a horde that is asleep, with
+      // infinite blocks in hand, would be theatre — so the cradle stays inert.
+      if(gm.forge){
+        addChat('⚙', 'The Keepstone is cold in Forge. It only wakes in Nightfall.');
+        return;
+      }
       const h = hotbarSlots[sel.slot];
       const st = keepstones.get(hx,hy,hz) || keepstones.place(hx,hy,hz);
       if(st.socketed){
