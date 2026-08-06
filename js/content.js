@@ -130,6 +130,9 @@ export const EXTRA_ITEMS = {
   127:{name:'Rope',         icon:'🪢'},
   128:{name:'Tar',          icon:'🛢️'},
   186:{name:'Elder Cube',   icon:'💠'},
+  // A replica left behind when a Keepstone finishes. It cannot claim anything —
+  // it only burns. Seat it in a dormant cradle and the stone becomes a lamp.
+  187:{name:'False Cube',   icon:'🔆'},
   130:{name:'Zombie Essence',icon:'🧪'},
   131:{name:'Bone',         icon:'🦴'},
   132:{name:'Red Dye',      icon:'🔴'},
@@ -345,6 +348,7 @@ export const EXTRA_GUIDE = [
   {id:10, where:'Craft (Stick + Log) or tar batch.', uses:'Place to light the dark. Zombies will not spawn nearby.'},
   {id:40, where:'Craft from Iron Ingot + Torch.', uses:'Bright caged flame — better than a torch.'},
   {id:186,where:'Lying in the deep dark, below the crystal layer. There is exactly one.', uses:'Socket into a Keepstone. It lights your way — it does NOT protect you.'},
+  {id:187,where:'Left in the reliquary a Keepstone leaves behind when its work is done.', uses:'Seat it in a spent Keepstone. It claims nothing, but it burns — a permanent lamp.'},
   {id:43, where:'Craft from Crystal Shards + Iron Ingots + Stone.', uses:'Place it, then click it holding the Elder Cube. Defend it while it claims.'},
   {id:41, where:'Craft from Crystal Shards + Glass.', uses:'Cool crystal glow, very bright.'},
   {id:42, where:'Craft from Logs + Coal + Stone.', uses:'Cozy campfire light.'},

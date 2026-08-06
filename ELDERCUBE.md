@@ -5,8 +5,8 @@ hold the siege → the ground is claimed for good → move on. Built and verifie
 `js/claim.js`, `js/keepstones.js`, `js/eldercube.js`, `js/map.js`, plus the spawn
 gate in `js/mobs.js` and the socket interaction in `js/player.js`.
 
-Not built yet: the Bearer chase (§6), the four faction shards (§7), village ally
-states (§9), host-authoritative Cube ownership (§10) and the endings (§11).
+Not built yet: the four faction shards (§7), village ally states (§9), and the
+endings (§11).
 
 Convention: **Eldercube** (one word) is the game. **Elder Cube** (two words) is the
 artifact inside it.
@@ -302,12 +302,72 @@ Rough ascending cost:
 3. ✅ Elder Cube item (186), vault placement in the deep dark, carry costs
 4. ✅ Siege escalation while socketed (`setCubePressure` in `js/mobs.js`)
 5. ✅ Map screen — **Tab**, not M (M is already the music toggle)
-6. Bearer flee behaviour on Cube drop — *medium*
-7. Village ally states — *small*, reuses `trades`/`gift`/`lines`
-8. Host-authoritative Cube ownership in `net.js` — *medium*, **required before
-   multiplayer ships**
-9. Four shards / faction quests — *large*
-10. Endings — *large*
+6. ✅ Bearer flee behaviour on Cube drop (`js/mobs.js`)
+7. ✅ Host-authoritative Cube ownership + hand-off (`js/net.js`, `/cube give`)
+8. ✅ Milestone rewards at 1/5/10/25% — wider discs, quicker sieges
+9. Village ally states — *small*, reuses `trades`/`gift`/`lines`
+10. Four shards / faction quests — *large*
+11. Endings — *large*
+
+## 15. Milestone rewards
+
+Horde intel only ever climbs, so reclaiming has to compound. Each tier makes the
+Cube itself stronger, indexed by percent of the world claimed:
+
+| Tier | At | Keepstone reach | Seconds per block |
+| ---- | -- | --------------- | ----------------- |
+| 0 | —     | 24 | 3.0 |
+| 1 | 1%    | 28 | 3.0 |
+| 2 | 5%    | 28 | 2.6 |
+| 3 | 10%   | 32 | 2.6 |
+| 4 | 25%   | 32 | 2.2 |
+
+A stone's target radius is **locked when the Cube is seated** (`s.target`), so a
+milestone crossed mid-siege never retroactively un-finishes a disc that already
+went dormant. The tier itself is re-derived from the claim percent on load rather
+than stored — the percent is the source of truth.
+
+## 16. The siege must stay dangerous
+
+Ground a Keepstone is still working on is **drawn as claimed but is not yet
+safe**. Without that split the siege sabotaged itself: the horde spawns in a
+16–30 block ring around the player, the disc grows to 24, and by mid-siege the
+stone's own claimed ground was rejecting most spawn attempts — so the hardest
+fight in the game became the quietest.
+
+`claim.js` therefore has two readings:
+
+- `claimedVisual(x,z)` — the raw bit. Drives the warm ground skin and the map,
+  so the sweep is still visible as it happens.
+- `claimed(x,z)` — visual **and** not inside an unfinished siege. This is the
+  gameplay truth the spawn gate uses.
+
+You are defending ground that does not protect you yet. It becomes safe the
+moment the stone tops out.
+
+## 17. The reliquary and the False Cube
+
+A stone that finishes its disc **and** gives the Cube back leaves a reliquary —
+a small chest hovering over the empty cradle. Clicking it yields three random
+salvage stacks plus, always, a **False Cube** (item 187).
+
+The False Cube claims nothing; the ground it sits on is already permanent. Seat
+it in a spent cradle and the dormant stone becomes a fixed lamp. It is the
+game's only way to make a Keepstone useful after its work is done, and it turns
+a finished claim site into a landmark you can see across the dark.
+
+## 18. The Bearer
+
+Die holding the Cube and it falls where you did. The first zombie to reach a
+loose Cube becomes the **Bearer**: it lights up, stops fighting entirely, and
+runs directly away from the nearest player at 1.35× speed.
+
+- Kill it → the Cube drops where it fell.
+- Let it get **110 blocks** from every player → it reaches the dark, and the Cube
+  is laid back in its vault.
+
+Either way the Cube survives. The cost of losing it is the walk back down, never
+the run.
 
 ## 14. Implementation notes worth keeping
 

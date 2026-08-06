@@ -12,6 +12,40 @@ import { scene, makeCharacter, ZOMBIE_SKIN, spawnParticles, VIEW, nearestTorchDi
 import { sfx } from './audio.js';
 import { gm } from './mode.js';
 import { claimed } from './claim.js';
+import * as drops from './drops.js';
+import * as eldercube from './eldercube.js';
+
+// ---- The Bearer ------------------------------------------------------------
+// A zombie that reaches a loose Elder Cube picks it up and stops fighting: it
+// lights up, gets quick, and runs for the dark. Kill it and the Cube drops.
+// Let it get away and the Cube goes home to its vault — a setback measured in
+// time, never a loss. The Cube is the one thing that can never be destroyed.
+const BEARER_ESCAPE_DIST = 110;   // blocks from every player before it's gone
+let bearerId = 0;
+export const getBearerId = ()=>bearerId;
+let onCubeHome = null;
+export function setCubeHomeHook(fn){ onCubeHome = fn; }
+
+function markBearer(zb){
+  bearerId = zb.id;
+  zb.bearer = true;
+  zb.eyes?.forEach?.(m => m.color.setHex(0xffc873));
+  const glow = box(.4,.4,.4, 0xffc873, 0, 1.9, 0);
+  glow.material.emissive?.setHex?.(0x8a5a1e);
+  zb.bearerGlow = glow;
+  (zb.c.holder || zb.c.g).add(glow);
+}
+function clearBearer(zb){
+  bearerId = 0;
+  zb.bearer = false;
+  if(zb.bearerGlow){ (zb.c.holder || zb.c.g).remove(zb.bearerGlow); zb.bearerGlow = null; }
+}
+/** Hand the Cube back to the world wherever the Bearer was standing. */
+function dropFromBearer(zb){
+  const p = zb.c.g.position;
+  clearBearer(zb);
+  return drops.spill(186, 1, p.x, p.y + .4, p.z);
+}
 
 export const zombies = new Map(); // id -> zombie
 export const corpses = new Map(); // id -> {mesh, x,y,z, feed}
@@ -169,6 +203,8 @@ export function hit(id, dmg){
   spawnParticles(zb.c.g.position.x, zb.c.g.position.y+1, zb.c.g.position.z, 0x8b2b2b, 6);
   if(zb.hp<=0){
     const wasDormant = zb.dormant;
+    // Killing the Bearer is the whole point of the chase — it must give the Cube up.
+    if(zb.bearer) dropFromBearer(zb);
     remove(id);
     killCount += wasDormant ? 3 : 1; // day-hunting hiders drains the horde faster
     if(killCount>=10){ killCount-=10; intelDown(); }
@@ -244,6 +280,24 @@ export function hostTick(dt, dl, targets){
     if(!zombies.size) return {hurts, digs};
   }
 
+  // A loose Cube on the ground is bait. The first zombie to reach it becomes
+  // the Bearer; there can only ever be one, because there is only one Cube.
+  if(!bearerId){
+    const loose = drops.serialize().find(d => d[1] === 186);
+    if(loose){
+      const [, , , lx, ly, lz] = loose;
+      for(const zb of zombies.values()){
+        const p = zb.c.g.position;
+        if(Math.abs(p.y - ly) < 2.5 && wrapDist(p.x, p.z, lx, lz) < 1.6){
+          drops.removeById(loose[0]);
+          markBearer(zb);
+          sfx.zgroan?.();
+          break;
+        }
+      }
+    }
+  }
+
   const speed = intel>=1 ? 2.1 : 1.7;
   for(const zb of zombies.values()){
     const p = zb.c.g.position;
@@ -275,6 +329,44 @@ export function hostTick(dt, dl, targets){
       if(dz > WORLD/2) dz -= WORLD; if(dz < -WORLD/2) dz += WORLD;
       return Math.hypot(dx, dz);
     };
+
+    // The Bearer does not fight. It runs, directly away from the nearest player,
+    // and if it gets clear the Cube returns to the vault it came from.
+    if(zb.bearer){
+      let near = null, nearD = 1e9;
+      for(const t of targets){
+        const d = distXZ(t.x, t.z, p.x, p.z);
+        if(d < nearD){ nearD = d; near = t; }
+      }
+      if(near){
+        let adx = p.x-near.x, adz = p.z-near.z;
+        if(adx > WORLD/2) adx -= WORLD; if(adx < -WORLD/2) adx += WORLD;
+        if(adz > WORLD/2) adz -= WORLD; if(adz < -WORLD/2) adz += WORLD;
+        zb.yaw = Math.atan2(adz, adx);           // straight away from them
+      } else if(Math.random() < dt*.4){
+        zb.yaw += (Math.random()-.5)*2;
+      }
+      if(nearD > BEARER_ESCAPE_DIST){
+        clearBearer(zb);                          // it got away — no drop here
+        onCubeHome?.();                           // main.js lays it back in the vault
+        remove(zb.id, false);
+        continue;
+      }
+      // fast, but not uncatchable — a sprinting player closes on it
+      const bsp = speed * 1.35;
+      const bnx2 = p.x + Math.cos(zb.yaw)*bsp*dt;
+      const bnz2 = p.z + Math.sin(zb.yaw)*bsp*dt;
+      const bgy = floorAt(Math.round(bnx2), p.y+1.6, Math.round(bnz2));
+      if(bgy >= 0 && bgy - Math.round(p.y-.5) <= 1){
+        p.x = ((bnx2 % WORLD) + WORLD) % WORLD;
+        p.z = ((bnz2 % WORLD) + WORLD) % WORLD;
+        p.y = bgy + .5;
+      } else {
+        zb.yaw += (Math.random()-.5)*1.6;        // blocked — pick a new way out
+      }
+      zb.c.g.rotation.y = -zb.yaw + Math.PI/2;
+      continue;
+    }
 
     // choose target: nearest player, or an unattended corpse
     let best = null, bestD = 28, isCorpse = false;

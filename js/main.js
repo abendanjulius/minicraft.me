@@ -42,7 +42,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.3.8'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.4.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -369,9 +369,32 @@ function begin(seed, edits, authority, saved){
     isAuthority = authority;
     survival.initSurvival({
       onRespawn: ()=>playerMod.spawn(),
-      onDeath: ()=>net.reportDeath(playerMod.player.pos),
+      onDeath: ()=>{
+        net.reportDeath(playerMod.player.pos);
+        // The Cube is never destroyed — dying scatters it. It lands lit and
+        // visible, and the horde will come for it.
+        if(inventory[186] > 0){
+          const p = playerMod.player.pos;
+          delete inventory[186];
+          for(let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]?.id===186) hotbarSlots[i] = null;
+          eldercube.setCubeOwner(null);
+          const payload = drops.spill(186, 1, p.x, p.y + 0.5, p.z);
+          if(payload) net.sendDrop(payload);
+          survival.note('cubelost');
+          net.systemMsg('💠 The Elder Cube has fallen. Recover it before the horde carries it off.');
+        }
+      },
     });
     mobs.setAnnouncer((text, iq)=>{ net.systemMsg(text); setHordeHud(iq); });
+    // A Bearer that escapes carries the Cube back into the deep dark. It is not
+    // lost — it is waiting in its vault again, and you have to go down for it.
+    mobs.setCubeHomeHook(()=>{
+      const v = eldercube.vaultRecord();
+      if(!v) return;
+      eldercube.setCubeOwner(null);
+      eldercube.layAt(v.x, v.y + 1, v.z);
+      net.systemMsg('💠 The Bearer reached the dark. The Elder Cube lies in its vault once more.');
+    });
     if(authority && saved) setMode(saved.mode==='forge');
     survival.showVitals(!gm.forge);
     $('btnMode').style.display = (net.mode==='client') ? 'none' : 'flex';
@@ -624,6 +647,15 @@ function loop(now){
       addChat('⚙', `The Keepstone goes quiet. ${claim.claimedPercent().toFixed(2)}% of the world is claimed for good.`);
       survival.note('keepfull');
     });
+    // Milestone crossings: the Cube itself grows stronger as the world remembers
+    // the light, which is what keeps reclaiming ahead of rising horde intel.
+    const newTier = claim.advanceTier();
+    if(newTier > 0){
+      survival.note('milestone', newTier);
+      const pct = claim.TIERS[newTier-1];
+      net.systemMsg(`🕯 ${pct}% reclaimed — the Elder Cube burns brighter. ` +
+        `Keepstones now reach ${keepstones.maxRadius()} blocks, claiming a block every ${keepstones.secsPerBlock()}s.`);
+    }
     if(isAuthority) keg.tick(dt, playerMod.player.pos, (edits)=>net.syncEdits(edits));
     // auto-pickup when close
     pickupCd = (pickupCd||0) - dt;

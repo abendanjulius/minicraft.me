@@ -2,7 +2,7 @@
 import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, topY, surfaceY } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
-import { claimed, claimedCells } from './claim.js';
+import { claimedVisual, claimedCells } from './claim.js';
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 export const VIEW = isTouch ? 56 : 120;
@@ -1101,7 +1101,7 @@ export function buildChunk(cx,cz){
     // idea, and cave floors in a claimed column must not light up underground.
     for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       const x = x0+lx, z = z0+lz;
-      if(!claimed(x, z)) continue;
+      if(!claimedVisual(x, z)) continue;
       // surfaceY, NOT topY: topY returns the highest non-air block, which on
       // plains is a grass tuft or a flower, and those are custom-mesh blocks we
       // skip — so every flowered column silently lost its skin and the claim
@@ -1469,6 +1469,27 @@ export function makeElderCubeMesh(size = .5){
   }
   g.userData.core = core;
   g.userData.shell = shell;
+  return g;
+}
+
+/**
+ * The reliquary a spent Keepstone leaves behind — a small chest that hovers
+ * over the empty cradle until it is collected.
+ */
+export function makeReliquaryMesh(){
+  const g = new THREE.Group();
+  const WOOD = 0x9a6b3a, DARK = 0x5b3d1f, GOLD = 0xffc873;
+  g.add(box(.34, .22, .26, WOOD, 0, 0, 0));
+  g.add(box(.36, .06, .28, DARK, 0, .13, 0));      // lid rim
+  g.add(box(.36, .05, .28, GOLD, 0, -.12, 0));     // gilt foot
+  const latch = box(.07, .08, .04, GOLD, 0, .02, .15);
+  latch.material.emissive?.setHex?.(0x6b4410);
+  g.add(latch);
+  for(const sx of [-1, 1]){
+    const band = box(.03, .24, .28, GOLD, sx * .14, 0, 0);
+    band.material.emissive?.setHex?.(0x4a2f0a);
+    g.add(band);
+  }
   return g;
 }
 

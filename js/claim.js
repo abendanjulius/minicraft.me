@@ -28,10 +28,30 @@ export const grid = () => bits;
 export const claimedCells = () => count;
 export const claimedPercent = () => (count / (GRID * GRID)) * 100;
 
-/** Is this world position on claimed ground? Wraps. */
-export function claimed(x, z){
+// Ground a Keepstone is still working on is drawn as claimed but is NOT yet
+// safe. Without this the siege sabotages itself: the horde spawns in a 16–30
+// block ring around you, the disc grows to 24, and by mid-siege its own claimed
+// ground was rejecting most spawns — so the hardest fight in the game quietly
+// became the quietest. You are defending ground that does not protect you yet.
+let siege = null;   // {x, z, r} of the stone currently claiming
+export function setSiegeZone(s){ siege = s; }
+function inSiege(x, z){
+  if(!siege) return false;
+  let dx = wrapC(x) - siege.x, dz = wrapC(z) - siege.z;
+  if(dx >  WORLD/2) dx -= WORLD; if(dx < -WORLD/2) dx += WORLD;
+  if(dz >  WORLD/2) dz -= WORLD; if(dz < -WORLD/2) dz += WORLD;
+  return dx*dx + dz*dz <= siege.r * siege.r;
+}
+
+/** Raw claim bit — what the ground LOOKS like. Used for the tint and the map. */
+export function claimedVisual(x, z){
   const i = idxOf(cellOf(x), cellOf(z));
   return (bits[i >> 3] & (1 << (i & 7))) !== 0;
+}
+
+/** Is this ground actually safe? Gameplay truth — used by the spawn gate. */
+export function claimed(x, z){
+  return claimedVisual(x, z) && !inSiege(x, z);
 }
 
 /** Claim one cell by cell-coords. Returns true if it was newly claimed. */
@@ -66,7 +86,30 @@ export function claimDisc(x, z, radius){
   return gained;
 }
 
-export function clear(){ bits = new Uint8Array(BYTES); count = 0; }
+// ---- Milestones ------------------------------------------------------------
+// Horde intel only ever climbs, so reclaiming has to compound or the long game
+// gets strictly harder with nothing to show for it. Each tier makes the Cube
+// itself stronger — wider discs, faster sieges — so the light gains ground on
+// the dark instead of merely keeping pace.
+export const TIERS = [1, 5, 10, 25];   // percent of the world reclaimed
+let tier = 0;
+export const claimTier = () => tier;
+
+function tierFor(pct){
+  let t = 0;
+  for(let i = 0; i < TIERS.length; i++) if(pct >= TIERS[i]) t = i + 1;
+  return t;
+}
+/** Recompute from the current claim. Returns the new tier if it advanced, else -1. */
+export function advanceTier(){
+  const t = tierFor(claimedPercent());
+  if(t > tier){ tier = t; return t; }
+  return -1;
+}
+/** Set the tier without announcing it — used when loading a save. */
+export function syncTier(){ tier = tierFor(claimedPercent()); }
+
+export function clear(){ bits = new Uint8Array(BYTES); count = 0; tier = 0; }
 
 // ---- save / restore --------------------------------------------------------
 // Run-length encoded, then base64. Early worlds are almost entirely zeros, so a
@@ -103,4 +146,5 @@ export function restore(str){
     let b = bits[i];
     while(b){ count += b & 1; b >>= 1; }
   }
+  syncTier(); // re-derive rather than store it — the percent is the source of truth
 }

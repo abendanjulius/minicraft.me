@@ -52,6 +52,10 @@ const ACH = [
   {id:'cube1',  name:'The Last Light', goal:'Find the Elder Cube'},
   {id:'keep1',  name:'Cradle',         goal:'Socket the Elder Cube into a Keepstone'},
   {id:'keepfull',name:'Reclaimed',     goal:'Fill a Keepstone’s claim to its edge'},
+  {id:'claim1', name:'First Light',    goal:'Reclaim 1% of the world'},
+  {id:'claim5', name:'Widening Dawn',  goal:'Reclaim 5% of the world'},
+  {id:'claim10',name:'The Long Light', goal:'Reclaim 10% of the world'},
+  {id:'claim25',name:'Dominion',       goal:'Reclaim a quarter of the world'},
 ];
 const unlocked = new Set(JSON.parse(localStorage.getItem('mc_ach')||'[]'));
 let placedCount = +(localStorage.getItem('mc_placed')||0);
@@ -100,6 +104,11 @@ export function note(what, arg){
   if(what==='cube'){ unlock('cube1'); toast('💠 The Elder Cube — it lights your way, it will not protect you'); }
   if(what==='socket'){ unlock('keep1'); toast('💠 Seated. Hold this ground.'); }
   if(what==='keepfull'){ unlock('keepfull'); toast('🕯 Claimed for good — the night cannot return here'); }
+  if(what==='milestone'){
+    const id = ['claim1','claim5','claim10','claim25'][arg-1];
+    if(id) unlock(id);
+  }
+  if(what==='cubelost'){ toast('💠 You dropped the Elder Cube — get it back before they do'); }
 }
 
 // ---- Vitals UI ----

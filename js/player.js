@@ -23,6 +23,25 @@ import * as claimMap from './map.js';
 const slotFood = ()=>{ const s = hotbarSlots[sel.slot]; const it = s&&s.k==='f' ? ITEMS[s.id] : null; return (it && (it.food || it.heal)) ? s.id : 0; };
 
 /**
+ * Reliquary loot. Salvage worth the siege but not worth farming: the real prize
+ * is the False Cube, which is granted separately and always.
+ */
+const RELIQUARY_LOOT = [
+  [122, 2], [126, 2], [120, 4], [121, 3],   // crystal shards, ingots, coal, iron
+  [40, 2], [10, 8], [17, 3], [23, 1],       // lanterns, torches, crystal block, iron block
+  [143, 1], [171, 1], [114, 6], [130, 2],   // crystal sword, medkit, berries, tonic
+];
+function rollReliquary(){
+  const pool = [...RELIQUARY_LOOT];
+  const out = [];
+  for(let i = 0; i < 3 && pool.length; i++){
+    const [id, n] = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    out.push([id, 1 + Math.floor(Math.random() * n)]);
+  }
+  return out;
+}
+
+/**
  * Ray direction through the CROSSHAIR pixel (not blindly through the canvas
  * centre). Built analytically from fov/aspect so it never depends on the
  * camera's matrix being up to date this frame. On mobile the canvas and the
@@ -688,8 +707,35 @@ export function placeAction(rIn){
         }
         return;
       }
+      // A spent stone that gave the Cube back leaves a reliquary. Collect it.
+      if(keepstones.hasReward(st)){
+        keepstones.takeReward(hx,hy,hz);
+        const loot = rollReliquary();
+        for(const [id,n] of loot) for(let i=0;i<n;i++) addToInventory(id);
+        addToInventory(187);                 // the False Cube is always in there
+        renderHotbar();
+        addChat('⚙', 'The reliquary opens: ' +
+          loot.map(([id,n])=>n+'× '+(TYPES[id]?.name || ITEMS[id]?.name || id)).join(', ') +
+          ', and a False Cube.');
+        placeAnim = 1; sfx.place();
+        return;
+      }
+      // A spent stone will hold a False Cube as a permanent lamp.
+      if(keepstones.isDone(st) && !keepstones.isLamp(st) && inventory[187] > 0){
+        if(keepstones.seatFalseCube(hx,hy,hz)){
+          inventory[187]--;
+          if(inventory[187] <= 0) delete inventory[187];
+          for(let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]?.id===187 && !(inventory[187]>0)) hotbarSlots[i]=null;
+          renderHotbar();
+          addChat('⚙', 'The False Cube settles into the spent cradle. It will burn here.');
+          placeAnim = 1; sfx.place();
+        }
+        return;
+      }
       if(keepstones.isDone(st)){
-        addChat('⚙', 'This Keepstone has finished its work.');
+        addChat('⚙', keepstones.isLamp(st)
+          ? 'This Keepstone burns quietly. Its claiming is long done.'
+          : 'This Keepstone has finished its work.');
         return;
       }
       // Keyed on carrying it, not on having it selected — the Cube lives in the
