@@ -207,7 +207,7 @@ body:not(.touch) #btnQuit{right:10px}
 
 /* v1.2 — survival */
 #vitals{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);display:none;gap:26px;z-index:2;pointer-events:none}
-#hearts,#hungerBar{display:flex;gap:1px}
+#hearts,#hungerBar,#airBar{display:flex;gap:1px}
 .vit{font-size:14px;text-shadow:1px 1px 1px #000}
 .vit.half{opacity:.55}
 .vit.off{opacity:.18;filter:grayscale(1)}

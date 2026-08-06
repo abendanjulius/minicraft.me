@@ -14,7 +14,14 @@ function armorPoints(){
 
 
 const $ = id=>document.getElementById(id);
-export const sv = { hp:20, hunger:20, dead:false };
+export const sv = { hp:20, hunger:20, air:20, dead:false };
+
+// Breath. Drains only while the HEAD is under — wading chest-deep is fine.
+// ~15s of air, then a heart every 2s; refills fast the moment you surface.
+const AIR_MAX = 20, AIR_DRAIN = AIR_MAX/15, AIR_REFILL = AIR_MAX/2.5, DROWN_EVERY = 2;
+let submerged = false, drownT = 0;
+export function setSubmerged(v){ submerged = !!v; }
+export const isSubmerged = ()=> submerged;
 let bedSpawn = null; // {x,y,z}
 export function getBedSpawn(){ return bedSpawn; }
 export function setBedSpawn(x,y,z){
@@ -113,13 +120,19 @@ export function note(what, arg){
 
 // ---- Vitals UI ----
 export function renderVitals(){
-  const h = $('hearts'), f = $('hungerBar');
-  let hs = '', fs = '';
+  const h = $('hearts'), f = $('hungerBar'), a = $('airBar');
+  let hs = '', fs = '', as = '';
   for(let i=0;i<10;i++){
     hs += `<span class="vit ${sv.hp     > i*2+1 ? '' : sv.hp     > i*2 ? 'half' : 'off'}">❤</span>`;
     fs += `<span class="vit ${sv.hunger > i*2+1 ? '' : sv.hunger > i*2 ? 'half' : 'off'}">🍗</span>`;
+    as += `<span class="vit ${sv.air    > i*2+1 ? '' : sv.air    > i*2 ? 'half' : 'off'}">🫧</span>`;
   }
   h.innerHTML = hs; f.innerHTML = fs;
+  if(a){
+    // Only surfaces when it matters — a full bar of bubbles is just clutter.
+    a.innerHTML = as;
+    a.style.display = sv.air >= 20 ? 'none' : 'block';
+  }
 }
 
 export let godMode = false;
@@ -141,13 +154,15 @@ export function damage(n, cause){
 function die(cause){
   sv.dead = true;
   onDeath?.();
-  const msg = {fall:'You fell from a high place', zombie:'A zombie got you', starve:'You starved'}[cause] || 'You died';
+  const msg = {fall:'You fell from a high place', zombie:'A zombie got you', starve:'You starved',
+               drown:'You drowned'}[cause] || 'You died';
   $('deathMsg').textContent = msg;
   $('deathScreen').style.display = 'flex';
   document.exitPointerLock?.();
 }
 export function respawn(){
-  sv.dead = false; sv.hp = 20; sv.hunger = 20;
+  sv.dead = false; sv.hp = 20; sv.hunger = 20; sv.air = 20;
+  drownT = 0;
   renderVitals();
   $('deathScreen').style.display = 'none';
   onRespawn?.();
@@ -173,8 +188,27 @@ export function eatSelected(foodId){
 
 // Called every frame from the main loop. moving = horizontal movement, dl = daylight 0..1
 export function tick(dt, moving, dl){
-  if(gm.forge || sv.dead) return;
+  if(gm.forge || sv.dead){
+    // Forge and death both reset breath, so surfacing isn't a punishment later.
+    if(sv.air !== 20){ sv.air = 20; renderVitals(); }
+    return;
+  }
   eatCd = Math.max(0, eatCd - dt);
+
+  // ---- breath ----
+  const airWas = sv.air;
+  if(submerged){
+    sv.air = Math.max(0, sv.air - dt * AIR_DRAIN);
+    if(sv.air <= 0){
+      drownT += dt;
+      if(drownT >= DROWN_EVERY){ drownT = 0; damage(2, 'drown'); }
+    }
+  } else {
+    sv.air = Math.min(AIR_MAX, sv.air + dt * AIR_REFILL);
+    drownT = 0;
+  }
+  if(Math.ceil(airWas) !== Math.ceil(sv.air)) renderVitals();
+
   // hunger drains slowly, faster while moving
   sv.hunger = Math.max(0, sv.hunger - dt*(.015 + (moving?.02:0)));
   // starving hurts; full-ish hunger regenerates

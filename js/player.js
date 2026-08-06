@@ -1100,6 +1100,10 @@ export function update(dt, elapsed){
     const body = getBlock(Math.round(player.pos.x), Math.round(player.pos.y + 0.6), Math.round(player.pos.z));
     const inWater = feet === 64 || body === 64;
     setUnderwater?.(inWater);
+    // Breath is about the HEAD, not the feet — wading chest-deep should not
+    // drown you. Eye height is ~1.6 above the player origin.
+    const head = getBlock(Math.round(player.pos.x), Math.round(player.pos.y + 1.5), Math.round(player.pos.z));
+    survival.setSubmerged(head === 64);
     if(inWater && !(state.flying && gm.forge)) speed *= 0.45;
     const fwd = new THREE.Vector3(-Math.sin(view.yaw),0,-Math.cos(view.yaw));
     const right = new THREE.Vector3(-fwd.z,0,fwd.x);
