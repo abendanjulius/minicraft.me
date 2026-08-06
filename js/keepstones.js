@@ -6,7 +6,7 @@
 // tops out the stone goes dormant and you carry the Cube to the next site.
 //
 // There is exactly one Cube per world, so at most one Keepstone is ever active.
-import { scene, box, placeWrapped, rebuildAt } from './render.js';
+import { scene, box, placeWrapped, rebuildAt, makeElderCubeMesh } from './render.js';
 import { wrapC, CH } from './world.js';
 import * as claim from './claim.js';
 
@@ -88,8 +88,12 @@ function remeshRing(x, z, prevR, newR){
 // ---- visuals ---------------------------------------------------------------
 function makeMesh(s){
   if(s.mesh) return;
-  const m = box(.42,.42,.42, 0xffc873, s.x, s.y + 1.0, s.z);
-  m.material.emissive?.setHex?.(0x8a5a1e); // reads as lit even in full dark
+  // The seated Cube is the same model as the loose one, riding the cradle, plus
+  // a real light so a working Keepstone is visible across the dark.
+  const m = makeElderCubeMesh(.46);
+  m.position.set(s.x, s.y + 1.0, s.z);
+  const lamp = new THREE.PointLight(0xffc873, 1.5, 14);
+  m.add(lamp);
   s.mesh = m;
   scene.add(m);
 }

@@ -945,7 +945,7 @@ const chunkMeshes = new Array(CHUNKS*CHUNKS).fill(null);
 const dummy = new THREE.Object3D();
 
 function isCustomMeshBlock(t){
-  return t===10 || t===11 || t===44
+  return t===10 || t===11 || t===43 || t===44
     || (t>=48&&t<=55) || (t>=70&&t<=93)
     || t===56 || t===58 || t===59 || t===60 || t===61 || t===62 || t===63 || t===65
     || t===66 || t===67 || t===68 || t===69
@@ -1427,6 +1427,80 @@ function makeChestMesh(x,y,z){
   g.position.set(x,y,z); g.userData.base=[x,y,z];
   return g;
 }
+/**
+ * The Elder Cube itself — used for the loose world drop, the seated Keepstone,
+ * and the off-hand model, so it reads as the same object everywhere.
+ * A dark iron cage around a bright core, with gold ribs along every edge.
+ */
+export function makeElderCubeMesh(size = .5){
+  const g = new THREE.Group();
+  const CAGE = 0x2b2418, GOLD = 0xffc873, CORE = 0xfff3d2;
+  const s = size, h = s/2, r = s*0.09; // rib thickness
+
+  // Inner core — the light everything else is a shard of.
+  const core = box(s*.62, s*.62, s*.62, CORE, 0,0,0);
+  core.material.emissive?.setHex?.(0xffdca8);
+  g.add(core);
+
+  // Translucent shell so the core glows through instead of being hidden.
+  const shellGeo = new THREE.BoxGeometry(s*.86, s*.86, s*.86);
+  const shell = new THREE.Mesh(shellGeo, new THREE.MeshLambertMaterial({
+    color: GOLD, transparent: true, opacity: .45, emissive: 0x6b4410,
+  }));
+  g.add(shell);
+
+  // 12 gold ribs — one per cube edge. This is what makes it read as an
+  // artefact rather than a plain block at any distance.
+  for(const [ax, ay, az] of [[1,0,0],[0,1,0],[0,0,1]]){
+    for(const u of [-h, h]) for(const v of [-h, h]){
+      const w = ax ? s : r, ht = ay ? s : r, d = az ? s : r;
+      const px = ax ? 0 : (ay ? u : u);
+      const py = ay ? 0 : (ax ? u : v);
+      const pz = az ? 0 : (ax ? v : v);
+      const rib = box(w, ht, d, GOLD, px, py, pz);
+      rib.material.emissive?.setHex?.(0x8a5a1e);
+      g.add(rib);
+    }
+  }
+  g.userData.core = core;
+  g.userData.shell = shell;
+  return g;
+}
+
+/**
+ * Keepstone — a carved pedestal, not a cube: stepped base, tapered column and
+ * an open cradle of four arms waiting for the Cube. Crystal veins run up the
+ * column so it reads as built-for-purpose even when empty and unlit.
+ */
+function makeKeepstoneMesh(x,y,z){
+  const g = new THREE.Group();
+  const STONE = 0x4e5460, DARK = 0x3a3f49, LIGHT = 0x6b7280, VEIN = 0x9fe8ff;
+
+  g.add(box(.94, .12, .94, DARK,  0, -.44, 0));   // footing
+  g.add(box(.78, .10, .78, STONE, 0, -.33, 0));   // step
+  g.add(box(.60, .08, .60, LIGHT, 0, -.25, 0));   // step lip
+
+  g.add(box(.34, .46, .34, STONE, 0,  .02, 0));   // column
+  // crystal veins up all four faces
+  for(const [dx,dz,w,d] of [[.18,0,.03,.16],[-.18,0,.03,.16],[0,.18,.16,.03],[0,-.18,.16,.03]]){
+    const v = box(w, .34, d, VEIN, dx, .02, dz);
+    v.material.emissive?.setHex?.(0x2d5f70);
+    g.add(v);
+  }
+
+  g.add(box(.56, .09, .56, LIGHT, 0, .29, 0));    // capital
+  // cradle: four arms leaving the centre open for the Cube
+  for(const [dx,dz] of [[.2,.2],[-.2,.2],[.2,-.2],[-.2,-.2]]){
+    const arm = box(.14, .22, .14, STONE, dx, .44, dz);
+    g.add(arm);
+    const tip = box(.10, .05, .10, VEIN, dx, .56, dz);
+    tip.material.emissive?.setHex?.(0x2d5f70);
+    g.add(tip);
+  }
+
+  g.position.set(x,y,z); g.userData.base=[x,y,z];
+  return g;
+}
 function makeFenceMesh(x,y,z){
   const g = new THREE.Group();
   const wood = 0x8a6236;
@@ -1447,7 +1521,7 @@ function makeLadderMesh(x,y,z){
 }
 export function trackSpecial(x,y,z,prev,t){
   const k = wrapC(x)+','+y+','+wrapC(z);
-  const specialIds = new Set([11,44,56,59,60,61,62,63,66,67,68,69]);
+  const specialIds = new Set([11,43,44,56,59,60,61,62,63,66,67,68,69]);
   if(specialIds.has(prev) && specialMeshes.has(k)){
     scene.remove(specialMeshes.get(k)); specialMeshes.delete(k);
   }
@@ -1457,6 +1531,7 @@ export function trackSpecial(x,y,z,prev,t){
   if(t===61) m = makeSlabMesh(wrapC(x),y,wrapC(z),t);
   else if(t===59||t===60) m = makeStairsMesh(wrapC(x),y,wrapC(z),t);
   else if(t===62||t===63) m = makeTrapdoorMesh(wrapC(x),y,wrapC(z),t===63);
+  else if(t===43) m = makeKeepstoneMesh(wrapC(x),y,wrapC(z));
   else if(t===56) m = makeChestMesh(wrapC(x),y,wrapC(z));
   else if(t===11) m = makeFenceMesh(wrapC(x),y,wrapC(z));
   else if(t===44) m = makeLadderMesh(wrapC(x),y,wrapC(z));

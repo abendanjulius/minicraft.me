@@ -1,7 +1,7 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
+         makeHeldItemIcon, makeElderCubeMesh, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, addChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';
@@ -112,21 +112,24 @@ handGroup.add(armPivot);
 // build while carrying it: that hand is full.
 const offHandGroup = new THREE.Group();
 camera.add(offHandGroup);
-offHandGroup.position.set(-0.34, -0.40, -0.62);
+offHandGroup.position.set(-0.36, -0.30, -0.62);
 let cubeInHand = null;
 export const carryingCube = ()=> (inventory[186] || 0) > 0;
 
 function updateOffHand(dt){
   const carrying = carryingCube();
   if(carrying && !cubeInHand){
-    cubeInHand = makeHeldItemIcon(186, 0.52);
+    cubeInHand = makeElderCubeMesh(0.16);
     cubeInHand.rotation.set(-0.15, 0.35, 0.1);
     offHandGroup.add(cubeInHand);
   } else if(!carrying && cubeInHand){
     offHandGroup.remove(cubeInHand);
-    cubeInHand.material?.map?.dispose?.();
-    cubeInHand.material?.dispose?.();
-    cubeInHand.geometry?.dispose?.();
+    // It is a Group of ribs/core/shell now, so dispose the whole tree.
+    cubeInHand.traverse(o=>{
+      o.material?.map?.dispose?.();
+      o.material?.dispose?.();
+      o.geometry?.dispose?.();
+    });
     cubeInHand = null;
   }
   if(cubeInHand){

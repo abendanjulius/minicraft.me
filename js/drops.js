@@ -1,6 +1,6 @@
 // drops.js — ground item entities: drop with Q, walk over to pick up
 import { WORLD, wrapC, topY, getBlock } from './world.js';
-import { scene, makeBlockCube, makeHeldItemIcon, TYPES, ITEMS, spawnParticles, placeWrapped, wrapDist } from './render.js';
+import { scene, makeBlockCube, makeHeldItemIcon, makeElderCubeMesh, TYPES, ITEMS, spawnParticles, placeWrapped, wrapDist } from './render.js';
 import { inventory, addToInventory, renderHotbar, hotbarSlots, sel, renderInv, invOpen } from './ui.js';
 import { gm } from './mode.js';
 import { sfx } from './audio.js';
@@ -17,6 +17,12 @@ export function init(isAuthority){
 
 function makeMesh(itemId){
   const g = new THREE.Group();
+  // The Elder Cube gets its real model — as a flat emoji billboard it read as a
+  // scrap of paper lying in a field, not the thing the game is named after.
+  if(itemId === 186){
+    g.add(makeElderCubeMesh(.52));
+    return g;
+  }
   if(itemId < 100 && TYPES[itemId]){
     const m = makeBlockCube(itemId, 0.28);
     g.add(m);
