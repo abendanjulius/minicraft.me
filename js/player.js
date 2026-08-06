@@ -621,8 +621,16 @@ export function placeAction(rIn){
   const r = rIn || castBlock();
   // Click door / crate / powder keg interactions
   if(r && r.hit){
-    const [hx,hy,hz] = r.hit;
-    const hit = getBlock(hx,hy,hz);
+    let [hx,hy,hz] = r.hit;
+    let hit = getBlock(hx,hy,hz);
+    // Forgiving aim for the Keepstone: the seated Cube is the eye-catching part
+    // and players aim at it, which can land a cell high. If the cell we hit is
+    // empty-ish and a Keepstone sits directly below, treat it as the stone.
+    if(hit !== 43 && getBlock(hx, hy-1, hz) === 43 && isWalkThrough(hit)){
+      hy -= 1; hit = 43;
+    } else if(hit !== 43 && r.place && getBlock(r.place[0], r.place[1]-1, r.place[2]) === 43){
+      hx = r.place[0]; hy = r.place[1]-1; hz = r.place[2]; hit = 43;
+    }
     if(isDoor(hit)){
       toggleDoorAt(hx,hy,hz);
       placeAnim = 1;
@@ -802,6 +810,12 @@ function updateMining(dt){
     const r = castBlock();
     if(!r){ state.mining=null; mineBar.style.display='none'; return; }
     [bx,by,bz] = r.hit;
+    // Same forgiving aim as placeAction: swinging at the seated Cube should dig
+    // the Keepstone holding it, not whatever lies far behind it.
+    if(getBlock(bx,by,bz) !== 43 && getBlock(bx,by-1,bz) === 43 && isWalkThrough(getBlock(bx,by,bz))) by -= 1;
+    else if(r.place && getBlock(r.place[0], r.place[1]-1, r.place[2]) === 43){
+      bx = r.place[0]; by = r.place[1]-1; bz = r.place[2];
+    }
   }
   let m = state.mining;
   if(!m || m.x!==bx || m.y!==by || m.z!==bz){

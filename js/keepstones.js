@@ -7,7 +7,7 @@
 //
 // There is exactly one Cube per world, so at most one Keepstone is ever active.
 import { scene, box, placeWrapped, rebuildAt, makeElderCubeMesh } from './render.js';
-import { wrapC, CH } from './world.js';
+import { wrapC } from './world.js';
 import * as claim from './claim.js';
 
 export const MAX_RADIUS = 24;   // world blocks — the disc a single stone can reach
@@ -68,14 +68,14 @@ export const isDone = s => s.radius >= MAX_RADIUS;
  * would re-run buildChunk on the same inner chunks ~24 times per siege.
  */
 function remeshRing(x, z, prevR, newR){
-  const outer = Math.ceil(newR), inner = Math.floor(prevR);
+  // Rebuild every chunk the disc currently overlaps, deduped WITHIN this step
+  // only. The old annulus skip left chunks that had already been meshed before
+  // the claim reached them, so finished discs kept permanent un-tinted patches.
+  const outer = Math.ceil(newR);
   const seen = new Set();
   for(let dz = -outer; dz <= outer; dz++){
     for(let dx = -outer; dx <= outer; dx++){
-      const d = Math.hypot(dx, dz);
-      if(d > outer) continue;
-      // skip the interior that was already claimed and meshed last step
-      if(d < inner - CH) continue;
+      if(dx*dx + dz*dz > newR*newR) continue;
       const wx = wrapC(x + dx), wz = wrapC(z + dz);
       const k = (wx >> 4) + ',' + (wz >> 4);
       if(seen.has(k)) continue;
@@ -90,8 +90,12 @@ function makeMesh(s){
   if(s.mesh) return;
   // The seated Cube is the same model as the loose one, riding the cradle, plus
   // a real light so a working Keepstone is visible across the dark.
-  const m = makeElderCubeMesh(.46);
-  m.position.set(s.x, s.y + 1.0, s.z);
+  // Seated at +0.38, INSIDE the pedestal's own block cell. It used to ride at
+  // +1.0 — a full block up in empty air — so aiming at the glowing Cube (the
+  // obvious target) shot straight through it, and the stone could be neither
+  // clicked to recover the Cube nor mined. The artefact must sit in the cradle.
+  const m = makeElderCubeMesh(.38);
+  m.position.set(s.x, s.y + 0.38, s.z);
   const lamp = new THREE.PointLight(0xffc873, 1.5, 14);
   m.add(lamp);
   s.mesh = m;
@@ -113,7 +117,7 @@ export function tick(dt, px, pz, onFull){
   for(const s of stones.values()){
     if(s.mesh){
       s.mesh.rotation.y += dt * 1.1;
-      s.mesh.position.y = s.y + 1.0 + Math.sin(performance.now() / 600) * 0.05;
+      s.mesh.position.y = s.y + 0.38 + Math.sin(performance.now() / 600) * 0.03;
       placeWrapped(s.mesh, s.x, s.mesh.position.y, s.z, px, pz);
     }
     if(!s.socketed || isDone(s)) continue;

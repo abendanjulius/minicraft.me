@@ -1,5 +1,5 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, topY } from './world.js';
+import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, topY, surfaceY } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
 import { claimed, claimedCells } from './claim.js';
@@ -1102,9 +1102,14 @@ export function buildChunk(cx,cz){
     for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       const x = x0+lx, z = z0+lz;
       if(!claimed(x, z)) continue;
-      const y = topY(x, z);
+      // surfaceY, NOT topY: topY returns the highest non-air block, which on
+      // plains is a grass tuft or a flower, and those are custom-mesh blocks we
+      // skip — so every flowered column silently lost its skin and the claim
+      // looked blotchy. surfaceY is the ground the player actually stands on.
+      const y = surfaceY(x, z);
       if(y < 0) continue;
       const t = getBlock(x, y, z);
+      // Water keeps its own surface; a warm quad floating on a lake reads wrong.
       if(!t || t === 64 || isCustomMeshBlock(t)) continue;
       tops.push([x,y,z]);
     }
@@ -1488,12 +1493,14 @@ function makeKeepstoneMesh(x,y,z){
     g.add(v);
   }
 
-  g.add(box(.56, .09, .56, LIGHT, 0, .29, 0));    // capital
-  // cradle: four arms leaving the centre open for the Cube
+  g.add(box(.56, .09, .56, LIGHT, 0, .22, 0));    // capital
+  // Cradle: four arms cupping the Cube. Kept low deliberately — the Cube has to
+  // sit INSIDE this block's cell, or aiming at it sends the ray through empty
+  // air above the pedestal and the stone becomes impossible to click or mine.
   for(const [dx,dz] of [[.2,.2],[-.2,.2],[.2,-.2],[-.2,-.2]]){
-    const arm = box(.14, .22, .14, STONE, dx, .44, dz);
+    const arm = box(.13, .20, .13, STONE, dx, .36, dz);
     g.add(arm);
-    const tip = box(.10, .05, .10, VEIN, dx, .56, dz);
+    const tip = box(.09, .05, .09, VEIN, dx, .47, dz);
     tip.material.emissive?.setHex?.(0x2d5f70);
     g.add(tip);
   }

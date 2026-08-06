@@ -291,6 +291,9 @@ export function tryCommand(raw){
       const id = resolveItem(args[0]);
       const n = Math.max(1, Math.min(64, +args[1] || 1));
       if(id == null){ reply('Usage: /give <id|name> [count]'); return true; }
+      // There is one Elder Cube per world and /give would happily mint more,
+      // which unravels the whole premise. /cube get moves the real one instead.
+      if(id === 186){ reply('The Elder Cube cannot be duplicated. Use /cube get to summon the one that exists.'); return true; }
       for(let i=0;i<n;i++) addToInventory(id);
       renderHotbar(); renderInv?.();
       const name = TYPES[id]?.name || ITEMS[id]?.name || id;
