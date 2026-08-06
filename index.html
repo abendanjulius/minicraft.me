@@ -8,7 +8,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.4.1">
+<link rel="stylesheet" href="./css/style.css?v=2.4.2">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -214,10 +214,13 @@
   <div id="btnInv">🎒</div>
   <div id="btnChat">💬</div>
 </div>
+<!-- Claim map. Lives outside #touchUI so desktop gets it too — Tab works, but a
+     visible button is the only way in on a phone. -->
+<div id="btnMap" style="display:none" title="Claim map">🗺️</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.4.1"></script>
+<script type="module" src="./js/main.js?v=2.4.2"></script>
 <script>
 (function(){
   function showRecover(msg){

@@ -67,6 +67,12 @@ function aimDir(){
  * nothing. Measured on real terrain, 8 blocks answered only ~82% of natural
  * taps; 12 answers ~90%, and taps past that are rare (median tap is ~3.5).
  */
+/** Open/close the claim map. Shared by the Tab key and the touch button. */
+export function toggleClaimMap(){
+  if(!state.playing) return;
+  claimMap.toggle(player.pos.x, player.pos.z);
+}
+
 export function castScreen(clientX, clientY, maxDist = 12){
   const n = screenToNDC(clientX, clientY);
   if(!n) return null;
@@ -453,7 +459,7 @@ export function initControls(){
     // Claim map. Tab, not M — M is already the music toggle.
     if(e.code==='Tab' && state.playing){
       e.preventDefault();
-      claimMap.toggle(player.pos.x, player.pos.z);
+      toggleClaimMap();
     }
     // Forge fly toggle
     if(e.code==='KeyF' && state.playing && gm.forge){

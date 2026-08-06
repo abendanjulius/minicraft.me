@@ -42,7 +42,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.4.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.4.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -424,6 +424,16 @@ function begin(seed, edits, authority, saved){
     $('loading').style.display = 'none';
     $('hud').style.display = 'block';
     $('btnQuit').style.display = 'flex';
+    // The map is Tab on a keyboard, but a phone has no Tab — this button is the
+    // only way in on touch, so it ships for everyone rather than touch-only.
+    const bm = $('btnMap');
+    if(bm){
+      bm.style.display = 'flex';
+      const openMap = e=>{ e.preventDefault(); e.stopPropagation();
+        playerMod.toggleClaimMap(); };
+      bm.addEventListener('click', openMap);
+      bm.addEventListener('touchstart', openMap, {passive:false});
+    }
     const bf = $('btnFly');
     if(bf) bf.style.display = (gm.forge && document.body.classList.contains('touch')) ? 'flex' : 'none';
     startMusic();

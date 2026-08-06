@@ -28,9 +28,14 @@ function build(){
 
   const hint = document.createElement('div');
   hint.style.cssText = 'font-size:11px;color:#8d97b8';
-  hint.textContent = 'Tab or Esc to close  ·  ▣ Keepstone  ·  ◆ village  ·  ✦ you';
+  hint.textContent = 'Tap anywhere to close  ·  ▣ Keepstone  ·  ◆ village  ·  ✦ you';
 
   el.append(title, cv, hint);
+  // The overlay sits above the HUD, so the map button is unreachable while it is
+  // open — on a phone that would trap you. Tapping the map itself closes it.
+  const dismiss = e=>{ e.preventDefault(); e.stopPropagation(); close(); };
+  el.addEventListener('click', dismiss);
+  el.addEventListener('touchstart', dismiss, {passive:false});
   document.body.appendChild(el);
 }
 
