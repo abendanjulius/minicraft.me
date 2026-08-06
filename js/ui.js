@@ -11,6 +11,12 @@ hotbarSlots[7] = {k:'t', id:'pick'};
 hotbarSlots[8] = {k:'t', id:'axe'};
 hotbarSlots[9] = {k:'t', id:'shovel'};
 export const sel = { slot:0 };
+
+// The Elder Cube is carried in the LEFT hand and nowhere else. It never takes a
+// hotbar slot, so it can never be equipped in the right hand alongside a weapon,
+// and there is nothing to "select" — carrying it is the whole state.
+export const OFFHAND_ONLY = 186;
+export const isOffhandOnly = id => +id === OFFHAND_ONLY;
 export const joy = { x:0, y:0 };
 
 const $ = id=>document.getElementById(id);
@@ -41,7 +47,7 @@ export function nextToolSlot(){
 export function addToInventory(t){
   inventory[t] = (inventory[t]||0)+1;
   const kind = t>=100 ? 'f' : 'b';
-  if(!hotbarSlots.some(s=>s?.k===kind && s.id===t)){
+  if(!isOffhandOnly(t) && !hotbarSlots.some(s=>s?.k===kind && s.id===t)){
     const empty = hotbarSlots.findIndex(s=>s===null);
     if(empty !== -1) hotbarSlots[empty] = {k:kind, id:t};
   }
@@ -100,7 +106,7 @@ export function renderHotbar(){
     d.addEventListener('drop', e=>{
       e.preventDefault();
       const data = e.dataTransfer.getData('text/plain');
-      if(data.startsWith('invb:')){ const id=+data.slice(5); hotbarSlots[i] = {k: id>=100?'f':'b', id}; }
+      if(data.startsWith('invb:')){ const id=+data.slice(5); if(!isOffhandOnly(id)) hotbarSlots[i] = {k: id>=100?'f':'b', id}; }
       else if(data.startsWith('invt:')) hotbarSlots[i] = {k:'t', id:data.slice(5)};
       else if(data.startsWith('slot:')){
         const j = +data.slice(5);
@@ -117,6 +123,13 @@ export function renderHotbar(){
           invPickTool = null;
         } else {
           const id = +invPick;
+          if(isOffhandOnly(id)){
+            showSlotName('The Elder Cube stays in your left hand');
+            invPick = null;
+            renderHotbar();
+            if(invOpen) renderInv();
+            return;
+          }
           hotbarSlots[i] = {k: id>=100 ? 'f' : 'b', id};
         }
         sel.slot = i;
@@ -435,6 +448,10 @@ function renderDetail(){
   }));
   box.querySelector('.dAssign').addEventListener('click', e=>{
     e.stopPropagation();
+    if(isOffhandOnly(id)){
+      showSlotName('The Elder Cube stays in your left hand');
+      return;
+    }
     hotbarSlots[sel.slot] = {k: id>=100 ? 'f' : 'b', id};
     if(gm.forge && id>=100 && !arcLocked(id)) inventory[id] = 999;
     renderHotbar();

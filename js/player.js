@@ -175,6 +175,15 @@ function updateHeld(){
   armMesh.material.color.setHex(sk);
   fistMesh.material.color.setHex(sk);
 
+  // The Elder Cube is off-hand only. It should never reach a hotbar slot, but a
+  // save written before that rule could still carry one — strip it rather than
+  // draw the Cube in both hands at once.
+  if(held?.id === 186){
+    hotbarSlots[sel.slot] = null;
+    poseArm('empty');
+    return;
+  }
+
   // Empty hand
   if(!held || (held.k!=='t' && !gm.forge && !(inventory[held.id]>0))){
     poseArm('empty');
@@ -655,7 +664,6 @@ export function placeAction(rIn){
         addChat('⚙', 'The Keepstone is cold in Forge. It only wakes in Nightfall.');
         return;
       }
-      const h = hotbarSlots[sel.slot];
       const st = keepstones.get(hx,hy,hz) || keepstones.place(hx,hy,hz);
       if(st.socketed){
         if(keepstones.unsocket(hx,hy,hz)){
@@ -673,10 +681,12 @@ export function placeAction(rIn){
         addChat('⚙', 'This Keepstone has finished its work.');
         return;
       }
-      if(h?.k==='f' && h.id===186 && inventory[186] > 0){
+      // Keyed on carrying it, not on having it selected — the Cube lives in the
+      // off-hand and never occupies a hotbar slot, so there is nothing to select.
+      if(carryingCube()){
         keepstones.socket(hx,hy,hz);
         inventory[186]--;
-        if(inventory[186] <= 0){ delete inventory[186]; hotbarSlots[sel.slot] = null; }
+        if(inventory[186] <= 0) delete inventory[186];
         eldercube.setCubeOwner(null); // it belongs to the stone now, not a person
         renderHotbar();
         survival.note('socket');
@@ -704,9 +714,14 @@ export function placeAction(rIn){
     return;
   }
   // Your left hand is full of Elder Cube. You can still fight — a weapon goes in
-  // the right hand — but you cannot build until you set the Cube down.
-  if(carryingCube()){
-    addChat('⚙', 'Your hands are full. Socket the Elder Cube before you build.');
+  // the right hand — but you cannot build while carrying it.
+  //
+  // The Keepstone is the one exception, and it has to be: you need a cradle to
+  // put the Cube down, so blocking it would strand you holding a Cube you can
+  // never seat. Setting down the pedestal is how you free your hands, not a way
+  // around the cost.
+  if(carryingCube() && tid !== 43){
+    addChat('⚙', 'Your hands are full — only a Keepstone can be set down while you carry the Elder Cube.');
     return;
   }
   // Normalize door state ids back to item ids

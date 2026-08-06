@@ -308,8 +308,9 @@ export function tryCommand(raw){
     case 'god': {
       if(!needHost()) return true;
       ctx.state.god = !ctx.state.god;
+      // setGodMode only — `godMode` is a module export binding and assigning to
+      // it throws a TypeError, which aborted the command mid-way.
       survival.setGodMode?.(ctx.state.god);
-      survival.godMode = ctx.state.god;
       reply(ctx.state.god ? 'God mode ON (no damage).' : 'God mode OFF.');
       return true;
     }
