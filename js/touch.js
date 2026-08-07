@@ -36,12 +36,14 @@ export function initTouch(hooks){
       }
     }
   }, {passive:false});
-  document.addEventListener('touchend', e=>{
+  const clearTouchIds = e=>{
     for(const t of e.changedTouches){
       if(t.identifier===joyId){ joyId=null; joy.x=joy.y=0; joyBase.style.display=joyStick.style.display='none'; }
       if(t.identifier===lookId) lookId=null;
     }
-  });
+  };
+  document.addEventListener('touchend', clearTouchIds);
+  document.addEventListener('touchcancel', clearTouchIds);
   // ========== Crosshair dig/place (Minecraft PE style) ==========
   // Aim with crosshair. Short tap = place. Hold = mine.
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
@@ -81,7 +83,9 @@ export function initTouch(hooks){
     if(t.clientX < innerWidth * 0.22) return;
 
     e.preventDefault();
-    if(lookId === null){ lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
+    // Always claim this finger as the look finger. Makes the system self-healing
+    // if a previous lookId was left stranded by a missed touchcancel/touchend.
+    lookId = t.identifier; lookX = t.clientX; lookY = t.clientY;
 
     digId = t.identifier;
     digX = t.clientX; digY = t.clientY;
