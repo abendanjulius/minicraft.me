@@ -638,6 +638,23 @@ function toggleDoorAt(bx,by,bz){
 }
 
 /** rIn: an optional pre-computed raycast (touch-to-place passes the tapped ray). */
+
+/** Keep the same hotbar slot selected while swapping empty ↔ water bucket.
+ *  In Forge the bucket stays as-is (infinite, Minecraft creative style). */
+function swapHeldBucket(fromId, toId){
+  if(gm.forge){ renderHotbar(); return; }
+  inventory[fromId] = (inventory[fromId] || 0) - 1;
+  if(inventory[fromId] <= 0) delete inventory[fromId];
+  inventory[toId] = (inventory[toId] || 0) + 1;
+  const s = hotbarSlots[sel.slot];
+  if(s && s.k === 'f' && s.id === fromId) s.id = toId;
+  else if(!hotbarSlots.some(x => x?.k === 'f' && x.id === toId)){
+    const empty = hotbarSlots.findIndex(x => x === null);
+    if(empty !== -1) hotbarSlots[empty] = {k: 'f', id: toId};
+  }
+  renderHotbar();
+}
+
 export function placeAction(rIn){
   if(survival.sv.dead) return;
   // Talk to nearby Eldercube folk
@@ -645,6 +662,40 @@ export function placeAction(rIn){
   const food = slotFood();
   if(food){ if(survival.eatSelected(food)) placeAnim = 1; return; }
   const r = rIn || castBlock();
+  const heldSlot = hotbarSlots[sel.slot];
+  const heldItem = (heldSlot?.k === 'f') ? heldSlot.id : 0;
+
+  // ---- Buckets: empty picks up a water source; full places one ----
+  if(heldItem === 166 || heldItem === 167){
+    if(heldItem === 166 && r && r.hit){
+      // Empty bucket → scoop water
+      const [hx,hy,hz] = r.hit;
+      if(getBlock(hx,hy,hz) === 64){
+        applyEdit(hx, hy, hz, 0, false);
+        net.sendEdit(hx, hy, hz, 0);
+        swapHeldBucket(166, 167);
+        placeAnim = 1;
+        sfx.place();
+        return;
+      }
+    }
+    if(heldItem === 167){
+      // Water bucket → place a water source (same rules as a normal block place)
+      const cell = resolvePlaceCell(r);
+      if(cell){
+        const [px,py,pz] = cell;
+        applyEdit(px, py, pz, 64, false);
+        net.sendEdit(px, py, pz, 64);
+        swapHeldBucket(167, 166);
+        placeAnim = 1;
+        sfx.place();
+        return;
+      }
+    }
+    // Holding a bucket but no valid water target — do nothing (don't fall through to block place)
+    return;
+  }
+
   // Click door / crate / powder keg interactions
   if(r && r.hit){
     let [hx,hy,hz] = r.hit;
