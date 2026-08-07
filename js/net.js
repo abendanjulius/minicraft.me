@@ -36,6 +36,30 @@ export let mode = 'solo';           // 'solo' | 'host' | 'client'
 let peer = null, conns = [];        // host: all client conns; client: [hostConn]
 let myName = 'Player';
 const editLog = [];                 // host keeps this for late joiners
+/** Soft cap: before exceeding, collapse to last-write-wins per cell (no lost final state). */
+const EDIT_LOG_SOFT = 6000;
+const EDIT_LOG_HARD = 12000;
+
+function compactEditLog(){
+  if(editLog.length < EDIT_LOG_SOFT) return;
+  const map = new Map();
+  for(const e of editLog){
+    if(!e || e.length < 4) continue;
+    map.set(e[0]+','+e[1]+','+e[2], e);
+  }
+  editLog.length = 0;
+  for(const e of map.values()) editLog.push(e);
+  // Absolute ceiling after compaction (very large worlds)
+  if(editLog.length > EDIT_LOG_HARD){
+    editLog.splice(0, editLog.length - EDIT_LOG_HARD);
+  }
+}
+
+function pushEditLog(entry){
+  editLog.push(entry);
+  if(editLog.length >= EDIT_LOG_SOFT) compactEditLog();
+}
+
 const remotes = new Map();          // peerId -> remote player
 let posTimer = 0, animTimer = 0;
 
@@ -122,11 +146,11 @@ function handle(msg, fromConn){
     if(mode==='host') relay(msg, fromConn);
   } else if(msg.t==='edit'){
     applyEdit(msg.x, msg.y, msg.z, msg.v, true);
-    if(mode==='host'){ editLog.push([msg.x,msg.y,msg.z,msg.v]); relay(msg, fromConn); }
+    if(mode==='host'){ pushEditLog([msg.x,msg.y,msg.z,msg.v]); relay(msg, fromConn); }
   } else if(msg.t==='edits'){
     applyEditsBatch(msg.list||[]);
     if(mode==='host'){
-      for(const e of (msg.list||[])) editLog.push(e);
+      for(const e of (msg.list||[])) pushEditLog(e);
       relay(msg, fromConn);
     }
   } else if(msg.t==='anim'){
@@ -274,7 +298,8 @@ export function sendHit(kind, eid, dmg, px, pz){
 }
 export function seedEditLog(arr){
   editLog.length = 0;
-  for(const e of arr) editLog.push(e);
+  for(const e of arr) pushEditLog(e);
+  compactEditLog();
 }
 export function reportDeath(pos){
   if(mode==='client'){ safeSendHost({t:'died', x:+pos.x.toFixed(1), y:+pos.y.toFixed(1), z:+pos.z.toFixed(1)}); }
@@ -297,14 +322,14 @@ export function syncEdits(list){
   if(!list || !list.length) return;
   applyEditsBatch(list);
   if(mode==='host'){
-    for(const e of list) editLog.push(e);
+    for(const e of list) pushEditLog(e);
     relay({t:'edits', list}, null);
   }
 }
 // The host pushes horde-made block edits into the same pipeline as player edits
 export function hostWorldEdit(x,y,z,t){
   applyEdit(x,y,z,t,true);
-  if(mode==='host'){ editLog.push([x,y,z,t]); relay({t:'edit', x,y,z, v:t, id:'horde'}, null); }
+  if(mode==='host'){ pushEditLog([x,y,z,t]); relay({t:'edit', x,y,z, v:t, id:'horde'}, null); }
 }
 // Targets for zombie AI: authority player + all remotes
 export function getTargets(myPos){
@@ -367,7 +392,7 @@ export function sendPickup(x,y,z){
 export function sendEdit(x,y,z,v){
   if(mode==='solo') return;
   const msg = {t:'edit', x,y,z, v, id:peer?.id};
-  if(mode==='host'){ editLog.push([x,y,z,v]); relay(msg,null); }
+  if(mode==='host'){ pushEditLog([x,y,z,v]); relay(msg,null); }
   else safeSendHost(msg);
 }
 

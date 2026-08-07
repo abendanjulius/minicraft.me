@@ -1,5 +1,5 @@
 // sw.js — cache app shell; JS always network-first so broken deploys can recover
-const CACHE = 'minicraft-v134';
+const CACHE = 'minicraft-v135';
 const CORE = [
   './', './index.html', './css/style.css', './manifest.json',
   './js/main.js', './js/world.js', './js/render.js', './js/player.js',
@@ -7,6 +7,8 @@ const CORE = [
   './js/mobs.js', './js/craft.js', './js/content.js', './js/mode.js', './js/persist.js', './js/idb.js',
   './js/physics.js', './js/drops.js', './js/chests.js', './js/keg.js',
   './js/commands.js', './js/villagers.js',
+  './js/eldercube.js', './js/keepstones.js', './js/claim.js', './js/map.js',
+  './js/remeshQueue.js',
   './icons/icon-192.png', './icons/icon-512.png', './assets/music.mp3',
 ];
 

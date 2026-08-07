@@ -1170,6 +1170,12 @@ export function rebuildAt(x,z){
   if((z&15)===15) buildChunk(cx, (cz+1)%CHUNKS);
 }
 
+/** Single-chunk rebuild — for claim-tint updates (no neighbor cascade). */
+export function rebuildChunkOnly(x,z){
+  x = wrapC(x); z = wrapC(z);
+  buildChunk(x>>4, z>>4);
+}
+
 // Only render chunks within view distance (toroidal-aware)
 const VIEW_CHUNKS = Math.ceil(VIEW/CH)+1;
 /** Shift v by k*WORLD so it sits as close as possible to ref (continuous player coords OK). */

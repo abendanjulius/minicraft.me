@@ -6,9 +6,10 @@
 // tops out the stone goes dormant and you carry the Cube to the next site.
 //
 // There is exactly one Cube per world, so at most one Keepstone is ever active.
-import { scene, box, placeWrapped, rebuildAt, makeElderCubeMesh, makeReliquaryMesh } from './render.js';
+import { scene, box, placeWrapped, makeElderCubeMesh, makeReliquaryMesh } from './render.js';
 import { wrapC } from './world.js';
 import * as claim from './claim.js';
+import { queueChunkRemesh, flushRemeshQueue } from './remeshQueue.js';
 
 export const MAX_RADIUS = 24;   // world blocks — a tier-0 stone's reach
 const SECS_PER_BLOCK = 3;       // radius growth rate → ~72s from bare stone to full
@@ -82,22 +83,27 @@ export const isDone = s => s.radius >= targetRadius(s);
  * appears as the ring sweeps outward. Rebuilding the whole disc every step
  * would re-run buildChunk on the same inner chunks ~24 times per siege.
  */
-function remeshRing(s, newR){
-  // Rebuild every chunk the disc currently overlaps, deduped WITHIN this step
-  // only. Deduping across steps looks tempting but is wrong: a chunk the disc
-  // merely clipped at r=8 is still filling in at r=20, and skipping it leaves
-  // permanent un-tinted patches inside a finished claim. At most ~25 chunks per
-  // step, once per block of growth, so a few rebuilds a second during a siege.
-  const seen = new Set();
+/**
+ * Queue remesh for chunks that intersect the NEW ring only (prevR → newR).
+ * Full-disc rebuild every step was O(r²) and hitchy on mobile. Inner chunks
+ * already carry correct claim skins from earlier steps; only the expanding
+ * annulus gains new claimed cells.
+ * Work is drained by flushRemeshQueue() each frame (budgeted).
+ */
+function remeshRing(s, newR, prevR){
   const outer = Math.ceil(newR);
+  const inner = Math.max(0, Math.floor(prevR || 0) - 1); // slight overlap
+  const seen = new Set();
   for(let dz = -outer; dz <= outer; dz++){
     for(let dx = -outer; dx <= outer; dx++){
-      if(dx*dx + dz*dz > newR*newR) continue;
+      const d2 = dx*dx + dz*dz;
+      if(d2 > newR*newR) continue;
+      if(d2 < inner*inner) continue;
       const wx = wrapC(s.x + dx), wz = wrapC(s.z + dz);
       const k = (wx >> 4) + ',' + (wz >> 4);
       if(seen.has(k)) continue;
       seen.add(k);
-      rebuildAt(wx, wz);
+      queueChunkRemesh(wx, wz);
     }
   }
 }
@@ -197,14 +203,16 @@ export function tick(dt, px, pz, onFull){
     s.radius = Math.min(tgt, s.radius + dt / secsPerBlock());
     if(Math.floor(s.radius) > Math.floor(prev)){
       claim.claimDisc(s.x, s.z, s.radius);
-      remeshRing(s, s.radius);
+      remeshRing(s, s.radius, prev);
     }
     if(isDone(s) && prev < tgt){
       claim.claimDisc(s.x, s.z, tgt); // make sure the rim is filled
-      remeshRing(s, tgt);
+      remeshRing(s, tgt, prev);
       onFull?.(s);
     }
   }
+  // Drain budgeted chunk rebuilds every frame (siege tint catch-up)
+  flushRemeshQueue();
 }
 
 // ---- save / restore --------------------------------------------------------
