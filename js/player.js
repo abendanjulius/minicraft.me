@@ -354,6 +354,21 @@ export function look(dx,dy){
 }
 /** sx,sy: optional screen pixel (touch). Mining then locks onto the block under
  *  the finger, so dragging to look afterwards doesn't slide the dig elsewhere. */
+/** Immediate combat tap at a screen pixel (mobile). Returns true if something was hit. */
+export function tryPunchAt(sx, sy){
+  if(survival.sv.dead) return false;
+  const r = castScreen(sx, sy);
+  const e = pickEntity(r ? r.dir : undefined, r);
+  if(!e) return false;
+  const held = hotbarSlots[sel.slot];
+  const wDmg = (held?.k==='f' && ITEMS[held.id]?.dmg) || 0;
+  const dmg = wDmg || (slotTool()!=='hand' ? 3 : 2);
+  net.sendHit(e.kind, e.eid, dmg, player.pos.x, player.pos.z);
+  placeAnim = 1;
+  sfx.punch();
+  return true;
+}
+
 export function setMine(b, sx, sy){
   if(survival.sv.dead){ state.mineHeld=false; state.mining=null; state.mineTarget=null; return; }
   const atPixel = b && sx !== undefined && sy !== undefined;
@@ -909,7 +924,18 @@ function updateMining(dt){
   if(state.mineTarget){
     // Touch: keep digging the block the finger went down on, even while looking
     [bx,by,bz] = state.mineTarget;
-    if(!getBlock(bx,by,bz)){ state.mining=null; mineBar.style.display='none'; return; }
+    if(!getBlock(bx,by,bz)){
+      // Block broke while still holding — re-acquire under the crosshair so
+      // continuous mining works the same as desktop (previously we just stopped).
+      state.mineTarget = null;
+      state.mining = null;
+      const r2 = castBlock();
+      if(!r2 || !r2.hit || !getBlock(...r2.hit)){ mineBar.style.display='none'; return; }
+      state.mineTarget = r2.hit.slice();
+      [bx,by,bz] = state.mineTarget;
+      // Keepstone aim forgiveness
+      if(getBlock(bx,by,bz) !== 43 && getBlock(bx,by-1,bz) === 43 && isWalkThrough(getBlock(bx,by,bz))) by -= 1;
+    }
   } else {
     const r = castBlock();
     if(!r){ state.mining=null; mineBar.style.display='none'; return; }

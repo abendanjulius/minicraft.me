@@ -87,6 +87,13 @@ export function initTouch(hooks){
     // if a previous lookId was left stranded by a missed touchcancel/touchend.
     lookId = t.identifier; lookX = t.clientX; lookY = t.clientY;
 
+    // Immediate combat: if the finger landed on a mob/animal, punch right away
+    // (desktop does this on left mousedown). Don't start a dig timer for a punch.
+    if(hooks.punch?.(t.clientX, t.clientY)){
+      digId = null;
+      return;
+    }
+
     digId = t.identifier;
     digX = t.clientX; digY = t.clientY;
     digStart = performance.now();
