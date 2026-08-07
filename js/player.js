@@ -1,7 +1,8 @@
 // player.js — local player: controls, physics, mining, first-person hand + visible body
 import { WORLD, WH, CENTER, getBlock, heightAt, isWalkThrough, isDoor, doorFacing, doorOpen, doorType, doorStyleOf, doorItemOf, DOOR_STYLES, wrapC } from './world.js';
 import { scene, camera, renderer, TYPES, TOOLS, ITEMS, SKINS, isTouch, box, makeCharacter, makeToolModel, makeBlockCube,
-         makeHeldItemIcon, makeElderCubeMesh, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, day, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , setUnderwater, applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
+         makeHeldItemIcon, makeElderCubeMesh, makeWeaponModel, makeToolIconPlane, applyEdit, spawnParticles, spawnDust, jit, setBedFacing, bedFacing, updateChunkVisibility, updateTorchLights , applyCharacterArmor, updatePlacePreview, aimNDC, refreshAimNDC, screenToNDC } from './render.js';
+import { day, setUnderwater } from './sky.js';
 import { inventory, hotbarSlots, sel, joy, invOpen, toggleInv, renderHotbar,
          addToInventory, setHeldChangeHook, slotTool, slotBlock, nextToolSlot,
          chat, openChat, addChat, armorSlots, setArmorHook, getArmorSlots } from './ui.js';

@@ -1,7 +1,8 @@
 // net.js — PeerJS rooms: host relays, clients follow. Also renders remote player avatars.
 import { WORLD, seed } from './world.js';
 import { scene, camera, box, makeCharacter, makeToolModel, makeBlockCube, makeHeldItemIcon, makeWeaponModel, applyCharacterArmor,
-         applyEdit, applyEditsBatch, spawnParticles, TYPES, ITEMS, SKINS, day, setDayTime } from './render.js';
+         applyEdit, applyEditsBatch, spawnParticles, TYPES, ITEMS, SKINS } from './render.js';
+import { day, setDayTime } from './sky.js';
 import { setBanner, setPlayers, addChat, setHorde, startHordeCountdown } from './ui.js';
 import { sfx } from './audio.js';
 import * as playerMod from './player.js';

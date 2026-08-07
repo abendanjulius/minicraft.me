@@ -1,14 +1,14 @@
 // main.js — menu, boot, game loop
 import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME, villageSites } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim, tickWind,
-         updateParticles, updateDayNight, SKINS, faceURL, trackTorch, updateTorchLights,
-         setEditRecorder, setDayTime, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
+         updateParticles, SKINS, faceURL, trackTorch, updateTorchLights,
+         setEditRecorder, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
+import { day, setDayTime, updateDayNight } from './sky.js';
 import { initUI, toggleInv, setHud, initChat, addChat, setCompass, setHorde as setHordeHud, restoreInv, setCraftApi, renderInv, toast, setSaveState, clearLoadout } from './ui.js';
 import * as craftMod from './craft.js';
 import { gm, setMode, onModeChange, modeName } from './mode.js';
 import * as persist from './persist.js';
 import { inventory, hotbarSlots, sel } from './ui.js';
-import { day } from './render.js';
 import { sv } from './survival.js';
 import { initAudio, startMusic, sfx, ambientTick } from './audio.js';
 import * as playerMod from './player.js';
@@ -42,7 +42,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.4.3'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.4.4'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
