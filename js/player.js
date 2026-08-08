@@ -370,7 +370,7 @@ export function tryPunchAt(sx, sy){
 }
 
 export function setMine(b, sx, sy){
-  if(survival.sv.dead){ state.mineHeld=false; state.mining=null; state.mineTarget=null; return; }
+  if(survival.sv.dead){ state.mineHeld=false; state.mining=null; state.mineTarget=null; state.mineScreen=null; return; }
   const atPixel = b && sx !== undefined && sy !== undefined;
   if(b){
     const r = atPixel ? castScreen(sx, sy) : castBlock();
@@ -386,9 +386,16 @@ export function setMine(b, sx, sy){
     }
     if(atPixel){
       state.mineTarget = r && r.hit ? r.hit.slice() : null;
+      state.mineScreen = state.mineTarget ? [sx, sy] : null; // finger pixel for re-aim
       if(!state.mineTarget){ state.mineHeld = false; state.mining = null; return; } // nothing under the finger
-    } else state.mineTarget = null;
-  } else state.mineTarget = null;
+    } else {
+      state.mineTarget = null;
+      state.mineScreen = null;
+    }
+  } else {
+    state.mineTarget = null;
+    state.mineScreen = null;
+  }
   state.mineHeld = b;
   if(!b) state.mining = null;
 }
@@ -925,16 +932,22 @@ function updateMining(dt){
     // Touch: keep digging the block the finger went down on, even while looking
     [bx,by,bz] = state.mineTarget;
     if(!getBlock(bx,by,bz)){
-      // Block broke while still holding — re-acquire under the crosshair so
-      // continuous mining works the same as desktop (previously we just stopped).
-      state.mineTarget = null;
+      // Block broke while still holding — re-acquire under the *finger pixel*,
+      // not the screen center. castBlock() was aiming wherever the camera looked,
+      // which felt like random far blocks once you had turned a bit.
       state.mining = null;
-      const r2 = castBlock();
-      if(!r2 || !r2.hit || !getBlock(...r2.hit)){ mineBar.style.display='none'; return; }
-      state.mineTarget = r2.hit.slice();
-      [bx,by,bz] = state.mineTarget;
+      const scr = state.mineScreen;
+      const r2 = scr ? castScreen(scr[0], scr[1]) : castBlock();
+      if(!r2 || !r2.hit || !getBlock(...r2.hit)){
+        state.mineTarget = null;
+        mineBar.style.display='none';
+        return;
+      }
+      let [nx,ny,nz] = r2.hit;
       // Keepstone aim forgiveness
-      if(getBlock(bx,by,bz) !== 43 && getBlock(bx,by-1,bz) === 43 && isWalkThrough(getBlock(bx,by,bz))) by -= 1;
+      if(getBlock(nx,ny,nz) !== 43 && getBlock(nx,ny-1,nz) === 43 && isWalkThrough(getBlock(nx,ny,nz))) ny -= 1;
+      state.mineTarget = [nx,ny,nz];
+      [bx,by,bz] = state.mineTarget;
     }
   } else {
     const r = castBlock();
