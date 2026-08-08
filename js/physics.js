@@ -89,42 +89,50 @@ export function tickDecay(dt){
   return gone;
 }
 
-// ---- Water flow (simple Minecraft-like) ----
+// ---- Water flow (finite — no infinite flat-ground floods) ----
 const WATER = 64;
+// How many horizontal steps a placed source may expand. Falling does not
+// consume this budget so water can still drop down cliffs, but a single
+// bucket on open ground stops after a small puddle instead of eating the map.
+const WATER_MAX_GEN = 3;
 const waterQ = [];
 let waterAcc = 0;
 
-export function notifyWater(x, y, z){
-  waterQ.push({x: wrapC(x), y, z: wrapC(z)});
+export function notifyWater(x, y, z, gen = 0){
+  waterQ.push({x: wrapC(x), y, z: wrapC(z), gen: gen|0});
 }
 
-function tryFlow(x, y, z, out){
+function tryFlow(x, y, z, gen, out){
   if(getBlock(x, y, z) !== WATER) return;
-  // Fall down first
+  // Fall down first — move, don't duplicate; keep gen so a cascade still ends
   if(y > 0 && !getBlock(x, y - 1, z)){
     setBlock(x, y, z, 0);
     setBlock(x, y - 1, z, WATER);
     out.push([x, y, z, 0], [x, y - 1, z, WATER]);
-    waterQ.push({x, y: y - 1, z});
+    waterQ.push({x, y: y - 1, z, gen});
     return;
   }
-  // Spread sideways into air (finite-ish: only if below is solid or water)
+  // No more horizontal spread past the budget
+  if(gen >= WATER_MAX_GEN) return;
+
+  // Prefer flowing down a step; otherwise one horizontal step into air that
+  // has solid (or water) under it — classic "puddle on dirt" fill.
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
   for(const [dx, dz] of dirs){
     const nx = wrapC(x + dx), nz = wrapC(z + dz);
     if(getBlock(nx, y, nz)) continue;
-    // prefer flowing down a step
+    const childGen = gen + 1;
     if(y > 0 && !getBlock(nx, y - 1, nz)){
       setBlock(nx, y - 1, nz, WATER);
       out.push([nx, y - 1, nz, WATER]);
-      waterQ.push({x: nx, y: y - 1, z: nz});
-    } else {
-      // horizontal spread limited — only if source has water neighbor count
+      waterQ.push({x: nx, y: y - 1, z: nz, gen: childGen});
+    } else if(y === 0 || getBlock(nx, y - 1, nz)){
+      // only fill sideways when the destination is supported
       setBlock(nx, y, nz, WATER);
       out.push([nx, y, nz, WATER]);
-      waterQ.push({x: nx, y, z: nz});
+      if(childGen < WATER_MAX_GEN) waterQ.push({x: nx, y, z: nz, gen: childGen});
     }
-    // one side per tick per cell to slow the flood
+    // one side per tick per cell
     break;
   }
 }
@@ -138,7 +146,7 @@ export function tickWater(dt){
   const n = Math.min(waterQ.length, 24);
   for(let i = 0; i < n; i++){
     const e = waterQ.shift();
-    if(e) tryFlow(e.x, e.y, e.z, out);
+    if(e) tryFlow(e.x, e.y, e.z, e.gen|0, out);
   }
   return out;
 }
