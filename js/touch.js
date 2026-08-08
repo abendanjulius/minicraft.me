@@ -47,7 +47,7 @@ export function initTouch(hooks){
   // ========== Crosshair dig/place (Minecraft PE style) ==========
   // Aim with crosshair. Short tap = place. Hold = mine.
   // Looking is allowed on the same finger; only large early drag cancels a pending hold.
-  let digId = null, digX = 0, digY = 0, digStart = 0, digMaxMove = 0;
+  let digId = null, digX = 0, digY = 0, digOriginX = 0, digOriginY = 0, digStart = 0, digMaxMove = 0;
   let digMining = false, digTimer = null;
   // Touch-to-place: you tap the block you want, so there is no crosshair.
   // A drag is looking and NEVER places, however it ends. TAP_SLOP is finger
@@ -96,6 +96,7 @@ export function initTouch(hooks){
 
     digId = t.identifier;
     digX = t.clientX; digY = t.clientY;
+    digOriginX = t.clientX; digOriginY = t.clientY; // fixed origin for cancel threshold
     digStart = performance.now();
     digMaxMove = 0;
     digMining = false;
@@ -105,7 +106,10 @@ export function initTouch(hooks){
       if(digId == null || invIsOpen()) return;
       if(digMaxMove > MINE_CANCEL) return; // was looking around
       digMining = true;
-      hooks.mine(true, digX, digY);        // dig the block under the finger
+      // Use CURRENT finger pixel — digX/Y are updated on touchmove. The old
+      // code froze the touchstart pixel while look still rotated the camera,
+      // so the ray no longer matched what the finger was over.
+      hooks.mine(true, digX, digY);
     }, HOLD_MS);
   }, {passive:false});
 
@@ -113,11 +117,15 @@ export function initTouch(hooks){
     if(digId == null) return;
     for(const t of e.changedTouches){
       if(t.identifier !== digId) continue;
-      const d = Math.hypot(t.clientX - digX, t.clientY - digY);
+      // Track movement from the original touch for cancel/place thresholds
+      const d = Math.hypot(t.clientX - digOriginX, t.clientY - digOriginY);
       if(d > digMaxMove) digMaxMove = d;
       if(!digMining && digMaxMove > MINE_CANCEL && digTimer){
         clearTimeout(digTimer); digTimer = null;
       }
+      // Always keep digX/Y on the live finger so mine aim stays under it
+      digX = t.clientX; digY = t.clientY;
+      if(digMining) hooks.mineAim?.(digX, digY);
     }
   }, {passive:true});
 

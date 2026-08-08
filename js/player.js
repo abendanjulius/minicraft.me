@@ -373,7 +373,9 @@ export function setMine(b, sx, sy){
   if(survival.sv.dead){ state.mineHeld=false; state.mining=null; state.mineTarget=null; state.mineScreen=null; return; }
   const atPixel = b && sx !== undefined && sy !== undefined;
   if(b){
-    const r = atPixel ? castScreen(sx, sy) : castBlock();
+    // Mobile dig uses the same reach as desktop crosshair mining (8), not the
+    // longer place reach (12) — far-terrain taps were starting digs 10+ blocks out.
+    const r = atPixel ? castScreen(sx, sy, 8) : castBlock();
     const e = pickEntity(atPixel && r ? r.dir : undefined, r);
     if(e){
       const held = hotbarSlots[sel.slot];
@@ -385,9 +387,11 @@ export function setMine(b, sx, sy){
       return;             // a punch, not a mining hold
     }
     if(atPixel){
+      // Finger is a live aim point — store screen pixel; world target is
+      // resolved every frame in updateMining so look-drag stays accurate.
+      state.mineScreen = [sx, sy];
       state.mineTarget = r && r.hit ? r.hit.slice() : null;
-      state.mineScreen = state.mineTarget ? [sx, sy] : null; // finger pixel for re-aim
-      if(!state.mineTarget){ state.mineHeld = false; state.mining = null; return; } // nothing under the finger
+      if(!state.mineTarget){ state.mineHeld = false; state.mining = null; state.mineScreen = null; return; }
     } else {
       state.mineTarget = null;
       state.mineScreen = null;
@@ -398,6 +402,12 @@ export function setMine(b, sx, sy){
   }
   state.mineHeld = b;
   if(!b) state.mining = null;
+}
+
+/** Live finger aim while a mobile dig is held — keeps mine under the fingertip. */
+export function setMineAim(sx, sy){
+  if(!state.mineHeld) return;
+  state.mineScreen = [sx, sy];
 }
 export function relock(){
   if(state.playing && !isTouch){
@@ -928,27 +938,19 @@ const mineFill = mineBar.firstElementChild;
 function updateMining(dt){
   if(!state.mineHeld || invOpen){ state.mining=null; mineBar.style.display='none'; return; }
   let bx, by, bz;
-  if(state.mineTarget){
-    // Touch: keep digging the block the finger went down on, even while looking
-    [bx,by,bz] = state.mineTarget;
-    if(!getBlock(bx,by,bz)){
-      // Block broke while still holding — re-acquire under the *finger pixel*,
-      // not the screen center. castBlock() was aiming wherever the camera looked,
-      // which felt like random far blocks once you had turned a bit.
+  if(state.mineScreen){
+    // Mobile: the finger is a live laser. Re-cast every frame from the current
+    // fingertip pixel so dig matches what the player is actually pointing at
+    // (look-drag on the same finger used to leave a stale world lock).
+    const r = castScreen(state.mineScreen[0], state.mineScreen[1], 8);
+    if(!r || !r.hit || !getBlock(...r.hit)){
       state.mining = null;
-      const scr = state.mineScreen;
-      const r2 = scr ? castScreen(scr[0], scr[1]) : castBlock();
-      if(!r2 || !r2.hit || !getBlock(...r2.hit)){
-        state.mineTarget = null;
-        mineBar.style.display='none';
-        return;
-      }
-      let [nx,ny,nz] = r2.hit;
-      // Keepstone aim forgiveness
-      if(getBlock(nx,ny,nz) !== 43 && getBlock(nx,ny-1,nz) === 43 && isWalkThrough(getBlock(nx,ny,nz))) ny -= 1;
-      state.mineTarget = [nx,ny,nz];
-      [bx,by,bz] = state.mineTarget;
+      mineBar.style.display = 'none';
+      return;
     }
+    [bx,by,bz] = r.hit;
+    if(getBlock(bx,by,bz) !== 43 && getBlock(bx,by-1,bz) === 43 && isWalkThrough(getBlock(bx,by,bz))) by -= 1;
+    state.mineTarget = [bx,by,bz];
   } else {
     const r = castBlock();
     if(!r){ state.mining=null; mineBar.style.display='none'; return; }
