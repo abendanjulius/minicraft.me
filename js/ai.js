@@ -83,6 +83,109 @@ function solid(x, y, z){
   return !!(b && !isWalkThrough(b) && b !== 64);
 }
 
+function isWaterAt(x, y, z){
+  return getBlock(Math.round(x), y|0, Math.round(z)) === 64;
+}
+
+function inWaterNow(){
+  const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
+  return isWaterAt(px, py, pz) || isWaterAt(px, py + 1, pz) || isWaterAt(px, py + 1.5, pz);
+}
+
+/**
+ * Escape lakes / underwater pockets.
+ * Priority: dig ceiling → swim straight up → swim toward nearest shore.
+ * Returns true if it handled this frame (caller should skip normal pathing).
+ */
+function escapeWater(dt){
+  if(!inWaterNow()) return false;
+
+  const px = Math.round(player.pos.x);
+  const py = Math.round(player.pos.y);
+  const pz = Math.round(player.pos.z);
+
+  setStatus('Swimming out…');
+  keys.sprint = false;
+  keys.ShiftLeft = keys.ShiftRight = false;
+
+  // 1) Solid block above head? Dig it — common "trapped under water+ceiling"
+  for(let dy = 2; dy <= 4; dy++){
+    if(solid(px, py + dy, pz)){
+      selectTool('pick');
+      view.pitch = -1.2;
+      faceYaw(view.yaw, dt, 1);
+      digLook(0.55);
+      keys.Space = true; // keep buoyancy while digging
+      keys.KeyW = false;
+      return true;
+    }
+  }
+
+  // 2) Ceiling is clear of solids — swim up hard
+  keys.Space = true;
+  view.pitch = -0.9;
+
+  // 3) Find best horizontal escape toward shallower / dry ground
+  const dirs = [
+    [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1],
+  ];
+  let best = null, bestScore = -Infinity;
+  for(const [dx, dz] of dirs){
+    const len = Math.hypot(dx, dz);
+    const nx = px + (dx / len) * 2;
+    const nz = pz + (dz / len) * 2;
+    let score = 0;
+    // prefer air at head height
+    if(!isWaterAt(nx, py + 2, nz) && !solid(nx, py + 2, nz)) score += 20;
+    if(!isWaterAt(nx, py + 1, nz)) score += 10;
+    if(!isWaterAt(nx, py, nz)) score += 8;
+    // shore: solid under a non-water cell
+    if(!isWaterAt(nx, py, nz) && solid(nx, py - 1, nz)) score += 15;
+    // open column to surface
+    let openUp = 0;
+    for(let y = py; y < Math.min(WH, py + 8); y++){
+      if(solid(nx, y, nz)){ openUp = -5; break; }
+      if(!isWaterAt(nx, y, nz)){ openUp += 3; break; }
+      openUp += 1;
+    }
+    score += openUp;
+    // lightly bias toward current goal if we have one
+    if(target){
+      const before = distXZ(px, pz, target.x, target.z);
+      const after = distXZ(nx, nz, target.x, target.z);
+      score += (before - after) * 2;
+    }
+    if(score > bestScore){ bestScore = score; best = [dx / len, dz / len]; }
+  }
+
+  if(best){
+    const want = Math.atan2(-best[0], -best[1]);
+    faceYaw(want, dt, 3.5);
+    keys.KeyW = true;
+  } else {
+    keys.KeyW = true;
+    view.yaw += dt * 1.2; // spin search
+  }
+
+  // 4) If still not rising and stuck, dig sideways underwater walls
+  const movedY = player.pos.y - lastPos.y;
+  if(stuckT > 0.5 || movedY < 0.02){
+    const ax = px - Math.sin(view.yaw);
+    const az = pz - Math.cos(view.yaw);
+    if(solid(ax, py + 1, az) || solid(ax, py + 2, az)){
+      view.pitch = -0.4;
+      digLook(0.5);
+    } else if(stuckT > 1.2){
+      // random turn to find a gap
+      avoidYaw = view.yaw + (Math.random() > 0.5 ? 1.2 : -1.2);
+      avoidT = 0.8;
+      stuckT = 0;
+    }
+  }
+
+  return true;
+}
+
 function passableColumn(x, yFeet, z){
   // body needs feet cell walk-through-or-ground and head clear
   const fy = Math.round(yFeet);
@@ -218,8 +321,10 @@ function scoreStep(dx, dz, goalX, goalZ){
   const after = distXZ(nx, nz, goalX, goalZ);
   score += (before - after) * 12;
 
-  const feetSolid = solid(nx, fy - 1, nz) || solid(nx, fy, nz);
-  const stepUp = !solid(nx, fy, nz) && solid(nx, fy - 1, nz) === false && solid(nx, fy, nz) === false;
+  // Avoid walking into lakes when pathing on land
+  if(isWaterAt(nx, fy, nz) || isWaterAt(nx, fy + 1, nz)){
+    score -= 25;
+  }
   // ground at same level
   if(solid(nx, fy - 1, nz) && !solid(nx, fy, nz) && !solid(nx, fy + 1, nz)){
     score += 8; // clean walk
@@ -341,10 +446,16 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
       avoidYaw = view.yaw + side * (0.9 + Math.random() * 0.5);
       avoidT = 0.9 + Math.random() * 0.6;
     } else if(recoverMode === 2){
-      // dig down one (escape floor traps / shallow embed)
-      view.pitch = 1.2;
-      digLook(0.6);
-      keys.KeyW = false;
+      // dig down only on dry land — underwater this made traps worse
+      if(!inWaterNow() && !isWaterAt(player.pos.x, player.pos.y - 1, player.pos.z)){
+        view.pitch = 1.2;
+        digLook(0.6);
+        keys.KeyW = false;
+      } else {
+        avoidYaw = view.yaw + 1.4;
+        avoidT = 0.7;
+        keys.Space = true;
+      }
     } else {
       // back up briefly then re-steer
       keys.KeyW = false;
@@ -479,11 +590,14 @@ export function tick(dt){
   clearKeys();
   if(joy){ joy.x = 0; joy.y = 0; }
 
-  // Water: always swim up
-  const feet = getBlock(Math.round(player.pos.x), Math.round(player.pos.y), Math.round(player.pos.z));
-  if(feet === 64){
-    keys.Space = true;
-    keys.KeyW = true;
+  // Water escape takes priority over combat and goals — drowning/stuck lakes
+  // were the main failure mode in testing.
+  if(escapeWater(dt)){
+    const moved = Math.hypot(player.pos.x - lastPos.x, player.pos.y - lastPos.y, player.pos.z - lastPos.z);
+    if(moved < 0.05) stuckT += dt;
+    else stuckT = Math.max(0, stuckT - dt);
+    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+    return;
   }
 
   if(phase !== PHASES.DONE && fightNearby(dt)){
