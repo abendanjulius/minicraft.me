@@ -1586,7 +1586,28 @@ function tickBuilder(dt){
     const eyeY = player.pos.y + 1.6;
     const horiz = distXZ(player.pos.x, player.pos.z, cx, cz);
     const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(stand.above ? 0.15 : 0.6, horiz));
-    faceToward(cx, cz, dt, pitch, 0.9);
+
+    if(stand.above && horiz < 1.2){
+      // Directly overhead the yaw toward the target is undefined — dx and dz are
+      // sub-block noise, so atan2 flips every frame and the bot spins on the spot.
+      // Aim at the NEXT cell instead (it looks like it's working ahead) and just
+      // ease the pitch down. Never chase a bearing that has no answer.
+      const nxt = buildQueue[buildIndex + 1];
+      if(nxt && distXZ(cx, cz, nxt.x, nxt.z) > 1.0){
+        faceToward(nxt.x, nxt.z, dt, pitch, 0.9);
+      } else {
+        const dp = pitch - view.pitch;
+        if(Math.abs(dp) > 0.03){
+          const max = 0.9 * 0.85 * dt;
+          view.pitch += Math.max(-max, Math.min(max, dp));
+        }
+        view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
+      }
+      // kill residual drift so it hovers still instead of orbiting
+      keys.KeyA = keys.KeyD = keys.KeyS = false;
+    } else {
+      faceToward(cx, cz, dt, pitch, 0.9);
+    }
 
     if(placeCd > 0) return;
     if(placeOverlapsPlayer(cx, cy, cz)){
