@@ -38,6 +38,7 @@ let phase = PHASES.IDLE;
 let status = '';
 let target = null;
 let mineTimer = 0;
+let mineLock = null; // {x,y,z} hold still until this block breaks
 let actionCd = 0;
 let stuckT = 0;
 let lastPos = {x:0, y:0, z:0};
@@ -279,16 +280,51 @@ function ensureKeepstoneMats(){
   return has(KEEPSTONE);
 }
 
-/** Mine whatever the crosshair hits (short reach). */
-function digLook(hold = 0.45){
+/** Start mining the block under the crosshair and LOCK movement until it breaks. */
+function digLook(_hold = 0.45){
+  if(mineLock) return true; // already committed
   selectTool('pick') || selectTool('shovel') || selectTool('axe');
   const r = castBlock(5);
   if(!r || !r.hit) return false;
-  const t = getBlock(...r.hit);
+  const [bx, by, bz] = r.hit;
+  const t = getBlock(bx, by, bz);
   if(!t || t === 64 || (TYPES[t]?.hard ?? 99) >= 90) return false;
+  mineLock = {x: bx, y: by, z: bz};
   setMine(true);
-  mineTimer = hold;
-  digCd = 0.2;
+  mineTimer = 12; // safety cap seconds
+  digCd = 0.15;
+  return true;
+}
+
+/** Hold still and keep the crosshair on mineLock until the block is gone. */
+function holdMine(dt){
+  if(!mineLock) return false;
+  const {x, y, z} = mineLock;
+  if(!getBlock(x, y, z)){
+    mineLock = null;
+    setMine(false);
+    mineTimer = 0;
+    return false;
+  }
+  // Aim at block center; do not walk
+  const eyeY = player.pos.y + 1.6;
+  const dx = wrapDelta(x - player.pos.x);
+  const dy = (y + 0.5) - eyeY;
+  const dz = wrapDelta(z - player.pos.z);
+  const horiz = Math.hypot(dx, dz) || 0.001;
+  faceYaw(Math.atan2(-dx, -dz), dt, 6);
+  const wantPitch = Math.atan2(-dy, horiz);
+  view.pitch += Math.max(-5 * dt, Math.min(5 * dt, wantPitch - view.pitch));
+  keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false;
+  keys.sprint = false;
+  // Keep mine button down
+  if(!state.mineHeld) setMine(true);
+  mineTimer -= dt;
+  if(mineTimer <= 0){
+    // give up on this cell
+    mineLock = null;
+    setMine(false);
+  }
   return true;
 }
 
@@ -371,6 +407,8 @@ function scoreStep(dx, dz, goalX, goalZ){
  * Returns true when within arriveR of goal XZ.
  */
 function navigateTo(goalX, goalZ, dt, opts = {}){
+  // Never walk while a dig is locked in
+  if(mineLock){ keys.KeyW = false; return false; }
   const arriveR = opts.arriveR ?? 1.4;
   const sprint = opts.sprint !== false;
   const d = distXZ(player.pos.x, player.pos.z, goalX, goalZ);
@@ -505,6 +543,7 @@ function digDownToward(ty, dt){
     keys.KeyW = false;
     return player.pos.y <= ty + 1.2;
   }
+  if(mineLock){ keys.KeyW = false; return player.pos.y <= ty + 1.2; }
   // if somehow floating, walk
   keys.KeyW = false;
   return player.pos.y <= ty + 1.2;
@@ -589,6 +628,8 @@ export function stop(){
   document.body.classList.remove('ai-driving');
   clearKeys();
   setMine(false);
+  mineLock = null;
+  mineTimer = 0;
   phase = PHASES.IDLE;
   setStatus('');
   const btn = document.getElementById('btnAI');
@@ -607,13 +648,15 @@ export function tick(dt){
   phaseT += dt;
   actionCd -= dt;
   digCd -= dt;
-  if(mineTimer > 0){
-    mineTimer -= dt;
-    if(mineTimer <= 0) setMine(false);
-  }
-
   clearKeys();
   if(joy){ joy.x = 0; joy.y = 0; }
+
+  // Finish the current dig before walking again — moving resets mine progress.
+  if(holdMine(dt)){
+    setStatus('Mining…');
+    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+    return;
+  }
 
   // Water escape takes priority over combat and goals — drowning/stuck lakes
   // were the main failure mode in testing.
