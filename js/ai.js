@@ -39,6 +39,7 @@ let status = '';
 let target = null;
 let mineTimer = 0;
 let mineLock = null; // {x,y,z} hold still until this block breaks
+let deathWait = 0;
 let actionCd = 0;
 let stuckT = 0;
 let lastPos = {x:0, y:0, z:0};
@@ -66,6 +67,33 @@ function clearKeys(){
   keys.Space = false;
   keys.ShiftLeft = keys.ShiftRight = keys.sprint = false;
 }
+
+function clearMining(){
+  mineLock = null;
+  mineTimer = 0;
+  state.mineHeld = false;
+  state.mineTarget = null;
+  state.mineScreen = null;
+  state.mining = null;
+  try{ setMine(false); }catch(e){}
+}
+
+function reevaluatePhase(){
+  stuckT = 0;
+  avoidT = 0;
+  recoverMode = 0;
+  target = vaultTarget();
+  if(carryingCube() || has(CUBE)){
+    setPhase(PHASES.GATHER, 'Have the Cube — gathering Keepstone…');
+  } else if(keepstones.sieging()){
+    setPhase(PHASES.DEFEND, 'Siege underway — defending…');
+  } else if(keepstones.all().some(s => s.socketed && keepstones.isDone(s))){
+    setPhase(PHASES.DONE, 'Claim complete — watching…');
+  } else {
+    setPhase(PHASES.TRAVEL, 'Marching to the vault…');
+  }
+}
+
 
 function wrapDelta(d){
   if(d >  WORLD/2) d -= WORLD;
@@ -616,16 +644,9 @@ export function start(){
   setInputLocked?.(true);
   document.body.classList.add('ai-driving');
   clearKeys();
-  target = vaultTarget();
-  if(carryingCube() || has(CUBE)){
-    setPhase(PHASES.GATHER, 'Have the Cube — gathering Keepstone…');
-  } else if(keepstones.sieging()){
-    setPhase(PHASES.DEFEND, 'Siege underway — defending…');
-  } else if(keepstones.all().some(s => s.socketed && keepstones.isDone(s))){
-    setPhase(PHASES.DONE, 'Claim complete — watching…');
-  } else {
-    setPhase(PHASES.TRAVEL, 'Marching to the vault…');
-  }
+  clearMining();
+  deathWait = 0;
+  reevaluatePhase();
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.add('active');
   addChat('🤖', 'Cube-arc bot ON — smarter pathing. No time limit.');
@@ -637,9 +658,8 @@ export function stop(){
   setInputLocked?.(false);
   document.body.classList.remove('ai-driving');
   clearKeys();
-  setMine(false);
-  mineLock = null;
-  mineTimer = 0;
+  clearMining();
+  deathWait = 0;
   phase = PHASES.IDLE;
   setStatus('');
   const btn = document.getElementById('btnAI');
@@ -653,7 +673,22 @@ export function toggle(){
 
 export function tick(dt){
   if(!active || !state.playing || state.paused) return;
-  if(survival.sv.dead){ clearKeys(); return; }
+
+  // Death: clear dig lock and auto-respawn after a short beat
+  if(survival.sv.dead){
+    clearKeys();
+    clearMining();
+    deathWait += dt;
+    setStatus('Respawning…');
+    if(deathWait >= 1.5){
+      deathWait = 0;
+      try{ survival.respawn(); }catch(e){ console.warn('[ai] respawn', e); }
+      reevaluatePhase();
+      addChat('🤖', 'Respawned — continuing the arc.');
+    }
+    return;
+  }
+  deathWait = 0;
 
   phaseT += dt;
   actionCd -= dt;
