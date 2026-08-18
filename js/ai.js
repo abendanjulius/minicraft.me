@@ -5,13 +5,15 @@
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
 import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
-import { TYPES, ITEMS, faceURL, SKINS } from './render.js';
+import { TYPES, ITEMS, faceURL, SKINS, applyEdit } from './render.js';
 import { gm } from './mode.js';
 import * as eldercube from './eldercube.js';
 import * as keepstones from './keepstones.js';
 import * as craft from './craft.js';
 import { zombies } from './mobs.js';
 import * as survival from './survival.js';
+import * as net from './net.js';
+import * as buildings from './buildings.js';
 
 const CUBE = 186;
 const KEEPSTONE = 43;
@@ -31,7 +33,23 @@ const PHASES = {
   SOCKET: 'socket',
   DEFEND: 'defend',
   DONE: 'done',
+  // Builder
+  BUILD_SETUP: 'build_setup',
+  BUILD_PLACE: 'build_place',
+  BUILD_DONE: 'build_done',
 };
+
+/** @type {'story'|'builder'} */
+let botProfile = 'story';
+/** @type {'creative'|'landmark'|null} */
+let builderMode = null;
+let landmarkId = null;
+let buildQueue = [];     // [{x,y,z,id}, ...] absolute cells
+let buildIndex = 0;
+let buildOrigin = null;  // {x,y,z}
+let buildName = '';
+let placeCd = 0;
+
 
 let active = false;
 let phase = PHASES.IDLE;
@@ -1011,13 +1029,133 @@ function checkStuckAlarm(dt){
   }
 }
 
-export function start(){
-  if(active) return;
-  if(!state.playing){ addChat('🤖', 'Start a world first.'); return; }
-  if(gm.forge){
-    addChat('🤖', 'Cube-arc bot runs in Nightfall — switch mode and try again.');
+function ensureBuildBlocks(id){
+  // Forge has infinite materials; Nightfall needs stock
+  if(gm.forge) return true;
+  if((inventory[id] || 0) > 0) return true;
+  // Fallbacks: any solid buildable
+  for(const alt of [3, 7, 8, 13, 1, 4]){
+    if((inventory[alt] || 0) > 0) return alt;
+  }
+  return false;
+}
+
+function placeBuildBlock(x, y, z, id){
+  if(y < 1 || y >= WH) return false;
+  if(getBlock(x, y, z)) return true; // already filled counts as done
+  let useId = id;
+  if(!gm.forge){
+    const ok = ensureBuildBlocks(id);
+    if(ok === false) return false;
+    if(ok !== true) useId = ok;
+    if((inventory[useId] || 0) <= 0) return false;
+    inventory[useId]--;
+  }
+  applyEdit(x, y, z, useId, false);
+  try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
+  return true;
+}
+
+function setupLandmark(id){
+  const bp = buildings.blueprint(id);
+  buildName = bp.name;
+  const ox = Math.round(player.pos.x);
+  const oz = Math.round(player.pos.z);
+  const oy = surfaceY(ox, oz) + 1;
+  buildOrigin = {x: ox, y: oy, z: oz};
+  // Sort bottom-up so foundations go first
+  const sorted = [...bp.blocks].sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2]);
+  buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
+    x: ox + dx, y: oy + dy, z: oz + dz, id: bid
+  }));
+  buildIndex = 0;
+}
+
+function setupCreative(){
+  const bp = buildings.randomCreative();
+  buildName = bp.name;
+  const ox = Math.round(player.pos.x + Math.sin(view.yaw) * -4);
+  const oz = Math.round(player.pos.z + Math.cos(view.yaw) * -4);
+  const oy = surfaceY(ox, oz) + 1;
+  buildOrigin = {x: ox, y: oy, z: oz};
+  const sorted = [...bp.blocks].sort((a, b) => a[1] - b[1]);
+  buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
+    x: ox + dx, y: oy + dy, z: oz + dz, id: bid
+  }));
+  buildIndex = 0;
+}
+
+function tickBuilder(dt){
+  placeCd -= dt;
+  if(phase === PHASES.BUILD_SETUP){
+    if(builderMode === 'creative') setupCreative();
+    else if(landmarkId) setupLandmark(landmarkId);
+    else setupCreative();
+    setPhase(PHASES.BUILD_PLACE, `Building ${buildName}…`);
     return;
   }
+  if(phase === PHASES.BUILD_PLACE){
+    if(buildIndex >= buildQueue.length){
+      setPhase(PHASES.BUILD_DONE, `${buildName} complete`);
+      return;
+    }
+    const cell = buildQueue[buildIndex];
+    setStatus(`${buildName} · ${buildIndex + 1}/${buildQueue.length}`);
+    const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
+    // Walk near the cell
+    if(d > 3.2){
+      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.4});
+      return;
+    }
+    // Look at placement
+    faceToward(cell.x, cell.z, dt, Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
+    keys.KeyW = false;
+    if(placeCd > 0) return;
+    if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
+      buildIndex++;
+      placeCd = 0.28; // human place cadence
+    } else {
+      // no materials — skip or try gather
+      if(!gm.forge){
+        setStatus('Need blocks — gathering…');
+        selectTool('pick');
+        if(!mineLock) digLook(0.5);
+        placeCd = 0.5;
+        // skip this cell after a few fails
+        if(phaseT > 8){ buildIndex++; phaseT = 0; }
+      } else {
+        buildIndex++;
+      }
+    }
+    return;
+  }
+  if(phase === PHASES.BUILD_DONE){
+    setStatus(`${buildName} complete — watching`);
+    clearKeys();
+    view.yaw += 0.1 * dt;
+    // Creative: start another doodle after a pause
+    if(builderMode === 'creative' && phaseT > 6){
+      setPhase(PHASES.BUILD_SETUP, 'Next creative build…');
+    }
+  }
+}
+
+export function start(opts = {}){
+  if(active) return;
+  if(!state.playing){ addChat('🤖', 'Start a world first.'); return; }
+
+  botProfile = opts.profile || 'story';
+  builderMode = opts.builderMode || null;
+  landmarkId = opts.landmarkId || null;
+
+  if(botProfile === 'story' && gm.forge){
+    addChat('🤖', 'Story campaign needs Nightfall — switch mode and try again.');
+    return;
+  }
+  if(botProfile === 'builder' && !gm.forge){
+    addChat('🤖', 'Builder tip: Forge mode has unlimited blocks.');
+  }
+
   active = true;
   setInputLocked?.(true);
   document.body.classList.add('ai-driving');
@@ -1028,11 +1166,22 @@ export function start(){
   sameActionTick = 0;
   lastActionKey = '';
   progressPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
-  reevaluatePhase();
+  buildQueue = [];
+  buildIndex = 0;
+
+  if(botProfile === 'builder'){
+    setPhase(PHASES.BUILD_SETUP, builderMode === 'creative' ? 'Creative building…' : 'Preparing landmark…');
+    addChat('🤖', builderMode === 'creative'
+      ? 'Builder ON — creative mode (no time limit).'
+      : `Builder ON — constructing ${(buildings.listBuildings().find(b=>b.id===landmarkId)||{}).name || 'landmark'}.`);
+  } else {
+    reevaluatePhase();
+    addChat('🤖', 'Story campaign ON — Elder Cube arc. No time limit.');
+  }
+
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.add('active');
   showStreamCam();
-  addChat('🤖', 'Cube-arc bot ON — smarter pathing. No time limit.');
 }
 
 export function stop(){
@@ -1044,15 +1193,101 @@ export function stop(){
   clearMining();
   deathWait = 0;
   phase = PHASES.IDLE;
+  botProfile = 'story';
+  builderMode = null;
+  landmarkId = null;
   setStatus('');
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.remove('active');
   hideStreamCam();
-  addChat('🤖', 'Cube-arc bot OFF.');
+  closeProfileModal();
+  addChat('🤖', 'Bot OFF.');
+}
+
+export function openProfileModal(){
+  const m = document.getElementById('aiProfileModal');
+  if(!m){ start({profile:'story'}); return; }
+  m.classList.add('show');
+  m.style.display = 'flex';
+  m.setAttribute('aria-hidden', 'false');
+  document.getElementById('aiBuilderOpts').style.display = 'none';
+  document.getElementById('aiBuildingList').style.display = 'none';
+  m.querySelector('.aiProfileGrid').style.display = 'flex';
+}
+
+export function closeProfileModal(){
+  const m = document.getElementById('aiProfileModal');
+  if(!m) return;
+  m.classList.remove('show');
+  m.style.display = 'none';
+  m.setAttribute('aria-hidden', 'true');
+}
+
+function showBuilderOpts(){
+  const m = document.getElementById('aiProfileModal');
+  m.querySelector('.aiProfileGrid').style.display = 'none';
+  document.getElementById('aiBuilderOpts').style.display = 'block';
+  document.getElementById('aiBuildingList').style.display = 'none';
+}
+
+function showBuildingList(){
+  document.getElementById('aiBuilderOpts').style.display = 'none';
+  document.getElementById('aiBuildingList').style.display = 'block';
+  const grid = document.getElementById('aiBuildingGrid');
+  grid.innerHTML = '';
+  for(const b of buildings.listBuildings()){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'aiBuildBtn';
+    btn.innerHTML = `<span class="ic">${b.icon}</span><span class="nm">${b.name}</span>`;
+    btn.addEventListener('click', ()=>{
+      closeProfileModal();
+      start({profile:'builder', builderMode:'landmark', landmarkId: b.id});
+    });
+    grid.appendChild(btn);
+  }
+}
+
+export function initProfileUI(){
+  const m = document.getElementById('aiProfileModal');
+  if(!m || m.dataset.ready) return;
+  m.dataset.ready = '1';
+  m.querySelectorAll('[data-profile]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const prof = btn.getAttribute('data-profile');
+      if(prof === 'story'){
+        closeProfileModal();
+        start({profile:'story'});
+      } else {
+        showBuilderOpts();
+      }
+    });
+  });
+  m.querySelectorAll('[data-build]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mode = btn.getAttribute('data-build');
+      if(mode === 'creative'){
+        closeProfileModal();
+        start({profile:'builder', builderMode:'creative'});
+      } else {
+        showBuildingList();
+      }
+    });
+  });
+  document.getElementById('aiBuilderBack')?.addEventListener('click', ()=>{
+    document.getElementById('aiBuilderOpts').style.display = 'none';
+    m.querySelector('.aiProfileGrid').style.display = 'flex';
+  });
+  document.getElementById('aiBuildingBack')?.addEventListener('click', showBuilderOpts);
+  document.getElementById('aiProfileClose')?.addEventListener('click', closeProfileModal);
 }
 
 export function toggle(){
-  if(active) stop(); else start();
+  if(active) stop();
+  else {
+    initProfileUI();
+    openProfileModal();
+  }
 }
 
 export function tick(dt){
@@ -1067,8 +1302,9 @@ export function tick(dt){
     if(deathWait >= 1.5){
       deathWait = 0;
       try{ survival.respawn(); }catch(e){ console.warn('[ai] respawn', e); }
-      reevaluatePhase();
-      addChat('🤖', 'Respawned — continuing the arc.');
+      if(botProfile === 'builder') setPhase(PHASES.BUILD_PLACE, `Resume ${buildName || 'build'}…`);
+      else reevaluatePhase();
+      addChat('🤖', 'Respawned — continuing.');
     }
     return;
   }
@@ -1106,6 +1342,17 @@ export function tick(dt){
     const moved = Math.hypot(player.pos.x - lastPos.x, player.pos.y - lastPos.y, player.pos.z - lastPos.z);
     if(moved < 0.05) stuckT += dt;
     else stuckT = Math.max(0, stuckT - dt);
+    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+    return;
+  }
+
+  // Builder profile skips combat focus unless attacked up close
+  if(botProfile === 'builder'){
+    if(nearestHostile() && fightNearby(dt)){
+      lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+      return;
+    }
+    tickBuilder(dt);
     lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
     return;
   }

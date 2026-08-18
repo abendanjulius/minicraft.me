@@ -8,7 +8,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.5.15">
+<link rel="stylesheet" href="./css/style.css?v=2.5.16">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -220,6 +220,47 @@
 <div id="btnAI" style="display:none" title="Cube-arc bot (watch mode)">🤖</div>
 <div id="aiStatus" style="display:none"></div>
 
+<div id="aiProfileModal" style="display:none" aria-hidden="true">
+  <div class="aiModalCard">
+    <h2>🤖 Bot Profile</h2>
+    <p class="aiModalHint">Choose how the bot plays</p>
+    <div class="aiProfileGrid">
+      <button type="button" class="aiProfBtn" data-profile="story">
+        <span class="aiProfIcon">📖</span>
+        <span class="aiProfTitle">Story Campaign</span>
+        <span class="aiProfDesc">Elder Cube arc — vault, Keepstone, siege</span>
+      </button>
+      <button type="button" class="aiProfBtn" data-profile="builder">
+        <span class="aiProfIcon">🧱</span>
+        <span class="aiProfTitle">Builder</span>
+        <span class="aiProfDesc">Creative builds &amp; famous landmarks</span>
+      </button>
+    </div>
+    <div id="aiBuilderOpts" style="display:none">
+      <p class="aiModalHint">Builder mode</p>
+      <div class="aiProfileGrid">
+        <button type="button" class="aiProfBtn" data-build="creative">
+          <span class="aiProfIcon">🎨</span>
+          <span class="aiProfTitle">Creative building</span>
+          <span class="aiProfDesc">Random towers, houses, walls…</span>
+        </button>
+        <button type="button" class="aiProfBtn" data-build="select">
+          <span class="aiProfIcon">🗺️</span>
+          <span class="aiProfTitle">Select building</span>
+          <span class="aiProfDesc">Famous landmarks</span>
+        </button>
+      </div>
+      <button type="button" class="aiBackBtn" id="aiBuilderBack">← Back</button>
+    </div>
+    <div id="aiBuildingList" style="display:none">
+      <p class="aiModalHint">What should it build?</p>
+      <div id="aiBuildingGrid" class="aiBuildingGrid"></div>
+      <button type="button" class="aiBackBtn" id="aiBuildingBack">← Back</button>
+    </div>
+    <button type="button" class="aiCloseBtn" id="aiProfileClose">Cancel</button>
+  </div>
+</div>
+
 <!-- Streamer-style facecam (shown while Cube-arc bot is watching mode) -->
 <div id="streamCam" style="display:none" aria-hidden="true">
   <div class="scLive"><span class="scDot"></span> LIVE</div>
@@ -235,7 +276,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.5.15"></script>
+<script type="module" src="./js/main.js?v=2.5.16"></script>
 <script>
 (function(){
   function showRecover(msg){
