@@ -62,6 +62,7 @@ let approachBestD = Infinity;     // closest we've come to the current target
 let noProgressT = 0;              // seconds without getting closer
 let approachKey = '';             // which cell the two above refer to
 let overlapT = 0;
+let navActive = false;   // steering engaged? (hysteresis, see BUILD_PLACE)
 const failCounts = Object.create(null);
 function countFail(why){ failCounts[why] = (failCounts[why] || 0) + 1; }
 function failSummary(){
@@ -765,6 +766,24 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
     keys.KeyW = false;
     faceToward(goalX, goalZ, dt, opts.pitch ?? -0.1);
     return true;
+  }
+
+  // Short-range positioning: steer at the EXACT bearing with no held heading.
+  // The 8-way scorer below commits to one of 8 compass directions for 1.6-2.2 s
+  // — at flight speed that is ~14 blocks of travel, so for a target a few blocks
+  // away the bot overshoots, re-picks, overshoots again: it orbits. Fine for
+  // crossing terrain, useless for lining up on a block.
+  if(opts.precise){
+    faceToward(goalX, goalZ, dt, opts.pitch ?? -0.1, 1.5);
+    keys.KeyW = true;
+    keys.KeyA = keys.KeyD = keys.KeyS = false;
+    keys.sprint = false;
+    // step over a lip rather than digging
+    const sx = player.pos.x - Math.sin(view.yaw);
+    const sz = player.pos.z - Math.cos(view.yaw);
+    const sy = Math.round(player.pos.y);
+    if(solid(sx, sy, sz) && !solid(sx, sy + 1, sz)) keys.Space = true;
+    return false;
   }
 
   // Active detour (stuck recovery)
@@ -1520,7 +1539,16 @@ function tickBuilder(dt){
     }
 
     holdBlock(cell.id);
-    if(gm.forge) ensureFlying();
+    // Fly only when the work is genuinely out of reach. Walking stops dead when
+    // the key releases; flight coasts, and that coasting is what turns every
+    // approach into an orbit. Ground courses are laid on foot.
+    const groundY = surfaceY(cx, cz);
+    const lowWork = groundY >= 0 && (cy - groundY) <= 3;
+    if(gm.forge){
+      if(lowWork){
+        if(state.flying && (player.pos.y - groundY) < 6){ try{ toggleFly(); }catch(e){} }
+      } else ensureFlying();
+    }
 
     approachT += dt;
     const stand = standOutside(cell);
@@ -1533,7 +1561,14 @@ function tickBuilder(dt){
 
     // Track real progress toward THIS cell rather than a blind timer.
     const key = cx + ',' + cy + ',' + cz;
-    if(key !== approachKey){ approachKey = key; approachBestD = Infinity; noProgressT = 0; approachT = 0; }
+    if(key !== approachKey){ approachKey = key; approachBestD = Infinity; noProgressT = 0; approachT = 0; navActive = false; }
+
+    // Hysteresis. With a single radius the bot flips between "steer" and "stop"
+    // every frame near the boundary — re-aiming and re-accelerating each time,
+    // which reads as circling. Engage steering only when clearly far, and
+    // disengage well inside that, so the two states can't chatter.
+    if(!navActive && d > (stand.above ? 4.0 : 3.4)) navActive = true;
+    if(navActive && d <= (stand.above ? 1.5 : 2.0)) navActive = false;
     if(d < approachBestD - 0.15){ approachBestD = d; noProgressT = 0; }
     else noProgressT += dt;
 
@@ -1558,7 +1593,7 @@ function tickBuilder(dt){
     // 8 blocks up, so the bot fled the very block it was trying to place.
     if(noProgressT > 4.5){
       if(state.flying) flyTowardY(cell.y + HOVER + 4 + 1.4, dt);
-      navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR});
+      navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR, precise: d < 12});
       if(noProgressT > 9){
         if(!placeOverlapsPlayer(cx, cy, cz) && placeBuildBlock(cx, cy, cz, cell.id)){
           buildIndex++;
@@ -1582,12 +1617,12 @@ function tickBuilder(dt){
     // flyTowardY aims the feet 1.4 below its argument, so add that back on
     const flyTarget = stand.above ? cell.y + HOVER + 1.4 : cell.y;
 
-    if(!near){
-      const arrived = navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR});
+    if(navActive){
+      const arrived = navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR, precise: d < 12});
       if(state.flying) flyTowardY(flyTarget, dt);
-      // Safety net: if the navigator says it has arrived, proceed even when our
-      // own radius disagrees. Never let the two thresholds deadlock each other.
-      if(!arrived) return;
+      if(arrived) navActive = false;
+      // Safety net: never let the radii deadlock each other.
+      if(!arrived && !near) return;
     }
 
     keys.KeyW = false;
