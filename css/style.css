@@ -1513,25 +1513,32 @@ html body #touchUI #btnFly.active:active{
 #aiStatus{position:fixed;top:54px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 
-/* Streamer facecam — bottom-left live-cast overlay */
+/* Streamer facecam — live-cast overlay */
 #streamCam{
-  position:fixed;
-  left:12px;
-  bottom:12px;
-  z-index:30;
-  width:132px;
-  pointer-events:none;
+  position:fixed !important;
+  left:10px !important;
+  bottom:12px !important;
+  top:auto !important;
+  z-index:9999 !important;
+  width:128px !important;
+  pointer-events:none !important;
   font-family:monospace;
   filter:drop-shadow(0 4px 14px rgba(0,0,0,.55));
   display:none;
 }
 #streamCam.scShow{
   display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
 }
-/* Above the mobile joystick so it stays visible on iPad */
-body.touch #streamCam.scShow{
-  bottom: 155px;
-  left: 10px;
+/* Mobile / touch: sit ABOVE the left joystick (joyZone is 45vh tall) */
+body.touch #streamCam,
+body.touch #streamCam.scShow,
+html body.touch #streamCam.scShow{
+  left:8px !important;
+  bottom:auto !important;
+  top:52px !important; /* under HUD — always visible on iPad */
+  width:112px !important;
 }
 #streamCam .scLive{
   display:inline-flex;
@@ -1549,16 +1556,16 @@ body.touch #streamCam.scShow{
 }
 #streamCam .scDot{
   width:6px;height:6px;border-radius:50%;background:#fff;
-  box-shadow:0 0 0 0 rgba(255,255,255,.7);
   animation:scDot 1.6s ease-out infinite;
 }
 #streamCam .scFrame{
   position:relative;
-  width:120px;height:120px;
+  width:100%;
+  aspect-ratio:1;
   border-radius:12px;
   overflow:hidden;
-  border:3px solid rgba(255,255,255,.88);
-  background:#1a1a22;
+  border:3px solid rgba(255,255,255,.9);
+  background:#2a2a35;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
 }
 #streamCam #scFace{
@@ -1567,6 +1574,7 @@ body.touch #streamCam.scShow{
   image-rendering:pixelated;
   transform-origin:center 30%;
   animation:scIdle 3.2s ease-in-out infinite;
+  background:#3d4a6b;
 }
 #streamCam.scMine #scFace{ animation:scFocus 0.55s ease-in-out infinite; }
 #streamCam.scFight #scFace{ animation:scReact 0.35s ease-in-out infinite; }
@@ -1578,18 +1586,17 @@ body.touch #streamCam.scShow{
 }
 #streamCam .scMeta{
   margin-top:5px;
-  background:rgba(0,0,0,.55);
-  border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.6);
+  border:1px solid rgba(255,255,255,.25);
   border-radius:8px;
   padding:5px 8px;
   color:#fff;
-  max-width:120px;
 }
 #streamCam #scName{
   font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 #streamCam #scAction{
-  font-size:9px;opacity:.8;margin-top:1px;
+  font-size:9px;opacity:.85;margin-top:1px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   color:#cfe;
 }
@@ -1614,9 +1621,4 @@ body.touch #streamCam.scShow{
 @keyframes scBob{
   0%,100%{ transform:translateY(0); }
   50%{ transform:translateY(4px); }
-}
-@media (max-width:860px){
-  #streamCam{ left:8px; bottom:8px; width:108px; }
-  #streamCam .scFrame{ width:96px; height:96px; border-radius:10px; }
-  #streamCam .scMeta{ max-width:96px; }
 }

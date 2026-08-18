@@ -49,6 +49,7 @@ let avoidYaw = 0;          // temporary detour heading
 let avoidT = 0;            // seconds left on detour
 let digCd = 0;
 let craftCd = 0;
+let streamCamGuard = 0;
 let wanderAng = 0;
 let recoverMode = 0;       // 0 none, 1 dig, 2 turn, 3 back up
 
@@ -74,8 +75,25 @@ function showStreamCam(){
     return;
   }
   el.classList.add('scShow');
-  el.style.display = 'block';
   el.setAttribute('aria-hidden', 'false');
+  // Inline styles beat stubborn mobile CSS
+  const touch = document.body.classList.contains('touch');
+  el.style.setProperty('display', 'block', 'important');
+  el.style.setProperty('visibility', 'visible', 'important');
+  el.style.setProperty('opacity', '1', 'important');
+  el.style.setProperty('z-index', '9999', 'important');
+  el.style.setProperty('position', 'fixed', 'important');
+  el.style.setProperty('left', '8px', 'important');
+  if(touch){
+    // Top-left on mobile — bottom-left is covered by the joystick
+    el.style.setProperty('top', '52px', 'important');
+    el.style.setProperty('bottom', 'auto', 'important');
+    el.style.setProperty('width', '112px', 'important');
+  } else {
+    el.style.setProperty('bottom', '12px', 'important');
+    el.style.setProperty('top', 'auto', 'important');
+    el.style.setProperty('width', '128px', 'important');
+  }
   const img = document.getElementById('scFace');
   const name = document.getElementById('scName');
   try{
@@ -83,9 +101,13 @@ function showStreamCam(){
     if(img){
       img.src = faceURL(idx);
       img.style.imageRendering = 'pixelated';
+      img.onerror = ()=>{ img.style.background = '#4a6fa5'; img.removeAttribute('src'); };
     }
     if(name) name.textContent = (SKINS[idx]?.name || 'Player') + ' · AI';
-  }catch(e){ console.warn('[ai] streamCam face', e); }
+  }catch(e){
+    console.warn('[ai] streamCam face', e);
+    if(img) img.style.background = '#4a6fa5';
+  }
   updateStreamCam('starting the run');
 }
 
@@ -898,6 +920,15 @@ export function tick(dt){
   if(joy){ joy.x = 0; joy.y = 0; }
 
   manageInventory(dt);
+
+  // Keep facecam visible (mobile Safari / layout can drop it)
+  streamCamGuard -= dt;
+  if(streamCamGuard <= 0){
+    streamCamGuard = 2.5;
+    const cam = streamCamEl();
+    if(cam && !cam.classList.contains('scShow')) showStreamCam();
+    else if(cam && cam.style.display === 'none') showStreamCam();
+  }
 
   // Finish the current dig before walking again — moving resets mine progress.
   if(holdMine(dt)){
