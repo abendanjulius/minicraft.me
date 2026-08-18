@@ -1516,14 +1516,14 @@ html body #touchUI #btnFly.active:active{
 /* Streamer facecam — live-cast overlay */
 #streamCam{
   position:fixed !important;
-  left:10px !important;
+  left:12px !important;
   bottom:12px !important;
   top:auto !important;
   z-index:9999 !important;
-  width:128px !important;
+  width:96px !important;
   pointer-events:none !important;
   font-family:monospace;
-  filter:drop-shadow(0 4px 14px rgba(0,0,0,.55));
+  filter:drop-shadow(0 3px 10px rgba(0,0,0,.5));
   display:none;
 }
 #streamCam.scShow{
@@ -1531,94 +1531,75 @@ html body #touchUI #btnFly.active:active{
   visibility:visible !important;
   opacity:1 !important;
 }
-/* Mobile / touch: sit ABOVE the left joystick (joyZone is 45vh tall) */
+/* Mobile: compact, top-left under HUD */
 body.touch #streamCam,
 body.touch #streamCam.scShow,
 html body.touch #streamCam.scShow{
   left:8px !important;
   bottom:auto !important;
-  top:52px !important; /* under HUD — always visible on iPad */
-  width:112px !important;
+  top:44px !important;
+  width:72px !important;
 }
 #streamCam .scLive{
   display:inline-flex;
   align-items:center;
-  gap:5px;
+  gap:4px;
   background:#e11;
   color:#fff;
-  font-size:10px;
+  font-size:9px;
   font-weight:700;
-  letter-spacing:.06em;
-  padding:2px 7px;
-  border-radius:4px;
-  margin-bottom:5px;
+  letter-spacing:.05em;
+  padding:1px 6px;
+  border-radius:3px;
+  margin-bottom:4px;
   animation:scPulse 1.6s ease-in-out infinite;
 }
+body.touch #streamCam .scLive{ font-size:8px; padding:1px 5px; }
 #streamCam .scDot{
-  width:6px;height:6px;border-radius:50%;background:#fff;
+  width:5px;height:5px;border-radius:50%;background:#fff;
   animation:scDot 1.6s ease-out infinite;
 }
 #streamCam .scFrame{
   position:relative;
   width:100%;
   aspect-ratio:1;
-  border-radius:12px;
+  border-radius:10px;
   overflow:hidden;
-  border:3px solid rgba(255,255,255,.9);
+  border:2px solid rgba(255,255,255,.9);
   background:#2a2a35;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
 }
+body.touch #streamCam .scFrame{ border-radius:8px; border-width:2px; }
 #streamCam #scFace{
   width:100%;height:100%;
   object-fit:cover;
   image-rendering:pixelated;
-  transform-origin:center 30%;
-  animation:scIdle 3.2s ease-in-out infinite;
+  transform-origin:50% 40%;
   background:#3d4a6b;
+  will-change:transform;
 }
-#streamCam.scMine #scFace{ animation:scFocus 0.55s ease-in-out infinite; }
-#streamCam.scFight #scFace{ animation:scReact 0.35s ease-in-out infinite; }
-#streamCam.scSwim #scFace{ animation:scBob 0.9s ease-in-out infinite; }
+/* Meta (name / action) hidden — face only */
+#streamCam .scMeta{ display:none !important; }
 #streamCam .scShade{
   position:absolute;inset:0;
-  background:linear-gradient(180deg, transparent 55%, rgba(0,0,0,.35) 100%);
+  background:linear-gradient(180deg, transparent 50%, rgba(0,0,0,.28) 100%);
   pointer-events:none;
 }
-#streamCam .scMeta{
-  margin-top:5px;
-  background:rgba(0,0,0,.6);
-  border:1px solid rgba(255,255,255,.25);
-  border-radius:8px;
-  padding:5px 8px;
-  color:#fff;
-}
-#streamCam #scName{
-  font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-#streamCam #scAction{
-  font-size:9px;opacity:.85;margin-top:1px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  color:#cfe;
+/* Live face states driven by JS classes */
+#streamCam.scLookL #scFace{ transform: translateX(-6%) rotate(-3deg) scale(1.04); }
+#streamCam.scLookR #scFace{ transform: translateX(6%) rotate(3deg) scale(1.04); }
+#streamCam.scNod #scFace{ transform: translateY(7%) scale(1.02, 0.94); }
+#streamCam.scBlink #scFace{ transform: scale(1.02, 0.82); filter:brightness(0.92); }
+#streamCam.scLean #scFace{ transform: translateY(5%) rotate(-2deg) scale(1.08); }
+#streamCam.scShock #scFace{ transform: translateY(-4%) scale(1.1); filter:brightness(1.08); }
+#streamCam.scMine #scFace{ transform: translateY(4%) scale(1.06); }
+#streamCam.scFight #scFace{ transform: translate(2%, -2%) rotate(2deg) scale(1.08); }
+#streamCam.scSwim #scFace{ transform: translateY(6%) rotate(-1deg); }
+#streamCam #scFace{
+  transition: transform 0.18s ease-out, filter 0.12s ease;
 }
 @keyframes scPulse{ 0%,100%{opacity:1} 50%{opacity:.72} }
 @keyframes scDot{
   0%{ box-shadow:0 0 0 0 rgba(255,255,255,.55); }
-  100%{ box-shadow:0 0 0 8px rgba(255,255,255,0); }
-}
-@keyframes scIdle{
-  0%,100%{ transform:translateY(0) scale(1); }
-  50%{ transform:translateY(2px) scale(1.03); }
-}
-@keyframes scFocus{
-  0%,100%{ transform:translateY(1px) scale(1.02); }
-  50%{ transform:translateY(3px) scale(1.06); }
-}
-@keyframes scReact{
-  0%,100%{ transform:translate(0,0) rotate(0deg); }
-  25%{ transform:translate(1px,-1px) rotate(-2deg); }
-  75%{ transform:translate(-1px,1px) rotate(2deg); }
-}
-@keyframes scBob{
-  0%,100%{ transform:translateY(0); }
-  50%{ transform:translateY(4px); }
+  100%{ box-shadow:0 0 0 6px rgba(255,255,255,0); }
 }

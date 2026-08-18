@@ -85,14 +85,14 @@ function showStreamCam(){
   el.style.setProperty('position', 'fixed', 'important');
   el.style.setProperty('left', '8px', 'important');
   if(touch){
-    // Top-left on mobile — bottom-left is covered by the joystick
-    el.style.setProperty('top', '52px', 'important');
+    // Compact top-left — clear of joystick
+    el.style.setProperty('top', '44px', 'important');
     el.style.setProperty('bottom', 'auto', 'important');
-    el.style.setProperty('width', '112px', 'important');
+    el.style.setProperty('width', '72px', 'important');
   } else {
     el.style.setProperty('bottom', '12px', 'important');
     el.style.setProperty('top', 'auto', 'important');
-    el.style.setProperty('width', '128px', 'important');
+    el.style.setProperty('width', '96px', 'important');
   }
   const img = document.getElementById('scFace');
   const name = document.getElementById('scName');
@@ -120,15 +120,61 @@ function hideStreamCam(){
 }
 
 function updateStreamCam(action){
-  const act = document.getElementById('scAction');
-  if(act && action) act.textContent = action;
+  // Name/action text removed from UI — keep mood only for face animation
   const el = streamCamEl();
   if(!el) return;
-  el.classList.remove('scMine','scFight','scSwim');
-  const a = (action || '').toLowerCase();
-  if(a.includes('mining') || a.includes('gather') || a.includes('descend') || a.includes('climb')) el.classList.add('scMine');
-  else if(a.includes('fight') || a.includes('siege')) el.classList.add('scFight');
-  else if(a.includes('swim')) el.classList.add('scSwim');
+  el.dataset.mood = '';
+  const a = (action || status || '').toLowerCase();
+  if(a.includes('fight') || a.includes('siege')) el.dataset.mood = 'fight';
+  else if(a.includes('swim')) el.dataset.mood = 'swim';
+  else if(a.includes('mining') || a.includes('shaft') || a.includes('gather') || a.includes('descend') || a.includes('climb')) el.dataset.mood = 'mine';
+  else el.dataset.mood = 'idle';
+}
+
+const FACE_EXPR = ['scLookL','scLookR','scNod','scBlink','scLean','scShock','scMine','scFight','scSwim'];
+let faceT = 0;
+let faceHold = 0;
+let faceExpr = '';
+
+/** Drive natural streamer-like head motion independent of status text. */
+function tickStreamFace(dt){
+  const el = streamCamEl();
+  if(!el || !el.classList.contains('scShow')) return;
+  faceT += dt;
+  faceHold -= dt;
+
+  const mood = el.dataset.mood || 'idle';
+
+  // Blink every ~2.5–4s
+  if(faceHold <= 0 && Math.random() < dt * 0.35){
+    faceExpr = 'scBlink';
+    faceHold = 0.12;
+  } else if(faceHold <= 0){
+    // Pick expression from mood
+    let pick;
+    if(mood === 'fight'){
+      pick = Math.random() < 0.55 ? 'scFight' : (Math.random() < 0.5 ? 'scShock' : 'scLookL');
+      faceHold = 0.25 + Math.random() * 0.35;
+    } else if(mood === 'mine'){
+      pick = Math.random() < 0.6 ? 'scLean' : (Math.random() < 0.5 ? 'scNod' : 'scMine');
+      faceHold = 0.35 + Math.random() * 0.5;
+    } else if(mood === 'swim'){
+      pick = 'scSwim';
+      faceHold = 0.4;
+    } else {
+      // idle: glance around like watching the game
+      const r = Math.random();
+      if(r < 0.28) pick = 'scLookL';
+      else if(r < 0.56) pick = 'scLookR';
+      else if(r < 0.72) pick = 'scNod';
+      else if(r < 0.85) pick = 'scLean';
+      else pick = '';
+      faceHold = 0.45 + Math.random() * 1.1;
+    }
+    faceExpr = pick;
+  }
+
+  for(const c of FACE_EXPR) el.classList.toggle(c, c === faceExpr);
 }
 
 function clearKeys(){
@@ -920,6 +966,7 @@ export function tick(dt){
   if(joy){ joy.x = 0; joy.y = 0; }
 
   manageInventory(dt);
+  tickStreamFace(dt);
 
   // Keep facecam visible (mobile Safari / layout can drop it)
   streamCamGuard -= dt;
