@@ -1200,15 +1200,14 @@ function flyTowardY(targetY, dt){
 
 function holdBlock(id){
   const kind = id >= 100 ? 'f' : 'b';
-  // Prefer an existing matching slot
   let i = hotbarSlots.findIndex(s => s && s.k === kind && s.id === id);
   if(i < 0){
-    // Use slot 0 for building so it's always visible
-    i = 0;
-    hotbarSlots[0] = {k: kind, id};
+    // Prefer empty slot; else slot 0 (don't stomp tools every frame if already a block)
+    i = hotbarSlots.findIndex(s => s === null);
+    if(i < 0) i = 0;
+    hotbarSlots[i] = {k: kind, id};
   }
-  sel.slot = i;
-  // Forge: keep a visible stock count; Nightfall uses real inventory
+  if(sel.slot !== i) sel.slot = i;
   if(gm.forge && id < 100) inventory[id] = Math.max(inventory[id] || 0, 64);
   renderHotbar();
 }
@@ -1282,6 +1281,10 @@ function tickBuilder(dt){
     return;
   }
   if(phase === PHASES.BUILD_PLACE){
+    if(!buildQueue.length){
+      setPhase(PHASES.BUILD_SETUP, 'Rebuilding queue…');
+      return;
+    }
     if(buildIndex >= buildQueue.length){
       if(buildJobId) markJobCompleted(buildJobId);
       snapshotJobProgress();
@@ -1293,7 +1296,6 @@ function tickBuilder(dt){
     const total = buildQueue.length;
     const eta = formatEta(buildEtaSec());
     setStatus(`${buildName} · ${done}/${total} · ETA ${eta}`);
-    // Dedicated countdown line under status
     const etaEl = document.getElementById('aiEta');
     if(etaEl){
       etaEl.style.display = 'block';
@@ -1301,42 +1303,45 @@ function tickBuilder(dt){
     }
     holdBlock(cell.id);
 
-    // Tall builds: fly up so the avatar is beside the block being placed
-    const needFly = gm.forge && (cell.y - (buildOrigin?.y || player.pos.y) > 2 || cell.y > player.pos.y + 3);
-    if(needFly || (gm.forge && state.flying)) ensureFlying();
+    // Fly for tall sections (Forge)
+    if(gm.forge && cell.y > (buildOrigin?.y || 0) + 2) ensureFlying();
 
     const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
-    const atAlt = !state.flying || flyTowardY(cell.y, dt);
+    const altOk = flyTowardY(cell.y, dt);
 
-    // Move horizontally while adjusting height
-    if(d > 2.8){
-      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.0});
-      // navigateTo clears Space — restore vertical intent after
+    // Approach cell, but do not soft-lock forever on pathing
+    if(d > 5.5){
+      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 3.5});
       if(state.flying) flyTowardY(cell.y, dt);
-      return;
+      // After lingering too long on approach, place remotely (applyEdit is absolute)
+      if(phaseT < 2.5) return;
+    } else {
+      keys.KeyW = false;
+      if(state.flying) flyTowardY(cell.y, dt);
+      faceToward(cell.x, cell.z, dt,
+        Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
+      // Wait briefly for altitude only when reasonably close
+      if(state.flying && !altOk && phaseT < 1.2) return;
     }
 
-    // Close in XZ: hold position and finish altitude
-    keys.KeyW = false;
-    if(state.flying) flyTowardY(cell.y, dt);
-    faceToward(cell.x, cell.z, dt, Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
-
-    if(!atAlt && state.flying) return; // still climbing/descending
     if(placeCd > 0) return;
+
+    // Place at absolute coords — does not require perfect stand position
     if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
       buildIndex++;
       noteBlockPlaced();
-      placeCd = 0.28;
+      placeCd = 0.22;
+      phaseT = 0; // reset approach timer for next cell
       if(buildIndex % 5 === 0) snapshotJobProgress();
     } else {
       if(!gm.forge){
         setStatus('Need blocks — gathering…');
-        selectTool('pick');
-        if(!mineLock) digLook(0.5);
-        placeCd = 0.5;
-        if(phaseT > 8){ buildIndex++; phaseT = 0; }
+        placeCd = 0.4;
+        if(phaseT > 6){ buildIndex++; phaseT = 0; }
       } else {
+        // should not fail in Forge — skip bad cell
         buildIndex++;
+        phaseT = 0;
       }
     }
     return;
@@ -1390,15 +1395,21 @@ export function start(opts = {}){
   sameActionTick = 0;
   lastActionKey = '';
   progressPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
-  buildQueue = [];
-  buildIndex = 0;
+  // Do NOT clear queue after resumeJob — that wiped progress and left the bot walking forever
+  if(!opts.resumeJob){
+    buildQueue = [];
+    buildIndex = 0;
+    buildJobId = buildJobId; // keep if set later by setup
+  }
 
   if(botProfile === 'builder'){
-    if(opts.resumeJob){
+    if(opts.resumeJob && buildQueue.length){
       if(gm.forge) ensureFlying();
       setPhase(PHASES.BUILD_PLACE, `Resuming ${buildName}…`);
       addChat('🤖', `Resuming ${buildName} from ${buildIndex}/${buildQueue.length}.`);
     } else {
+      buildQueue = [];
+      buildIndex = 0;
       setPhase(PHASES.BUILD_SETUP, builderMode === 'creative' ? 'Creative building…' : 'Preparing landmark…');
       addChat('🤖', builderMode === 'creative'
         ? 'Builder ON — creative mode (no time limit).'
@@ -1603,7 +1614,8 @@ export function tick(dt){
   clearKeys();
   if(joy){ joy.x = 0; joy.y = 0; }
 
-  manageInventory(dt);
+  // Builder must not run craft/tool brain — it steals the hotbar from holdBlock
+  if(botProfile !== 'builder') manageInventory(dt);
   checkStuckAlarm(dt);
   tickStreamFace(dt);
 
