@@ -56,6 +56,9 @@ let sameActionCount = 0;   // stuck-alarm: same plan with no progress
 let sameActionTick = 0;
 let lastActionKey = '';
 let progressPos = {x:0,y:0,z:0};
+let steerDir = null;   // held [dx,dz] for smooth pathing
+let steerHold = 0;
+let smoothPitchTarget = null;
 
 export const isActive = () => active;
 export const getPhase = () => phase;
@@ -366,27 +369,41 @@ function passableColumn(x, yFeet, z){
   return true;
 }
 
-function faceYaw(want, dt, rate = 1.7){
+function faceYaw(want, dt, rate = 1.15){
   let dy = want - view.yaw;
   while(dy > Math.PI) dy -= Math.PI * 2;
   while(dy < -Math.PI) dy += Math.PI * 2;
-  const max = rate * dt;
+  // Dead-zone stops micro-jitter when almost aligned
+  if(Math.abs(dy) < 0.035) return true;
+  // Ease-in: slower when close, still capped
+  const ease = Math.min(1, Math.abs(dy) * 1.4);
+  const max = rate * dt * (0.4 + 0.6 * ease);
   view.yaw += Math.max(-max, Math.min(max, dy));
-  return Math.abs(dy) < 0.12;
+  return Math.abs(dy) < 0.07;
 }
 
-function faceToward(tx, tz, dt, pitch = null, rate = 1.7){
+function faceToward(tx, tz, dt, pitch = null, rate = 1.15){
   const dx = wrapDelta(tx - player.pos.x);
   const dz = wrapDelta(tz - player.pos.z);
   const want = Math.atan2(-dx, -dz);
   const ok = faceYaw(want, dt, rate);
   if(pitch != null){
     const dp = pitch - view.pitch;
-    const max = rate * dt;
-    view.pitch += Math.max(-max, Math.min(max, dp));
+    if(Math.abs(dp) > 0.03){
+      const max = rate * 0.85 * dt;
+      view.pitch += Math.max(-max, Math.min(max, dp));
+    }
     view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
   }
   return ok;
+}
+
+function smoothPitch(want, dt, rate = 0.9){
+  const dp = want - view.pitch;
+  if(Math.abs(dp) < 0.03) return;
+  const max = rate * dt;
+  view.pitch += Math.max(-max, Math.min(max, dp));
+  view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
 }
 
 function selectTool(id){
@@ -601,8 +618,8 @@ function holdMine(dt){
   const dy = (y + 0.5) - eyeY;
   const dz = wrapDelta(z - player.pos.z);
   const horiz = Math.hypot(dx, dz) || 0.001;
-  faceYaw(Math.atan2(-dx, -dz), dt, 2.4);
-  view.pitch += Math.max(-6 * dt, Math.min(6 * dt, Math.atan2(-dy, horiz) - view.pitch));
+  faceYaw(Math.atan2(-dx, -dz), dt, 1.3);
+  smoothPitch(Math.atan2(-dy, horiz), dt, 1.1);
   mineTimer -= dt;
   if(mineTimer <= 0){
     mineLock = null;
@@ -721,61 +738,55 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
     return false;
   }
 
-  // Score 8 compass directions (cardinal + diagonal)
-  const dirs = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
-  ];
-  let best = null, bestScore = -Infinity;
-  for(const [dx, dz] of dirs){
-    const len = Math.hypot(dx, dz);
-    const s = scoreStep(dx / len * 1.1, dz / len * 1.1, goalX, goalZ);
-    if(s > bestScore){ bestScore = s; best = [dx / len, dz / len]; }
+  // Hold a steer direction for a bit — re-picking every frame shakes the camera
+  steerHold -= dt;
+  const needRescore = steerHold <= 0 || !steerDir;
+  if(needRescore){
+    const dirs = [
+      [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ];
+    let best = null, bestScore = -Infinity;
+    for(const [dx, dz] of dirs){
+      const len = Math.hypot(dx, dz);
+      const s = scoreStep(dx / len * 1.1, dz / len * 1.1, goalX, goalZ);
+      if(s > bestScore){ bestScore = s; best = [dx / len, dz / len]; }
+    }
+    if(bestScore < -15){
+      faceToward(goalX, goalZ, dt, 0.12, 1.0);
+      keys.KeyW = true;
+      keys.Space = true;
+      if(digCd <= 0) digLook(0.55);
+      return false;
+    }
+    steerDir = best;
+    steerHold = 0.55 + Math.random() * 0.35;
   }
 
-  // If every direction is bad, force recovery dig toward goal
-  if(bestScore < -15){
-    faceToward(goalX, goalZ, dt, 0.15);
-    keys.KeyW = true;
-    keys.Space = true;
-    if(digCd <= 0) digLook(0.55);
-    return false;
-  }
-
-  const [bx, bz] = best;
+  const [bx, bz] = steerDir;
   const wantYaw = Math.atan2(-bx, -bz);
-  faceYaw(wantYaw, dt, 1.9);
-  if(opts.pitch != null){
-    const dp = opts.pitch - view.pitch;
-    view.pitch += Math.max(-1.6 * dt, Math.min(1.6 * dt, dp));
-  } else {
-    view.pitch += Math.max(-1.2 * dt, Math.min(1.2 * dt, -0.08 - view.pitch));
-  }
+  faceYaw(wantYaw, dt, 1.2);
+  if(opts.pitch != null) smoothPitch(opts.pitch, dt, 0.85);
+  else smoothPitch(-0.08, dt, 0.7);
 
-  // Walk in short pulses so motion reads human, not constant rush
-  keys.KeyW = (Math.floor(phaseT * 2.2) % 5) !== 4;
+  // Continuous walk (pulses caused velocity jitter / screen shake)
+  keys.KeyW = true;
   keys.sprint = false;
 
-  // Step-up: solid at feet level ahead, clear above → jump
+  // Step-up / dig — pitch eased, never snapped
   const ax = player.pos.x - Math.sin(view.yaw) * 1.0;
   const az = player.pos.z - Math.cos(view.yaw) * 1.0;
   const fy = Math.round(player.pos.y);
   if(solid(ax, fy, az) && !solid(ax, fy + 1, az) && !solid(ax, fy + 2, az)){
     keys.Space = true;
-  }
-  // Two-high wall → dig
-  else if(solid(ax, fy, az) && solid(ax, fy + 1, az)){
-    if(digCd <= 0){
-      view.pitch = 0.05;
-      digLook(0.5);
-    }
-  }
-  // Head-height only → dig head
-  else if(!solid(ax, fy, az) && solid(ax, fy + 1, az)){
-    if(digCd <= 0){
-      view.pitch = -0.35;
-      digLook(0.5);
-    }
+  } else if(solid(ax, fy, az) && solid(ax, fy + 1, az)){
+    smoothPitch(0.08, dt, 1.0);
+    if(digCd <= 0) digLook(0.5);
+    steerHold = 0; // allow rescore after wall
+  } else if(!solid(ax, fy, az) && solid(ax, fy + 1, az)){
+    smoothPitch(-0.25, dt, 1.0);
+    if(digCd <= 0) digLook(0.5);
+    steerHold = 0;
   }
 
   // Stuck recovery
@@ -830,7 +841,7 @@ function digDownToward(ty, dt){
   selectTool('pick');
   keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false;
   keys.sprint = false;
-  view.pitch = 1.35;
+  smoothPitch(1.25, dt, 1.2);
 
   const px = Math.round(player.pos.x);
   const pz = Math.round(player.pos.z);
@@ -897,6 +908,8 @@ function setPhase(p, msg){
   stuckT = 0;
   avoidT = 0;
   recoverMode = 0;
+  steerDir = null;
+  steerHold = 0;
   setStatus(msg || p);
   if(performance.now() > announceAt){
     addChat('🤖', msg || p);
@@ -920,6 +933,8 @@ function forceUnstick(){
   stuckT = 0;
   avoidT = 0;
   recoverMode = 0;
+  steerDir = null;
+  steerHold = 0;
   sameActionCount = 0;
   sameActionTick = 0;
   const side = Math.random() < 0.5 ? 1 : -1;
