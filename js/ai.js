@@ -49,6 +49,8 @@ let buildIndex = 0;
 let buildOrigin = null;  // {x,y,z}
 let buildName = '';
 let placeCd = 0;
+let buildStartedAt = 0;  // performance.now()/1000 when first block of this job placed
+let buildPlaceTimes = []; // rolling samples of seconds per block
 
 
 let active = false;
@@ -1042,6 +1044,50 @@ function ensureBuildBlocks(id){
 
 /** Put the exact block type in the active hotbar slot so the hand matches the place. */
 
+
+function formatEta(sec){
+  if(!isFinite(sec) || sec < 0) return '…';
+  sec = Math.max(0, Math.ceil(sec));
+  const m = (sec / 60) | 0;
+  const s = sec % 60;
+  if(m >= 60){
+    const h = (m / 60) | 0;
+    return `${h}h ${m % 60}m`;
+  }
+  return m > 0 ? `${m}m ${String(s).padStart(2,'0')}s` : `${s}s`;
+}
+
+/** Estimate remaining build time from observed place rate. */
+function buildEtaSec(){
+  const left = Math.max(0, buildQueue.length - buildIndex);
+  if(left <= 0) return 0;
+  let per = 0.55; // default: place cadence + short move
+  if(buildPlaceTimes.length >= 3){
+    const sum = buildPlaceTimes.reduce((a, b) => a + b, 0);
+    per = sum / buildPlaceTimes.length;
+  } else if(buildIndex > 0 && buildStartedAt){
+    const elapsed = performance.now() / 1000 - buildStartedAt;
+    per = Math.max(0.2, elapsed / buildIndex);
+  }
+  // slight padding for travel between sparse cells
+  return left * per * 1.05;
+}
+
+function noteBlockPlaced(){
+  const now = performance.now() / 1000;
+  if(!buildStartedAt) buildStartedAt = now;
+  else {
+    const last = buildPlaceTimes.length
+      ? buildStartedAt + buildPlaceTimes.reduce((a,b)=>a+b,0)
+      : buildStartedAt;
+    // approximate interval from index timing
+    const elapsed = now - buildStartedAt;
+    const per = elapsed / Math.max(1, buildIndex);
+    buildPlaceTimes.push(per);
+    if(buildPlaceTimes.length > 12) buildPlaceTimes.shift();
+  }
+}
+
 function ensureFlying(){
   if(!gm.forge) return false;
   if(!state.flying){
@@ -1124,6 +1170,8 @@ function setupLandmark(id){
     x: ox + dx, y: oy + dy, z: oz + dz, id: bid
   }));
   buildIndex = 0;
+  buildStartedAt = 0;
+  buildPlaceTimes = [];
 }
 
 function setupCreative(){
@@ -1138,6 +1186,8 @@ function setupCreative(){
     x: ox + dx, y: oy + dy, z: oz + dz, id: bid
   }));
   buildIndex = 0;
+  buildStartedAt = 0;
+  buildPlaceTimes = [];
 }
 
 function tickBuilder(dt){
@@ -1156,7 +1206,16 @@ function tickBuilder(dt){
       return;
     }
     const cell = buildQueue[buildIndex];
-    setStatus(`${buildName} · ${buildIndex + 1}/${buildQueue.length}`);
+    const done = buildIndex;
+    const total = buildQueue.length;
+    const eta = formatEta(buildEtaSec());
+    setStatus(`${buildName} · ${done}/${total} · ETA ${eta}`);
+    // Dedicated countdown line under status
+    const etaEl = document.getElementById('aiEta');
+    if(etaEl){
+      etaEl.style.display = 'block';
+      etaEl.textContent = `⏱ ${eta} remaining`;
+    }
     holdBlock(cell.id);
 
     // Tall builds: fly up so the avatar is beside the block being placed
@@ -1183,6 +1242,7 @@ function tickBuilder(dt){
     if(placeCd > 0) return;
     if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
       buildIndex++;
+      noteBlockPlaced();
       placeCd = 0.28;
     } else {
       if(!gm.forge){
@@ -1198,7 +1258,9 @@ function tickBuilder(dt){
     return;
   }
   if(phase === PHASES.BUILD_DONE){
-    setStatus(`${buildName} complete — watching`);
+    setStatus(`${buildName} complete`);
+    const etaEl = document.getElementById('aiEta');
+    if(etaEl){ etaEl.textContent = '⏱ Done'; setTimeout(()=>{ if(etaEl.textContent==='⏱ Done') etaEl.style.display='none'; }, 2500); }
     clearKeys();
     // Gently return toward ground level after a tall build
     if(state.flying){
@@ -1275,6 +1337,8 @@ export function stop(){
   stopFlying();
   hideStreamCam();
   closeProfileModal();
+  const etaEl = document.getElementById('aiEta');
+  if(etaEl) etaEl.style.display = 'none';
   addChat('🤖', 'Bot OFF.');
 }
 
