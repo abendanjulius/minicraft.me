@@ -57,6 +57,7 @@ let buildPassPlaced = 0;
 let buildPlacedTotal = 0;   // blocks actually placed (the cursor also moves on skips)
 let placeFailStreak = 0;    // consecutive rejected placements
 let failReported = false;
+let stallT = 0, stallMark = -1;   // watchdog: notice when nothing is being placed
 let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
@@ -1181,6 +1182,7 @@ function resumeJob(job){
   buildStranded = 0;
   placeFailStreak = 0;
   failReported = false;
+  stallT = 0; stallMark = -1;
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1375,6 +1377,7 @@ function setupLandmark(id, originOverride = null){
   buildStranded = 0;
   placeFailStreak = 0;
   failReported = false;
+  stallT = 0; stallMark = -1;
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1405,6 +1408,7 @@ function setupCreative(){
   buildStranded = 0;
   placeFailStreak = 0;
   failReported = false;
+  stallT = 0; stallMark = -1;
   buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1502,10 +1506,28 @@ function tickBuilder(dt){
     holdBlock(cell.id);
     if(gm.forge) ensureFlying();
 
+    // Watchdog — a build that places nothing now explains itself instead of
+    // silently flying in circles.
+    if(buildPlacedTotal !== stallMark){ stallMark = buildPlacedTotal; stallT = 0; }
+    else {
+      stallT += dt;
+      if(stallT > 12){
+        stallT = 0;
+        const dd = distXZ(player.pos.x, player.pos.z, cx, cz).toFixed(1);
+        addChat('🤖', `stalled: target ${cx},${cy},${cz} · dist ${dd} · dy ${(player.pos.y - cy).toFixed(1)}`
+          + ` · fly ${state.flying ? 'on' : 'off'} · cd ${placeCd.toFixed(2)}`
+          + ` · last reject: ${lastPlaceFail || 'never reached placement'}`);
+      }
+    }
+
     approachT += dt;
     const stand = standOutside(cell);
     const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
-    const near = d <= (stand.above ? 1.2 : 2.8);
+    // navigateTo stops steering once it is within arriveR, so `near` must never
+    // be tighter than arriveR — otherwise the bot parks just outside the
+    // threshold and waits forever (v2.6.4 did exactly that: 0 blocks placed).
+    const arriveR = stand.above ? 0.7 : 2.2;
+    const near = d <= (stand.above ? 1.4 : 2.8);
 
     // Stuck recovery: fly + jump + strafe outside
     if(approachT > 5.5){
@@ -1530,9 +1552,11 @@ function tickBuilder(dt){
     const flyTarget = stand.above ? cell.y + HOVER + 1.4 : cell.y;
 
     if(!near){
-      navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR: 2.2});
+      const arrived = navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR});
       if(state.flying) flyTowardY(flyTarget, dt);
-      return;
+      // Safety net: if the navigator says it has arrived, proceed even when our
+      // own radius disagrees. Never let the two thresholds deadlock each other.
+      if(!arrived) return;
     }
 
     keys.KeyW = false;
