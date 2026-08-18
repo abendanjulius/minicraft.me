@@ -1355,10 +1355,21 @@ function canBotPlaceAt(x, y, z){
 }
 
 let lastPlaceFail = '';
+// Same reach a human gets: player.js castBlock() defaults to 8 blocks from the
+// eye. The bot wrote blocks directly, so nothing stopped it building from across
+// the site — it has to earn the placement by being there.
+const BOT_REACH = 8;
+function withinReach(x, y, z){
+  const dx = wrapDelta(x - player.pos.x);
+  const dz = wrapDelta(z - player.pos.z);
+  const dy = y - (player.pos.y + 1.6);
+  return Math.hypot(dx, dy, dz) <= BOT_REACH;
+}
 function placeBuildBlock(x, y, z, id){
   x = wrapC(x); z = wrapC(z);
   y = y|0;
   if(y < 1 || y >= WH){ lastPlaceFail = 'outside the world'; return false; }
+  if(!withinReach(x, y, z)){ lastPlaceFail = 'out of reach'; return false; }
   if(getBlock(x, y, z)) return true; // already filled counts as done
   if(!canBotPlaceAt(x, y, z)){ lastPlaceFail = 'nothing to attach to'; return false; }
   // Don't place inside the player's body
@@ -1595,7 +1606,9 @@ function tickBuilder(dt){
       if(state.flying) flyTowardY(cell.y + HOVER + 4 + 1.4, dt);
       navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR, precise: d < 12});
       if(noProgressT > 9){
-        if(!placeOverlapsPlayer(cx, cy, cz) && placeBuildBlock(cx, cy, cz, cell.id)){
+        // only allowed if genuinely in reach — otherwise this became a way to
+        // build from anywhere on the map
+        if(withinReach(cx, cy, cz) && !placeOverlapsPlayer(cx, cy, cz) && placeBuildBlock(cx, cy, cz, cell.id)){
           buildIndex++;
           buildPassPlaced++;
           buildPlacedTotal++;      // this path used to place without counting it
