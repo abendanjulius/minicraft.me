@@ -1210,6 +1210,8 @@ export function update(dt, elapsed){
     const sprinting = !!(keys.ShiftLeft || keys.ShiftRight || keys.sprint);
     let speed = sprinting ? 8.2 : 5;
     if(state.flying && gm.forge) speed = sprinting ? 14 : 9;
+    // AI / locked input: human-paced walk (bot looked too frantic)
+    if(inputLocked) speed *= sprinting ? 0.62 : 0.58;
     // Water: slower move + mild buoyancy
     const feet = getBlock(Math.round(player.pos.x), Math.round(player.pos.y - 0.1), Math.round(player.pos.z));
     const body = getBlock(Math.round(player.pos.x), Math.round(player.pos.y + 0.6), Math.round(player.pos.z));

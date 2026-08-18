@@ -1520,7 +1520,7 @@ html body #touchUI #btnFly.active:active{
   bottom:12px !important;
   top:auto !important;
   z-index:9999 !important;
-  width:48px !important;
+  width:60px !important;
   pointer-events:none !important;
   font-family:monospace;
   filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));
@@ -1537,7 +1537,7 @@ html body.touch #streamCam.scShow{
   left:8px !important;
   bottom:auto !important;
   top:42px !important;
-  width:40px !important;
+  width:50px !important;
 }
 #streamCam .scLive{
   display:inline-flex;

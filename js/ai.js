@@ -91,11 +91,11 @@ function showStreamCam(){
   if(touch){
     el.style.setProperty('top', '42px', 'important');
     el.style.setProperty('bottom', 'auto', 'important');
-    el.style.setProperty('width', '40px', 'important');
+    el.style.setProperty('width', '50px', 'important');
   } else {
     el.style.setProperty('bottom', '12px', 'important');
     el.style.setProperty('top', 'auto', 'important');
-    el.style.setProperty('width', '48px', 'important');
+    el.style.setProperty('width', '60px', 'important');
   }
   const img = document.getElementById('scFace');
   const name = document.getElementById('scName');
@@ -320,7 +320,7 @@ function escapeWater(dt){
   // walls and actually path — not stare at the sky.
   const steer = shoreSteer();
   if(steer){
-    faceYaw(Math.atan2(-steer[0], -steer[1]), dt, 4);
+    faceYaw(Math.atan2(-steer[0], -steer[1]), dt, 1.8);
   } else {
     view.yaw += 1.5 * dt;
   }
@@ -366,7 +366,7 @@ function passableColumn(x, yFeet, z){
   return true;
 }
 
-function faceYaw(want, dt, rate = 3.2){
+function faceYaw(want, dt, rate = 1.7){
   let dy = want - view.yaw;
   while(dy > Math.PI) dy -= Math.PI * 2;
   while(dy < -Math.PI) dy += Math.PI * 2;
@@ -375,7 +375,7 @@ function faceYaw(want, dt, rate = 3.2){
   return Math.abs(dy) < 0.12;
 }
 
-function faceToward(tx, tz, dt, pitch = null, rate = 3.2){
+function faceToward(tx, tz, dt, pitch = null, rate = 1.7){
   const dx = wrapDelta(tx - player.pos.x);
   const dz = wrapDelta(tz - player.pos.z);
   const want = Math.atan2(-dx, -dz);
@@ -552,7 +552,7 @@ function manageInventory(dt){
   craftCd -= dt;
   useConsumables();
   if(craftCd > 0) return;
-  craftCd = 0.7;
+  craftCd = 1.4;
   runCrafting();
 }
 
@@ -572,7 +572,7 @@ function digLook(_hold = 0.45){
   state.mineHeld = true;
   state.mining = null; // restart progress on this cell
   mineTimer = 15;
-  digCd = 0.15;
+  digCd = 0.45;
   return true;
 }
 
@@ -601,7 +601,7 @@ function holdMine(dt){
   const dy = (y + 0.5) - eyeY;
   const dz = wrapDelta(z - player.pos.z);
   const horiz = Math.hypot(dx, dz) || 0.001;
-  faceYaw(Math.atan2(-dx, -dz), dt, 8);
+  faceYaw(Math.atan2(-dx, -dz), dt, 2.4);
   view.pitch += Math.max(-6 * dt, Math.min(6 * dt, Math.atan2(-dy, horiz) - view.pitch));
   mineTimer -= dt;
   if(mineTimer <= 0){
@@ -641,8 +641,8 @@ function fightNearby(dt){
   keys.sprint = false;
   if(actionCd <= 0){
     setMine(true);
-    actionCd = 0.32;
-    mineTimer = 0.15;
+    actionCd = 0.55;
+    mineTimer = 0.2;
   }
   return true;
 }
@@ -707,7 +707,7 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
   // Active detour (stuck recovery)
   if(avoidT > 0){
     avoidT -= dt;
-    faceYaw(avoidYaw, dt, 4);
+    faceYaw(avoidYaw, dt, 2.0);
     keys.KeyW = true;
     keys.sprint = false;
     keys.Space = true;
@@ -744,16 +744,17 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
 
   const [bx, bz] = best;
   const wantYaw = Math.atan2(-bx, -bz);
-  faceYaw(wantYaw, dt, 3.5);
+  faceYaw(wantYaw, dt, 1.9);
   if(opts.pitch != null){
     const dp = opts.pitch - view.pitch;
-    view.pitch += Math.max(-3 * dt, Math.min(3 * dt, dp));
+    view.pitch += Math.max(-1.6 * dt, Math.min(1.6 * dt, dp));
   } else {
-    view.pitch += Math.max(-2 * dt, Math.min(2 * dt, -0.08 - view.pitch));
+    view.pitch += Math.max(-1.2 * dt, Math.min(1.2 * dt, -0.08 - view.pitch));
   }
 
-  keys.KeyW = true;
-  keys.sprint = sprint && d > 8 && stuckT < 0.4;
+  // Walk in short pulses so motion reads human, not constant rush
+  keys.KeyW = (Math.floor(phaseT * 2.2) % 5) !== 4;
+  keys.sprint = false;
 
   // Step-up: solid at feet level ahead, clear above → jump
   const ax = player.pos.x - Math.sin(view.yaw) * 1.0;
@@ -1105,7 +1106,7 @@ export function tick(dt){
       target = vaultTarget();
       const d = distXZ(player.pos.x, player.pos.z, target.x, target.z)|0;
       setStatus(`To vault · ${d}m`);
-      if(navigateTo(target.x, target.z, dt, {sprint: true, arriveR: 2.2})){
+      if(navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2.2})){
         clearMining();
         setPhase(PHASES.DESCEND, 'Descending into the vault…');
       }
