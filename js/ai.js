@@ -54,6 +54,7 @@ let buildClipped = 0;    // cells dropped for being above the world ceiling
 let buildDeferred = [];  // cells that had no support this pass
 let buildPass = 1;
 let buildPassPlaced = 0;
+let buildPlacedTotal = 0;   // blocks actually placed (the cursor also moves on skips)
 let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
@@ -1174,6 +1175,7 @@ function resumeJob(job){
   buildDeferred = [];
   buildPass = 1;
   buildPassPlaced = 0;
+  buildPlacedTotal = 0;
   buildStranded = 0;
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
@@ -1249,7 +1251,21 @@ function orderOutsideIn(relBlocks){
 }
 
 /** Stand outside the structure relative to origin — not inside the hull. */
+/** Where the bot should be to place `cell`.
+ *
+ *  Standing *beside* the target only works for the outer shell: as soon as a
+ *  structure has an inside, the spot 2.6 blocks sideways is inside solid blocks
+ *  and the bot can never arrive — it orbits, times out, and places nothing.
+ *
+ *  Builds run bottom-up, so the column directly above the target is always
+ *  clear. When flying, hover over the cell and look down at it; that reaches
+ *  interior and exterior cells alike. On foot (Nightfall) hovering isn't an
+ *  option, so fall back to the radial position. */
+const HOVER = 2.6;
 function standOutside(cell){
+  if(state.flying){
+    return { x: cell.x, z: cell.z, hoverY: cell.y + HOVER, above: true };
+  }
   const ox = buildOrigin?.x ?? cell.x;
   const oz = buildOrigin?.z ?? cell.z;
   let dx = cell.x - ox, dz = cell.z - oz;
@@ -1262,6 +1278,8 @@ function standOutside(cell){
   return {
     x: cell.x + (dx / len) * dist,
     z: cell.z + (dz / len) * dist,
+    hoverY: cell.y,
+    above: false,
   };
 }
 
@@ -1347,6 +1365,7 @@ function setupLandmark(id, originOverride = null){
   buildDeferred = [];
   buildPass = 1;
   buildPassPlaced = 0;
+  buildPlacedTotal = 0;
   buildStranded = 0;
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
@@ -1374,6 +1393,7 @@ function setupCreative(){
   buildDeferred = [];
   buildPass = 1;
   buildPassPlaced = 0;
+  buildPlacedTotal = 0;
   buildStranded = 0;
   buildIndex = 0;
   buildStartedAt = 0;
@@ -1462,11 +1482,11 @@ function tickBuilder(dt){
     const left = buildQueue.length - buildIndex;
     const eta = formatEta(buildEtaSec());
     const passTag = buildPass > 1 ? ` · pass ${buildPass}` : '';
-    setStatus(`${buildName} · ${buildIndex} done · ${left} left${passTag} · ETA ${eta}`);
+    setStatus(`${buildName} · ${buildPlacedTotal} placed · ${left} left${passTag} · ETA ${eta}`);
     const etaEl = document.getElementById('aiEta');
     if(etaEl){
       etaEl.style.display = 'block';
-      etaEl.textContent = `⏱ ${eta} remaining · ${left} left`;
+      etaEl.textContent = `⏱ ${eta} remaining · ${buildPlacedTotal} placed`;
     }
 
     holdBlock(cell.id);
@@ -1475,7 +1495,7 @@ function tickBuilder(dt){
     approachT += dt;
     const stand = standOutside(cell);
     const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
-    const near = d <= 2.8;
+    const near = d <= (stand.above ? 1.2 : 2.8);
 
     // Stuck recovery: fly + jump + strafe outside
     if(approachT > 5.5){
@@ -1496,23 +1516,25 @@ function tickBuilder(dt){
       return;
     }
 
+    // flyTowardY aims the feet 1.4 below its argument, so add that back on
+    const flyTarget = stand.above ? cell.y + HOVER + 1.4 : cell.y;
+
     if(!near){
       navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR: 2.2});
-      if(state.flying) flyTowardY(cell.y, dt);
-      // Gentle rise only — constant Space caused jitter with fly
-      if(state.flying && player.pos.y < cell.y - 2) keys.Space = true;
+      if(state.flying) flyTowardY(flyTarget, dt);
       return;
     }
 
     keys.KeyW = false;
     if(state.flying){
-      const ok = flyTowardY(cell.y, dt);
+      const ok = flyTowardY(flyTarget, dt);
       if(!ok && approachT < 8) return;
     }
 
-    // Face the block from outside (slow look)
+    // Look at the block (steeply down when hovering above it)
     const eyeY = player.pos.y + 1.6;
-    const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(0.6, distXZ(player.pos.x, player.pos.z, cx, cz)));
+    const horiz = distXZ(player.pos.x, player.pos.z, cx, cz);
+    const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(stand.above ? 0.15 : 0.6, horiz));
     faceToward(cx, cz, dt, pitch, 0.9);
 
     if(placeCd > 0) return;
@@ -1525,6 +1547,7 @@ function tickBuilder(dt){
     if(placeBuildBlock(cx, cy, cz, cell.id)){
       buildIndex++;
       buildPassPlaced++;
+      buildPlacedTotal++;
       noteBlockPlaced();
       placeCd = 0.36;
       approachT = 0;

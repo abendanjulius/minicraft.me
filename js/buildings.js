@@ -502,13 +502,36 @@ function houseCreative(){
       if(Math.abs(dx)+Math.abs(dz) < 8) push(B, dx, 5, dz, LOG);
   return {name:'Creative House', blocks: dedupe(B)};
 }
+/** Walk from the centre out to (tx,tz) one axis at a time, so every cell is
+ *  face-adjacent to the previous one (diagonal steps leave unsupported gaps). */
+function armPath(tx, tz){
+  const out = [];
+  let x = 0, z = 0;
+  while(x !== tx || z !== tz){
+    if(Math.abs(tx - x) >= Math.abs(tz - z)) x += Math.sign(tx - x);
+    else z += Math.sign(tz - z);
+    out.push([x, z]);
+  }
+  return out;
+}
+
+/** A spiral STAIRCASE: central pillar + connected steps winding around it.
+ *  The old version placed one block per level on a rotating radius, so no two
+ *  blocks ever touched — 36 floating dots that couldn't be built in Nightfall. */
 function spiralCreative(){
   const B = [];
-  for(let i = 0; i < 36; i++){
-    const ang = i * 0.5;
-    const r = 2 + i * 0.1;
-    push(B, Math.round(Math.cos(ang)*r), i, Math.round(Math.sin(ang)*r), SBRICK);
+  const H = 24, R = 4, PER_TURN = 8;
+  for(let y = 0; y < H; y++){
+    push(B, 0, y, 0, SBRICK);                       // central pillar
+    const ang = (y % PER_TURN) * (Math.PI * 2 / PER_TURN);
+    const tx = Math.round(Math.cos(ang) * R);
+    const tz = Math.round(Math.sin(ang) * R);
+    const arm = armPath(tx, tz);
+    arm.forEach(([x, z], i) => push(B, x, y, z, i === arm.length - 1 ? PLANK : SBRICK));
+    // a lamp on the outer end every half turn, so it reads at night
+    if(y % 4 === 0 && arm.length) push(B, tx, y + 1, tz, TORCH);
   }
+  push(B, 0, H, 0, TORCH);                          // beacon on top
   return {name:'Creative Spiral', blocks: dedupe(B)};
 }
 function wallCreative(){
