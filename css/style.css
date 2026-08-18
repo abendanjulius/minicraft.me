@@ -1338,17 +1338,22 @@ html body #btnFly{ right: 72px !important; bottom: 178px !important; }
 html body #btnChat,
 html body #btnMode,
 html body #btnQuit,
-html body #btnMap{
+html body #btnMap,
+html body #btnAI{
   width: 40px !important;
   height: 40px !important;
   font-size: 16px !important;
   border-radius: 8px !important;
   top: 8px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
 }
 html body #btnChat{ right: 8px !important; }
 html body #btnQuit{ right: 52px !important; }
 html body #btnMode{ right: 96px !important; }
 html body #btnMap{ right: 140px !important; }
+html body #btnAI{ right: 184px !important; }
 
 html body #slotNameToast,
 html body #slotNameToast.show,
@@ -1497,9 +1502,12 @@ html body #touchUI #btnFly.active:active{
 }
 
 
-/* Cube-arc AI spectator bot */
-#btnAI{position:fixed;top:10px;right:170px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:22px;display:none;align-items:center;justify-content:center;z-index:3;cursor:pointer}
+/* Cube-arc AI spectator bot — matches #btnMap / #btnQuit row */
+#btnAI{
+  position:fixed;top:8px;right:184px;width:40px;height:40px;border-radius:8px;
+  background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;
+  font-size:16px;display:none;align-items:center;justify-content:center;z-index:3;cursor:pointer;
+  box-sizing:border-box;
+}
 #btnAI.active{background:rgba(40,120,80,.75);border-color:#6f6}
-body:not(.touch) #btnAI{right:62px}
-body:not(.touch) #btnMap{right:118px}
-#aiStatus{position:fixed;top:58px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#aiStatus{position:fixed;top:54px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

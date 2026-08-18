@@ -957,6 +957,16 @@ function updateMining(dt){
     [bx,by,bz] = r.hit;
     if(getBlock(bx,by,bz) !== 43 && getBlock(bx,by-1,bz) === 43 && isWalkThrough(getBlock(bx,by,bz))) by -= 1;
     state.mineTarget = [bx,by,bz];
+  } else if(state.mineTarget){
+    // World-locked dig (AI / explicit lock). Progress stays on this cell even if
+    // the crosshair drifts — required for the bot to finish blocks.
+    [bx,by,bz] = state.mineTarget;
+    if(!getBlock(bx,by,bz)){
+      state.mining = null;
+      state.mineTarget = null;
+      mineBar.style.display = 'none';
+      return;
+    }
   } else {
     const r = castBlock();
     if(!r){ state.mining=null; mineBar.style.display='none'; return; }

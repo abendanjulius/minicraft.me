@@ -280,50 +280,59 @@ function ensureKeepstoneMats(){
   return has(KEEPSTONE);
 }
 
-/** Start mining the block under the crosshair and LOCK movement until it breaks. */
+/** Start a world-locked dig on the crosshair block. Movement freezes until it breaks. */
 function digLook(_hold = 0.45){
-  if(mineLock) return true; // already committed
+  if(mineLock) return true;
   selectTool('pick') || selectTool('shovel') || selectTool('axe');
-  const r = castBlock(5);
+  const r = castBlock(6);
   if(!r || !r.hit) return false;
   const [bx, by, bz] = r.hit;
   const t = getBlock(bx, by, bz);
   if(!t || t === 64 || (TYPES[t]?.hard ?? 99) >= 90) return false;
   mineLock = {x: bx, y: by, z: bz};
-  setMine(true);
-  mineTimer = 12; // safety cap seconds
+  // World-lock: do NOT call setMine(true) — that clears mineTarget on desktop path.
+  state.mineScreen = null;
+  state.mineTarget = [bx, by, bz];
+  state.mineHeld = true;
+  state.mining = null; // restart progress on this cell
+  mineTimer = 15;
   digCd = 0.15;
   return true;
 }
 
-/** Hold still and keep the crosshair on mineLock until the block is gone. */
+/** Stand still; keep world-locked dig alive until the cell is air. */
 function holdMine(dt){
   if(!mineLock) return false;
   const {x, y, z} = mineLock;
   if(!getBlock(x, y, z)){
     mineLock = null;
-    setMine(false);
+    state.mineHeld = false;
+    state.mineTarget = null;
+    state.mining = null;
     mineTimer = 0;
     return false;
   }
-  // Aim at block center; do not walk
+  // Re-assert lock every frame (nothing else should clear it mid-dig)
+  state.mineScreen = null;
+  state.mineTarget = [x, y, z];
+  state.mineHeld = true;
+  keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false;
+  keys.sprint = false;
+  keys.Space = false;
+  // Face the block for particles / feedback only — target is world-locked
   const eyeY = player.pos.y + 1.6;
   const dx = wrapDelta(x - player.pos.x);
   const dy = (y + 0.5) - eyeY;
   const dz = wrapDelta(z - player.pos.z);
   const horiz = Math.hypot(dx, dz) || 0.001;
-  faceYaw(Math.atan2(-dx, -dz), dt, 6);
-  const wantPitch = Math.atan2(-dy, horiz);
-  view.pitch += Math.max(-5 * dt, Math.min(5 * dt, wantPitch - view.pitch));
-  keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false;
-  keys.sprint = false;
-  // Keep mine button down
-  if(!state.mineHeld) setMine(true);
+  faceYaw(Math.atan2(-dx, -dz), dt, 8);
+  view.pitch += Math.max(-6 * dt, Math.min(6 * dt, Math.atan2(-dy, horiz) - view.pitch));
   mineTimer -= dt;
   if(mineTimer <= 0){
-    // give up on this cell
     mineLock = null;
-    setMine(false);
+    state.mineHeld = false;
+    state.mineTarget = null;
+    state.mining = null;
   }
   return true;
 }
@@ -496,35 +505,36 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
   if(moved < 0.04) stuckT += dt;
   else stuckT = Math.max(0, stuckT - dt * 2);
 
-  if(stuckT > 0.7){
-    recoverMode = (recoverMode + 1) % 4;
-    stuckT = 0.15;
+  if(stuckT > 0.55){
+    recoverMode = (recoverMode + 1) % 5;
+    stuckT = 0.1;
     if(recoverMode === 0){
-      // dig straight ahead
-      view.pitch = 0.1;
+      view.pitch = 0.15;
       digLook(0.7);
     } else if(recoverMode === 1){
-      // detour 70–110° left or right
       const side = (Math.floor(phaseT * 3) % 2) ? 1 : -1;
-      avoidYaw = view.yaw + side * (0.9 + Math.random() * 0.5);
-      avoidT = 0.9 + Math.random() * 0.6;
+      avoidYaw = view.yaw + side * (1.0 + Math.random() * 0.7);
+      avoidT = 1.1;
+      keys.Space = true;
     } else if(recoverMode === 2){
-      // dig down only on dry land — underwater this made traps worse
-      if(!inWaterNow() && !isWaterAt(player.pos.x, player.pos.y - 1, player.pos.z)){
-        view.pitch = 1.2;
+      // dig head-height and feet-height ahead
+      view.pitch = -0.2;
+      digLook(0.7);
+    } else if(recoverMode === 3){
+      if(!headSubmerged() && !isWaterAt(player.pos.x, player.pos.y - 1, player.pos.z)){
+        view.pitch = 1.15;
         digLook(0.6);
         keys.KeyW = false;
       } else {
-        avoidYaw = view.yaw + 1.4;
-        avoidT = 0.7;
+        avoidYaw = view.yaw + 1.6;
+        avoidT = 0.9;
         keys.Space = true;
       }
     } else {
-      // back up briefly then re-steer
       keys.KeyW = false;
       keys.KeyS = true;
-      avoidYaw = view.yaw + Math.PI * 0.6 * ((Math.floor(phaseT) % 2) ? 1 : -1);
-      avoidT = 0.55;
+      avoidYaw = view.yaw + Math.PI * (0.5 + Math.random() * 0.5) * ((Math.floor(phaseT) % 2) ? 1 : -1);
+      avoidT = 0.7;
     }
   }
 
