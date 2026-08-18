@@ -5,12 +5,12 @@
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
 import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
+import { TYPES, ITEMS } from './render.js';
 import { gm } from './mode.js';
 import * as eldercube from './eldercube.js';
 import * as keepstones from './keepstones.js';
 import * as craft from './craft.js';
 import { zombies } from './mobs.js';
-import { TYPES } from './render.js';
 import * as survival from './survival.js';
 
 const CUBE = 186;
@@ -48,6 +48,7 @@ let announceAt = 0;
 let avoidYaw = 0;          // temporary detour heading
 let avoidT = 0;            // seconds left on detour
 let digCd = 0;
+let craftCd = 0;
 let wanderAng = 0;
 let recoverMode = 0;       // 0 none, 1 dig, 2 turn, 3 back up
 
@@ -293,19 +294,149 @@ function selectItem(id){
 }
 
 function has(id, n = 1){ return (inventory[id] || 0) >= n; }
+function count(id){ return inventory[id] || 0; }
 
+/** Put an owned item/tool onto an empty hotbar slot (or select if already there). */
+function ensureHotbar(id, kind){
+  const existing = hotbarSlots.findIndex(s => s && s.id === id);
+  if(existing >= 0){ sel.slot = existing; renderHotbar(); return true; }
+  if(kind !== 't' && count(id) <= 0) return false;
+  const empty = hotbarSlots.findIndex(s => s === null);
+  if(empty < 0) return false;
+  hotbarSlots[empty] = {k: kind, id};
+  sel.slot = empty;
+  renderHotbar();
+  return true;
+}
+
+function ensureTool(toolId){
+  const i = hotbarSlots.findIndex(s => s?.k === 't' && s.id === toolId);
+  if(i >= 0) return true;
+  const empty = hotbarSlots.findIndex(s => s === null);
+  if(empty < 0){
+    // replace a non-tool slot
+    const slot = hotbarSlots.findIndex(s => !s || s.k !== 't');
+    if(slot < 0) return false;
+    hotbarSlots[slot] = {k: 't', id: toolId};
+    renderHotbar();
+    return true;
+  }
+  hotbarSlots[empty] = {k: 't', id: toolId};
+  renderHotbar();
+  return true;
+}
+
+/** Craft any one recipe that outputs outId (first craftable match). */
 function tryCraftId(outId){
-  const r = craft.RECIPES.find(x => x.out.id === outId);
-  if(!r || !craft.canCraft(r)) return false;
-  return craft.craft(r);
+  for(const r of craft.RECIPES){
+    if(r.out.id !== outId) continue;
+    if(!craft.canCraft(r)) continue;
+    if(!craft.craft(r)) continue;
+    const kind = outId >= 100 ? 'f' : 'b';
+    ensureHotbar(outId, kind);
+    return true;
+  }
+  return false;
+}
+
+function hasWeapon(){
+  if(hotbarSlots.some(s => s?.k === 'f' && ITEMS[s.id]?.dmg)) return true;
+  for(const id of [140, 141, 142, 143, 144, 145, 146]) if(count(id) > 0) return true;
+  return false;
+}
+
+function selectWeapon(){
+  for(let i = 0; i < hotbarSlots.length; i++){
+    const s = hotbarSlots[i];
+    if(s?.k === 'f' && ITEMS[s.id]?.dmg){ sel.slot = i; renderHotbar(); return true; }
+  }
+  for(const id of [143, 142, 141, 140, 146, 145, 144]){
+    if(count(id) > 0 && ensureHotbar(id, 'f')) return true;
+  }
+  return false;
+}
+
+/**
+ * Full crafting brain — runs on a short cooldown.
+ * Builds planks/sticks/torches/ingots/weapons/Keepstone when ingredients exist.
+ */
+function runCrafting(){
+  // Core conversions
+  if(has(4, 1)) tryCraftId(7);            // log → planks
+  if(has(7, 2)) tryCraftId(110);          // planks → sticks
+  if(has(IRON_CHUNK, 3)) tryCraftId(IRON_INGOT);
+  // Makeshift coal + torches (light for caves / night)
+  if(count(120) < 4 && has(4, 1) && has(119, 1)) tryCraftId(120);
+  if(count(10) < 8 && has(110, 1) && (has(4, 1) || has(120, 1) || has(128, 1))) tryCraftId(10);
+  // Club / wooden weapon
+  if(!hasWeapon() && has(7, 2) && has(110, 1)) tryCraftId(140);
+  // Keepstone
+  if(has(CRYSTAL, 2) && has(IRON_INGOT, 2) && has(STONE, 8)) tryCraftId(KEEPSTONE);
+  // Simple cooked-ish foods when possible
+  if(count(101) + count(102) + count(103) + count(150) < 2){
+    tryCraftId(150); // whatever simple food recipes accept
+  }
+  // Ensure basic tools always on bar
+  ensureTool('pick');
+  ensureTool('axe');
+  ensureTool('shovel');
+  if(has(KEEPSTONE)) ensureHotbar(KEEPSTONE, 'b');
+  if(has(CUBE)) ensureHotbar(CUBE, 'f');
+  if(has(10)) ensureHotbar(10, 'b');
 }
 
 function ensureKeepstoneMats(){
-  while(has(IRON_CHUNK, 3) && !has(IRON_INGOT, 2)) tryCraftId(IRON_INGOT);
-  if(has(CRYSTAL, 2) && has(IRON_INGOT, 2) && has(STONE, 8)){
-    return tryCraftId(KEEPSTONE) || has(KEEPSTONE);
-  }
+  runCrafting();
   return has(KEEPSTONE);
+}
+
+/** Eat / heal from inventory when vitals are low. */
+function useConsumables(){
+  const sv = survival.sv;
+  if(sv.hunger < 14){
+    // Prefer cooked/better foods by food value
+    const foods = Object.keys(inventory)
+      .map(Number)
+      .filter(id => inventory[id] > 0 && ITEMS[id]?.food)
+      .sort((a, b) => (ITEMS[b].food || 0) - (ITEMS[a].food || 0));
+    for(const id of foods){
+      if(survival.eatSelected(id)) return true;
+    }
+  }
+  if(sv.hp < 12){
+    const meds = Object.keys(inventory)
+      .map(Number)
+      .filter(id => inventory[id] > 0 && ITEMS[id]?.heal)
+      .sort((a, b) => (ITEMS[b].heal || 0) - (ITEMS[a].heal || 0));
+    for(const id of meds){
+      if(survival.eatSelected(id)) return true;
+    }
+    // food also heals some recipes — try food as backup
+    const foods = Object.keys(inventory)
+      .map(Number)
+      .filter(id => inventory[id] > 0 && ITEMS[id]?.food);
+    for(const id of foods){
+      if(survival.eatSelected(id)) return true;
+    }
+  }
+  return false;
+}
+
+/** Place a torch nearby if we have one and it's dark-ish / underground. */
+function maybePlaceTorch(){
+  if(!has(10)) return false;
+  if(player.pos.y > 18) return false; // surface-ish, skip
+  if(!ensureHotbar(10, 'b')) return false;
+  placeAction();
+  return true;
+}
+
+function manageInventory(dt){
+  craftCd -= dt;
+  useConsumables();
+  if(craftCd > 0) return;
+  craftCd = 0.7;
+  runCrafting();
 }
 
 /** Start a world-locked dig on the crosshair block. Movement freezes until it breaks. */
@@ -386,6 +517,7 @@ function nearestHostile(){
 function fightNearby(dt){
   const p = nearestHostile();
   if(!p) return false;
+  selectWeapon();
   faceToward(p.x, p.z, dt, -0.1);
   const d = distXZ(player.pos.x, player.pos.z, p.x, p.z);
   keys.KeyW = d > 1.6;
@@ -696,6 +828,8 @@ export function tick(dt){
   clearKeys();
   if(joy){ joy.x = 0; joy.y = 0; }
 
+  manageInventory(dt);
+
   // Finish the current dig before walking again — moving resets mine progress.
   if(holdMine(dt)){
     setStatus('Mining…');
@@ -778,18 +912,35 @@ export function tick(dt){
         setPhase(PHASES.PLACE, 'Keepstone ready — placing…');
         break;
       }
-      setStatus('Gathering stone / ores…');
-      tryCraftId(IRON_INGOT);
-      // wander & dig
-      wanderAng += dt * 0.6;
-      const wx = player.pos.x + Math.cos(wanderAng) * 10;
-      const wz = player.pos.z + Math.sin(wanderAng) * 10;
-      navigateTo(wx, wz, dt, {sprint: false, arriveR: 2, pitch: 0.4});
-      if(digCd <= 0) digLook(0.45);
-      if((!has(CRYSTAL, 2) || !has(IRON_INGOT, 2)) && player.pos.y > 10){
-        view.pitch = 0.95;
-        digLook(0.5);
+      // Need list for status
+      const need = [];
+      if(!has(STONE, 8)) need.push('stone');
+      if(!has(IRON_INGOT, 2) && !has(IRON_CHUNK, 6)) need.push('iron');
+      if(!has(CRYSTAL, 2)) need.push('crystal');
+      setStatus('Gathering ' + (need.join('/') || 'materials') + '…');
+
+      // Prefer digging what we still need
+      if(!has(STONE, 8)){
+        selectTool('pick');
+        view.pitch = 0.55;
+      } else if(!has(IRON_INGOT, 2) || !has(CRYSTAL, 2)){
+        selectTool('pick');
+        // go deeper for ores
+        if(player.pos.y > 14){
+          view.pitch = 1.0;
+          if(digCd <= 0 && !mineLock) digLook(0.5);
+        }
+      } else if(!has(7, 4) && !has(4, 2)){
+        selectTool('axe'); // trees for sticks/torches
+        view.pitch = -0.05;
       }
+
+      wanderAng += dt * 0.55;
+      const wx = player.pos.x + Math.cos(wanderAng) * 12;
+      const wz = player.pos.z + Math.sin(wanderAng) * 12;
+      if(!mineLock) navigateTo(wx, wz, dt, {sprint: false, arriveR: 2, pitch: null});
+      if(digCd <= 0 && !mineLock) digLook(0.45);
+      if(actionCd <= 0){ maybePlaceTorch(); actionCd = 4; }
       break;
     }
     case PHASES.PLACE: {
