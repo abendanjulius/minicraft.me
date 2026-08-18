@@ -61,6 +61,13 @@ let stallT = 0, stallMark = -1;   // watchdog: notice when nothing is being plac
 let approachBestD = Infinity;     // closest we've come to the current target
 let noProgressT = 0;              // seconds without getting closer
 let approachKey = '';             // which cell the two above refer to
+let overlapT = 0;
+const failCounts = Object.create(null);
+function countFail(why){ failCounts[why] = (failCounts[why] || 0) + 1; }
+function failSummary(){
+  const parts = Object.entries(failCounts).map(([k, v]) => `${k} ×${v}`);
+  return parts.length ? parts.join(', ') : 'none';
+}
 let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
@@ -1186,6 +1193,8 @@ function resumeJob(job){
   placeFailStreak = 0;
   failReported = false;
   stallT = 0; stallMark = -1;
+  overlapT = 0;
+  for(const k in failCounts) delete failCounts[k];
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1381,6 +1390,8 @@ function setupLandmark(id, originOverride = null){
   placeFailStreak = 0;
   failReported = false;
   stallT = 0; stallMark = -1;
+  overlapT = 0;
+  for(const k in failCounts) delete failCounts[k];
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1412,6 +1423,8 @@ function setupCreative(){
   placeFailStreak = 0;
   failReported = false;
   stallT = 0; stallMark = -1;
+  overlapT = 0;
+  for(const k in failCounts) delete failCounts[k];
   buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1509,21 +1522,6 @@ function tickBuilder(dt){
     holdBlock(cell.id);
     if(gm.forge) ensureFlying();
 
-    // Watchdog — a build that places nothing now explains itself instead of
-    // silently flying in circles.
-    if(buildPlacedTotal !== stallMark){ stallMark = buildPlacedTotal; stallT = 0; }
-    else {
-      stallT += dt;
-      if(stallT > 12){
-        stallT = 0;
-        const dd = distXZ(player.pos.x, player.pos.z, cx, cz).toFixed(1);
-        addChat('🤖', `stalled: target ${cx},${cy},${cz} · dist ${dd} (best ${approachBestD === Infinity ? '-' : approachBestD.toFixed(1)})`
-          + ` · dy ${(player.pos.y - cy).toFixed(1)} · noProgress ${noProgressT.toFixed(1)}s`
-          + ` · fly ${state.flying ? 'on' : 'off'} · cd ${placeCd.toFixed(2)}`
-          + ` · last reject: ${lastPlaceFail || 'never reached placement'}`);
-      }
-    }
-
     approachT += dt;
     const stand = standOutside(cell);
     const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
@@ -1538,6 +1536,22 @@ function tickBuilder(dt){
     if(key !== approachKey){ approachKey = key; approachBestD = Infinity; noProgressT = 0; approachT = 0; }
     if(d < approachBestD - 0.15){ approachBestD = d; noProgressT = 0; }
     else noProgressT += dt;
+
+    // Watchdog — a build that places nothing now explains itself instead of
+    // silently flying in circles.
+    if(buildPlacedTotal !== stallMark){ stallMark = buildPlacedTotal; stallT = 0; }
+    else {
+      stallT += dt;
+      if(stallT > 12){
+        stallT = 0;
+        const dd = distXZ(player.pos.x, player.pos.z, cx, cz).toFixed(1);
+        addChat('🤖', `stalled @ ${cx},${cy},${cz} · dist ${dd} · dy ${(player.pos.y - cy).toFixed(1)}`
+          + ` · mode ${gm.forge ? 'FORGE' : 'NIGHTFALL'} · fly ${state.flying ? 'on' : 'OFF'}`
+          + ` · hover ${stand.above ? 'above' : 'BESIDE'} · placed ${buildPlacedTotal}`
+          + ` · rejects: ${failSummary()}`);
+      }
+    }
+
 
     // Recovery only when genuinely not closing in. Critically it keeps steering
     // toward the target: the old version stopped navigating and flew outward and
@@ -1555,6 +1569,7 @@ function tickBuilder(dt){
           placeCd = 0.3;
         } else {
           if(!lastPlaceFail) lastPlaceFail = 'bot is in the way';
+          countFail(lastPlaceFail);
           buildDeferred.push(cell);
           buildIndex++;
           placeFailStreak++;
@@ -1613,10 +1628,23 @@ function tickBuilder(dt){
 
     if(placeCd > 0) return;
     if(placeOverlapsPlayer(cx, cy, cz)){
-      // Step farther out so we don't place inside ourselves
-      builderUnstuck(dt);
+      // Rise straight up out of the way — builderUnstuck() flew outward and 8
+      // blocks up, abandoning the target and looping. Just climb, then retry.
+      lastPlaceFail = 'bot is in the way';
+      overlapT += dt;
+      keys.KeyW = keys.KeyA = keys.KeyD = keys.KeyS = false;
+      keys.Space = true;
+      keys.ShiftLeft = keys.ShiftRight = keys.sprint = false;
+      if(overlapT > 1.5){
+        overlapT = 0;
+        buildDeferred.push(cell);
+        buildIndex++;
+        placeFailStreak++;
+        countFail('bot is in the way');
+      }
       return;
     }
+    overlapT = 0;
 
     if(placeBuildBlock(cx, cy, cz, cell.id)){
       buildIndex++;
@@ -1634,6 +1662,7 @@ function tickBuilder(dt){
       approachT = 0;
       placeCd = 0.15;
       placeFailStreak++;
+      countFail(lastPlaceFail || 'unknown');
       // Silent failure used to look identical to working: the bot flew around
       // animating with nothing appearing. Say what is wrong, once.
       if(placeFailStreak >= 20 && !failReported){
