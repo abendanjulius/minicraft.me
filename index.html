@@ -8,7 +8,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.5.8">
+<link rel="stylesheet" href="./css/style.css?v=2.5.9">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -220,9 +220,22 @@
 <div id="btnAI" style="display:none" title="Cube-arc bot (watch mode)">🤖</div>
 <div id="aiStatus" style="display:none"></div>
 
+<!-- Streamer-style facecam (shown while Cube-arc bot is watching mode) -->
+<div id="streamCam" style="display:none" aria-hidden="true">
+  <div class="scLive"><span class="scDot"></span> LIVE</div>
+  <div class="scFrame">
+    <img id="scFace" alt="Player" width="96" height="96">
+    <div class="scShade"></div>
+  </div>
+  <div class="scMeta">
+    <div id="scName">Streamer</div>
+    <div id="scAction">playing Eldercube</div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.5.8"></script>
+<script type="module" src="./js/main.js?v=2.5.9"></script>
 <script>
 (function(){
   function showRecover(msg){

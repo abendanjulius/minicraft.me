@@ -1511,3 +1511,103 @@ html body #touchUI #btnFly.active:active{
 }
 #btnAI.active{background:rgba(40,120,80,.75);border-color:#6f6}
 #aiStatus{position:fixed;top:54px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+
+/* Streamer facecam — bottom-left live-cast overlay */
+#streamCam{
+  position:fixed;
+  left:12px;
+  bottom:12px;
+  z-index:4;
+  width:132px;
+  pointer-events:none;
+  font-family:monospace;
+  filter:drop-shadow(0 4px 14px rgba(0,0,0,.55));
+}
+#streamCam .scLive{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  background:#e11;
+  color:#fff;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.06em;
+  padding:2px 7px;
+  border-radius:4px;
+  margin-bottom:5px;
+  animation:scPulse 1.6s ease-in-out infinite;
+}
+#streamCam .scDot{
+  width:6px;height:6px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 0 rgba(255,255,255,.7);
+  animation:scDot 1.6s ease-out infinite;
+}
+#streamCam .scFrame{
+  position:relative;
+  width:120px;height:120px;
+  border-radius:12px;
+  overflow:hidden;
+  border:3px solid rgba(255,255,255,.88);
+  background:#1a1a22;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
+}
+#streamCam #scFace{
+  width:100%;height:100%;
+  object-fit:cover;
+  image-rendering:pixelated;
+  transform-origin:center 30%;
+  animation:scIdle 3.2s ease-in-out infinite;
+}
+#streamCam.scMine #scFace{ animation:scFocus 0.55s ease-in-out infinite; }
+#streamCam.scFight #scFace{ animation:scReact 0.35s ease-in-out infinite; }
+#streamCam.scSwim #scFace{ animation:scBob 0.9s ease-in-out infinite; }
+#streamCam .scShade{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg, transparent 55%, rgba(0,0,0,.35) 100%);
+  pointer-events:none;
+}
+#streamCam .scMeta{
+  margin-top:5px;
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:8px;
+  padding:5px 8px;
+  color:#fff;
+  max-width:120px;
+}
+#streamCam #scName{
+  font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#streamCam #scAction{
+  font-size:9px;opacity:.8;margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:#cfe;
+}
+@keyframes scPulse{ 0%,100%{opacity:1} 50%{opacity:.72} }
+@keyframes scDot{
+  0%{ box-shadow:0 0 0 0 rgba(255,255,255,.55); }
+  100%{ box-shadow:0 0 0 8px rgba(255,255,255,0); }
+}
+@keyframes scIdle{
+  0%,100%{ transform:translateY(0) scale(1); }
+  50%{ transform:translateY(2px) scale(1.03); }
+}
+@keyframes scFocus{
+  0%,100%{ transform:translateY(1px) scale(1.02); }
+  50%{ transform:translateY(3px) scale(1.06); }
+}
+@keyframes scReact{
+  0%,100%{ transform:translate(0,0) rotate(0deg); }
+  25%{ transform:translate(1px,-1px) rotate(-2deg); }
+  75%{ transform:translate(-1px,1px) rotate(2deg); }
+}
+@keyframes scBob{
+  0%,100%{ transform:translateY(0); }
+  50%{ transform:translateY(4px); }
+}
+@media (max-width:860px){
+  #streamCam{ left:8px; bottom:8px; width:108px; }
+  #streamCam .scFrame{ width:96px; height:96px; border-radius:10px; }
+  #streamCam .scMeta{ max-width:96px; }
+}

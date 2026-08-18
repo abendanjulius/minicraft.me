@@ -3,9 +3,9 @@
 // Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
-import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked } from './player.js';
+import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
-import { TYPES, ITEMS } from './render.js';
+import { TYPES, ITEMS, faceURL, SKINS } from './render.js';
 import { gm } from './mode.js';
 import * as eldercube from './eldercube.js';
 import * as keepstones from './keepstones.js';
@@ -61,6 +61,43 @@ function setStatus(s){
   status = s;
   const el = document.getElementById('aiStatus');
   if(el) el.textContent = active ? `🤖 ${s}` : '';
+  if(active) updateStreamCam(s);
+}
+
+
+function streamCamEl(){ return document.getElementById('streamCam'); }
+
+function showStreamCam(){
+  const el = streamCamEl();
+  if(!el) return;
+  el.style.display = 'block';
+  const img = document.getElementById('scFace');
+  const name = document.getElementById('scName');
+  try{
+    const idx = skinIdx();
+    if(img) img.src = faceURL(idx);
+    if(name) name.textContent = (SKINS[idx]?.name || 'Player') + ' · AI';
+  }catch(e){}
+  updateStreamCam('starting the run');
+}
+
+function hideStreamCam(){
+  const el = streamCamEl();
+  if(!el) return;
+  el.style.display = 'none';
+  el.classList.remove('scMine','scFight','scSwim');
+}
+
+function updateStreamCam(action){
+  const act = document.getElementById('scAction');
+  if(act && action) act.textContent = action;
+  const el = streamCamEl();
+  if(!el) return;
+  el.classList.remove('scMine','scFight','scSwim');
+  const a = (action || '').toLowerCase();
+  if(a.includes('mining') || a.includes('gather') || a.includes('descend') || a.includes('climb')) el.classList.add('scMine');
+  else if(a.includes('fight') || a.includes('siege')) el.classList.add('scFight');
+  else if(a.includes('swim')) el.classList.add('scSwim');
 }
 
 function clearKeys(){
@@ -781,6 +818,7 @@ export function start(){
   reevaluatePhase();
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.add('active');
+  showStreamCam();
   addChat('🤖', 'Cube-arc bot ON — smarter pathing. No time limit.');
 }
 
@@ -796,6 +834,7 @@ export function stop(){
   setStatus('');
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.remove('active');
+  hideStreamCam();
   addChat('🤖', 'Cube-arc bot OFF.');
 }
 
