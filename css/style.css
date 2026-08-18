@@ -1513,17 +1513,17 @@ html body #touchUI #btnFly.active:active{
 #aiStatus{position:fixed;top:54px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 
-/* Streamer facecam — live-cast overlay */
+/* Streamer facecam — compact ID-style portrait */
 #streamCam{
   position:fixed !important;
   left:12px !important;
   bottom:12px !important;
   top:auto !important;
   z-index:9999 !important;
-  width:96px !important;
+  width:48px !important;
   pointer-events:none !important;
   font-family:monospace;
-  filter:drop-shadow(0 3px 10px rgba(0,0,0,.5));
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));
   display:none;
 }
 #streamCam.scShow{
@@ -1531,75 +1531,76 @@ html body #touchUI #btnFly.active:active{
   visibility:visible !important;
   opacity:1 !important;
 }
-/* Mobile: compact, top-left under HUD */
 body.touch #streamCam,
 body.touch #streamCam.scShow,
 html body.touch #streamCam.scShow{
   left:8px !important;
   bottom:auto !important;
-  top:44px !important;
-  width:72px !important;
+  top:42px !important;
+  width:40px !important;
 }
 #streamCam .scLive{
   display:inline-flex;
   align-items:center;
-  gap:4px;
+  gap:3px;
   background:#e11;
   color:#fff;
-  font-size:9px;
+  font-size:7px;
   font-weight:700;
-  letter-spacing:.05em;
-  padding:1px 6px;
-  border-radius:3px;
-  margin-bottom:4px;
+  letter-spacing:.04em;
+  padding:1px 4px;
+  border-radius:2px;
+  margin-bottom:3px;
   animation:scPulse 1.6s ease-in-out infinite;
 }
-body.touch #streamCam .scLive{ font-size:8px; padding:1px 5px; }
 #streamCam .scDot{
-  width:5px;height:5px;border-radius:50%;background:#fff;
+  width:4px;height:4px;border-radius:50%;background:#fff;
   animation:scDot 1.6s ease-out infinite;
 }
+/* ID / passport style frame — padding so full face is visible */
 #streamCam .scFrame{
   position:relative;
   width:100%;
   aspect-ratio:1;
-  border-radius:10px;
+  border-radius:6px;
   overflow:hidden;
-  border:2px solid rgba(255,255,255,.9);
-  background:#2a2a35;
-  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
+  border:2px solid rgba(255,255,255,.92);
+  background:linear-gradient(180deg, #5a6a88 0%, #3d4a66 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
-body.touch #streamCam .scFrame{ border-radius:8px; border-width:2px; }
 #streamCam #scFace{
-  width:100%;height:100%;
-  object-fit:cover;
+  width:72%;
+  height:72%;
+  object-fit:contain;
   image-rendering:pixelated;
-  transform-origin:50% 40%;
-  background:#3d4a6b;
+  transform-origin:50% 45%;
+  background:transparent;
   will-change:transform;
+  border-radius:3px;
 }
-/* Meta (name / action) hidden — face only */
 #streamCam .scMeta{ display:none !important; }
 #streamCam .scShade{
   position:absolute;inset:0;
-  background:linear-gradient(180deg, transparent 50%, rgba(0,0,0,.28) 100%);
+  background:linear-gradient(180deg, transparent 60%, rgba(0,0,0,.2) 100%);
   pointer-events:none;
 }
-/* Live face states driven by JS classes */
-#streamCam.scLookL #scFace{ transform: translateX(-6%) rotate(-3deg) scale(1.04); }
-#streamCam.scLookR #scFace{ transform: translateX(6%) rotate(3deg) scale(1.04); }
-#streamCam.scNod #scFace{ transform: translateY(7%) scale(1.02, 0.94); }
-#streamCam.scBlink #scFace{ transform: scale(1.02, 0.82); filter:brightness(0.92); }
-#streamCam.scLean #scFace{ transform: translateY(5%) rotate(-2deg) scale(1.08); }
-#streamCam.scShock #scFace{ transform: translateY(-4%) scale(1.1); filter:brightness(1.08); }
-#streamCam.scMine #scFace{ transform: translateY(4%) scale(1.06); }
-#streamCam.scFight #scFace{ transform: translate(2%, -2%) rotate(2deg) scale(1.08); }
-#streamCam.scSwim #scFace{ transform: translateY(6%) rotate(-1deg); }
+#streamCam.scLookL #scFace{ transform: translateX(-5%) rotate(-2deg) scale(1.03); }
+#streamCam.scLookR #scFace{ transform: translateX(5%) rotate(2deg) scale(1.03); }
+#streamCam.scNod #scFace{ transform: translateY(6%) scale(1.01, 0.93); }
+#streamCam.scBlink #scFace{ transform: scale(1.01, 0.84); filter:brightness(0.92); }
+#streamCam.scLean #scFace{ transform: translateY(4%) rotate(-2deg) scale(1.05); }
+#streamCam.scShock #scFace{ transform: translateY(-3%) scale(1.08); filter:brightness(1.06); }
+#streamCam.scMine #scFace{ transform: translateY(3%) scale(1.04); }
+#streamCam.scFight #scFace{ transform: translate(2%, -2%) rotate(2deg) scale(1.05); }
+#streamCam.scSwim #scFace{ transform: translateY(5%) rotate(-1deg); }
 #streamCam #scFace{
   transition: transform 0.18s ease-out, filter 0.12s ease;
 }
 @keyframes scPulse{ 0%,100%{opacity:1} 50%{opacity:.72} }
 @keyframes scDot{
   0%{ box-shadow:0 0 0 0 rgba(255,255,255,.55); }
-  100%{ box-shadow:0 0 0 6px rgba(255,255,255,0); }
+  100%{ box-shadow:0 0 0 5px rgba(255,255,255,0); }
 }

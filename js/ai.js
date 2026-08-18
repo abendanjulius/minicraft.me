@@ -52,6 +52,10 @@ let craftCd = 0;
 let streamCamGuard = 0;
 let wanderAng = 0;
 let recoverMode = 0;       // 0 none, 1 dig, 2 turn, 3 back up
+let sameActionCount = 0;   // stuck-alarm: same plan with no progress
+let sameActionTick = 0;
+let lastActionKey = '';
+let progressPos = {x:0,y:0,z:0};
 
 export const isActive = () => active;
 export const getPhase = () => phase;
@@ -85,14 +89,13 @@ function showStreamCam(){
   el.style.setProperty('position', 'fixed', 'important');
   el.style.setProperty('left', '8px', 'important');
   if(touch){
-    // Compact top-left — clear of joystick
-    el.style.setProperty('top', '44px', 'important');
+    el.style.setProperty('top', '42px', 'important');
     el.style.setProperty('bottom', 'auto', 'important');
-    el.style.setProperty('width', '72px', 'important');
+    el.style.setProperty('width', '40px', 'important');
   } else {
     el.style.setProperty('bottom', '12px', 'important');
     el.style.setProperty('top', 'auto', 'important');
-    el.style.setProperty('width', '96px', 'important');
+    el.style.setProperty('width', '48px', 'important');
   }
   const img = document.getElementById('scFace');
   const name = document.getElementById('scName');
@@ -900,6 +903,98 @@ function setPhase(p, msg){
   }
 }
 
+
+/** Normalize status so "To vault · 355m" and "To vault · 350m" count as same action. */
+function actionKey(){
+  const s = (status || '').replace(/\d+/g, '#');
+  return phase + '|' + s;
+}
+
+/**
+ * If the bot repeats the same plan ~10 times with almost no movement,
+ * force a different action so it cannot soft-lock forever.
+ */
+function forceUnstick(){
+  clearMining();
+  stuckT = 0;
+  avoidT = 0;
+  recoverMode = 0;
+  sameActionCount = 0;
+  sameActionTick = 0;
+  const side = Math.random() < 0.5 ? 1 : -1;
+  avoidYaw = view.yaw + side * (1.2 + Math.random() * 1.2);
+  avoidT = 1.4 + Math.random() * 0.8;
+  keys.Space = true;
+  addChat('🤖', 'Stuck alarm — changing plan.');
+  setStatus('Stuck alarm — new plan');
+
+  // Phase-specific escapes
+  if(phase === PHASES.TRAVEL){
+    // Dig through whatever is in front, then keep walking
+    view.pitch = 0.1;
+    digLook(0.7);
+    wanderAng += Math.PI * 0.7;
+  } else if(phase === PHASES.DESCEND){
+    // Sidestep off the stuck shaft column and dig again
+    player.pos.x += side * 1.2;
+    player.pos.z += side * 0.6;
+    clearMining();
+  } else if(phase === PHASES.LOOT){
+    wanderAng += Math.PI;
+    view.yaw += side * 1.5;
+  } else if(phase === PHASES.ASCEND){
+    view.yaw += side * 1.8;
+    view.pitch = -0.5;
+    digLook(0.7);
+  } else if(phase === PHASES.GATHER){
+    wanderAng += Math.PI * (0.8 + Math.random());
+    // Give up on this dig target
+    clearMining();
+  } else if(phase === PHASES.PLACE || phase === PHASES.SOCKET){
+    view.yaw += side * 1.0;
+    view.pitch = 0.5;
+  } else if(phase === PHASES.DEFEND){
+    wanderAng += Math.PI * 0.5;
+  }
+  progressPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+}
+
+function checkStuckAlarm(dt){
+  const key = actionKey();
+  const moved = Math.hypot(
+    player.pos.x - progressPos.x,
+    player.pos.y - progressPos.y,
+    player.pos.z - progressPos.z
+  );
+  if(moved > 2.0){
+    progressPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+    sameActionCount = 0;
+    sameActionTick = 0;
+    lastActionKey = key;
+    return;
+  }
+  if(key !== lastActionKey){
+    lastActionKey = key;
+    sameActionCount = 0;
+    sameActionTick = 0;
+    return;
+  }
+  // Same plan, little movement — tick every ~1.2s
+  sameActionTick += dt;
+  if(sameActionTick >= 1.2){
+    sameActionTick = 0;
+    sameActionCount++;
+    if(sameActionCount >= 10){
+      forceUnstick();
+    } else if(sameActionCount >= 5 && sameActionCount % 2 === 0){
+      // Mild nudge before full alarm
+      avoidYaw = view.yaw + (Math.random() < 0.5 ? 1 : -1) * 0.9;
+      avoidT = Math.max(avoidT, 0.7);
+      clearMining();
+    }
+  }
+}
+
 export function start(){
   if(active) return;
   if(!state.playing){ addChat('🤖', 'Start a world first.'); return; }
@@ -913,6 +1008,10 @@ export function start(){
   clearKeys();
   clearMining();
   deathWait = 0;
+  sameActionCount = 0;
+  sameActionTick = 0;
+  lastActionKey = '';
+  progressPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
   reevaluatePhase();
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.add('active');
@@ -966,6 +1065,7 @@ export function tick(dt){
   if(joy){ joy.x = 0; joy.y = 0; }
 
   manageInventory(dt);
+  checkStuckAlarm(dt);
   tickStreamFace(dt);
 
   // Keep facecam visible (mobile Safari / layout can drop it)
