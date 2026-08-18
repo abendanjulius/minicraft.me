@@ -1582,29 +1582,31 @@ function tickBuilder(dt){
       if(!ok && noProgressT < 2.5 && Math.abs(player.pos.y - (cell.y + HOVER)) > 3) return;
     }
 
-    // Look at the block (steeply down when hovering above it)
+    // Aim. When hovering, NEVER derive the bearing from the block underneath:
+    // its horizontal offset is sub-block noise, and switching between "current
+    // cell" and "next cell" gives two bearings ~180° apart, so the bot swings
+    // back and forth forever (the circling — flipping the target just reversed
+    // its direction). Instead lock onto the work direction: the next queued cell
+    // that is far enough away to define a stable heading.
     const eyeY = player.pos.y + 1.6;
     const horiz = distXZ(player.pos.x, player.pos.z, cx, cz);
     const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(stand.above ? 0.15 : 0.6, horiz));
 
-    if(stand.above && horiz < 1.2){
-      // Directly overhead the yaw toward the target is undefined — dx and dz are
-      // sub-block noise, so atan2 flips every frame and the bot spins on the spot.
-      // Aim at the NEXT cell instead (it looks like it's working ahead) and just
-      // ease the pitch down. Never chase a bearing that has no answer.
-      const nxt = buildQueue[buildIndex + 1];
-      if(nxt && distXZ(cx, cz, nxt.x, nxt.z) > 1.0){
-        faceToward(nxt.x, nxt.z, dt, pitch, 0.9);
-      } else {
-        const dp = pitch - view.pitch;
-        if(Math.abs(dp) > 0.03){
-          const max = 0.9 * 0.85 * dt;
-          view.pitch += Math.max(-max, Math.min(max, dp));
-        }
-        view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
+    if(stand.above){
+      // DON'T TURN WHILE PLACING. Any heading computed from the build geometry
+      // oscillates: the block underneath gives a noise-driven bearing, and on a
+      // narrow structure like Big Ben the serpentine rows are 1-3 blocks long so
+      // the travel direction reverses every couple of blocks (measured: a >90°
+      // swing on 30% of blocks). That oscillation *is* the circling.
+      // Yaw is left wherever the last real flight pointed it; only the pitch
+      // eases down onto the block. The bot turns when it flies, not when it lays.
+      const dp = pitch - view.pitch;
+      if(Math.abs(dp) > 0.03){
+        const max = 0.6 * 0.85 * dt;
+        view.pitch += Math.max(-max, Math.min(max, dp));
       }
-      // kill residual drift so it hovers still instead of orbiting
-      keys.KeyA = keys.KeyD = keys.KeyS = false;
+      view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
+      keys.KeyW = keys.KeyA = keys.KeyD = keys.KeyS = false;
     } else {
       faceToward(cx, cz, dt, pitch, 0.9);
     }
