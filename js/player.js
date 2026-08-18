@@ -547,7 +547,7 @@ function isSupportBlock(b){
   return !!(b && !isWalkThrough(b) && b !== 64);
 }
 
-function hasBlockSupport(x, y, z){
+export function hasBlockSupport(x, y, z){
   for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){
     if(isSupportBlock(getBlock(x+dx, y+dy, z+dz))) return true;
   }
@@ -555,7 +555,7 @@ function hasBlockSupport(x, y, z){
 }
 
 /** Center-indexed unit cubes: block at n occupies [n-0.5, n+0.5] */
-function placeOverlapsPlayer(px, py, pz){
+export function placeOverlapsPlayer(px, py, pz){
   const half = 0.3;
   const px0 = player.pos.x - half, px1 = player.pos.x + half;
   const pz0 = player.pos.z - half, pz1 = player.pos.z + half;

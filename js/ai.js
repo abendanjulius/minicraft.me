@@ -3,7 +3,7 @@
 // Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
-import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly, pulsePlace } from './player.js';
+import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly, pulsePlace, hasBlockSupport, placeOverlapsPlayer } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
 import { TYPES, ITEMS, faceURL, SKINS, applyEdit } from './render.js';
 import { gm } from './mode.js';
@@ -1156,8 +1156,9 @@ function resumeJob(job){
   buildOrigin = {...job.origin};
   const bp = buildings.blueprint(job.landmarkId);
   const ox = job.origin.x, oy = job.origin.y, oz = job.origin.z;
-  const sorted = [...bp.blocks].sort((a,b)=>a[1]-b[1]||a[0]-b[0]||a[2]-b[2]);
-  buildQueue = sorted.map(([dx,dy,dz,bid])=>({x:ox+dx,y:oy+dy,z:oz+dz,id:bid}));
+  buildQueue = orderOutsideIn(bp.blocks).map(([dx,dy,dz,bid])=>({
+    x:ox+dx, y:oy+dy, z:oz+dz, id:bid, defers:0
+  }));
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1213,11 +1214,56 @@ function holdBlock(id){
   renderHotbar();
 }
 
+/** Bottom-up, outside-in so walls/legs exist before interior. */
+function orderOutsideIn(relBlocks){
+  return [...relBlocks].sort((a, b) => {
+    if(a[1] !== b[1]) return a[1] - b[1];
+    const da = a[0]*a[0] + a[2]*a[2];
+    const db = b[0]*b[0] + b[2]*b[2];
+    if(db !== da) return db - da; // farther from center first
+    return Math.atan2(a[2], a[0]) - Math.atan2(b[2], b[0]);
+  });
+}
+
+/** Stand outside the structure relative to origin — not inside the hull. */
+function standOutside(cell){
+  const ox = buildOrigin?.x ?? cell.x;
+  const oz = buildOrigin?.z ?? cell.z;
+  let dx = cell.x - ox, dz = cell.z - oz;
+  let len = Math.hypot(dx, dz);
+  if(len < 0.2){
+    // center column: pick a fixed outside offset
+    dx = 1; dz = 0; len = 1;
+  }
+  const dist = 2.6;
+  return {
+    x: cell.x + (dx / len) * dist,
+    z: cell.z + (dz / len) * dist,
+  };
+}
+
+function builderUnstuck(dt){
+  // Aggressive fly + jump escape when a cell is hard to reach
+  ensureFlying();
+  keys.Space = true;
+  const side = (Math.floor(approachT * 2) % 2) ? 1 : -1;
+  avoidYaw = view.yaw + side * 1.4;
+  avoidT = 0.8;
+  faceYaw(avoidYaw, dt, 2.5);
+  keys.KeyW = true;
+  // Rise above the structure briefly
+  if(buildOrigin) flyTowardY((buildOrigin.y || player.pos.y) + 12 + (approachT % 5), dt);
+}
+
 function placeBuildBlock(x, y, z, id){
   x = wrapC(x); z = wrapC(z);
   y = y|0;
   if(y < 1 || y >= WH) return false;
   if(getBlock(x, y, z)) return true; // already filled counts as done
+  // Physics: must attach to a solid neighbor (no floating / clipping through)
+  if(!hasBlockSupport(x, y, z)) return false;
+  // Don't place inside the player's body
+  if(placeOverlapsPlayer(x, y, z)) return false;
   let useId = id;
   if(!gm.forge){
     const ok = ensureBuildBlocks(id);
@@ -1229,7 +1275,6 @@ function placeBuildBlock(x, y, z, id){
   holdBlock(useId);
   applyEdit(x, y, z, useId, false);
   try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
-  // Look like a real player place — hand swing + sound
   try{ pulsePlace(); }catch(e){}
   return true;
 }
@@ -1247,9 +1292,9 @@ function setupLandmark(id, originOverride = null){
     oy = surfaceY(ox, oz) + 1;
   }
   buildOrigin = {x: ox, y: oy, z: oz};
-  const sorted = [...bp.blocks].sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2]);
+  const sorted = orderOutsideIn(bp.blocks);
   buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
-    x: ox + dx, y: oy + dy, z: oz + dz, id: bid
+    x: ox + dx, y: oy + dy, z: oz + dz, id: bid, defers: 0
   }));
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
@@ -1265,9 +1310,9 @@ function setupCreative(){
   const oz = Math.round(player.pos.z + Math.cos(view.yaw) * -4);
   const oy = surfaceY(ox, oz) + 1;
   buildOrigin = {x: ox, y: oy, z: oz};
-  const sorted = [...bp.blocks].sort((a, b) => a[1] - b[1]);
+  const sorted = orderOutsideIn(bp.blocks);
   buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
-    x: ox + dx, y: oy + dy, z: oz + dz, id: bid
+    x: ox + dx, y: oy + dy, z: oz + dz, id: bid, defers: 0
   }));
   buildIndex = 0;
   buildStartedAt = 0;
@@ -1308,65 +1353,100 @@ function tickBuilder(dt){
     }
 
     const cell = buildQueue[buildIndex];
-    // Skip cells that are already solid (resume / overlap)
-    if(getBlock(wrapC(cell.x), cell.y|0, wrapC(cell.z))){
+    const cx = wrapC(cell.x), cy = cell.y|0, cz = wrapC(cell.z);
+
+    // Already solid — done
+    if(getBlock(cx, cy, cz)){
       buildIndex++;
       approachT = 0;
       return;
     }
 
-    const total = buildQueue.length;
+    // No support yet — defer to end of queue (place neighbors first)
+    if(!hasBlockSupport(cx, cy, cz)){
+      cell.defers = (cell.defers || 0) + 1;
+      buildQueue.splice(buildIndex, 1);
+      if(cell.defers < 8) buildQueue.push(cell);
+      // else drop unsupported cell
+      approachT = 0;
+      return;
+    }
+
+    const total = buildQueue.length + buildIndex; // approx remaining+done unstable; use index display
+    const left = buildQueue.length - buildIndex;
     const eta = formatEta(buildEtaSec());
-    setStatus(`${buildName} · ${buildIndex}/${total} · ETA ${eta}`);
+    setStatus(`${buildName} · ${buildIndex} done · ${left} left · ETA ${eta}`);
     const etaEl = document.getElementById('aiEta');
     if(etaEl){
       etaEl.style.display = 'block';
-      etaEl.textContent = `⏱ ${eta} remaining · ${buildIndex}/${total}`;
+      etaEl.textContent = `⏱ ${eta} remaining · ${left} left`;
     }
 
     holdBlock(cell.id);
-    if(gm.forge && cell.y > (buildOrigin?.y || 0) + 2) ensureFlying();
+    if(gm.forge) ensureFlying();
 
     approachT += dt;
-    const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
-    const wantY = cell.y - 1.4;
-    const dy = Math.abs(player.pos.y - wantY);
-    const altOk = !state.flying || dy < 2.2;
-    const near = d <= 3.2;
+    const stand = standOutside(cell);
+    const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
+    const near = d <= 2.8;
 
-    // Move the body to the work site — placement waits for this
-    if(!near){
-      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.4});
-      if(state.flying) flyTowardY(cell.y, dt);
-      // Safety: if pathfinding fails for a long time, still place once so builds finish
-      if(approachT < 14) return;
-    } else {
-      keys.KeyW = false;
-      if(state.flying){
-        const ok = flyTowardY(cell.y, dt);
-        if(!ok && approachT < 10) return;
+    // Stuck recovery: fly + jump + strafe outside
+    if(approachT > 5.5){
+      builderUnstuck(dt);
+      if(approachT > 12){
+        // give up on approach — try place if support+no overlap, else defer
+        if(!placeOverlapsPlayer(cx, cy, cz) && placeBuildBlock(cx, cy, cz, cell.id)){
+          buildIndex++;
+          noteBlockPlaced();
+          placeCd = 0.3;
+        } else {
+          cell.defers = (cell.defers || 0) + 1;
+          buildQueue.splice(buildIndex, 1);
+          if(cell.defers < 8) buildQueue.push(cell);
+        }
+        approachT = 0;
       }
+      return;
     }
 
-    // Aim at the exact cell being placed (crosshair + body face the work)
+    if(!near){
+      navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR: 2.2});
+      if(state.flying) flyTowardY(cell.y, dt);
+      keys.Space = true; // hop / fly-up assist
+      return;
+    }
+
+    keys.KeyW = false;
+    if(state.flying){
+      const ok = flyTowardY(cell.y, dt);
+      if(!ok && approachT < 8) return;
+    }
+
+    // Face the block from outside
     const eyeY = player.pos.y + 1.6;
-    const pitch = Math.atan2(-(cell.y + 0.5 - eyeY), Math.max(0.6, d));
-    faceToward(cell.x, cell.z, dt, pitch, 2.0);
+    const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(0.6, distXZ(player.pos.x, player.pos.z, cx, cz)));
+    faceToward(cx, cz, dt, pitch, 2.2);
 
-    // Must be mostly looking at it before the swing
     if(placeCd > 0) return;
-    if(approachT < 0.2 && near) return; // brief settle
+    if(placeOverlapsPlayer(cx, cy, cz)){
+      // Step farther out so we don't place inside ourselves
+      builderUnstuck(dt);
+      return;
+    }
 
-    if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
+    if(placeBuildBlock(cx, cy, cz, cell.id)){
       buildIndex++;
       noteBlockPlaced();
-      placeCd = 0.38; // human place rhythm
+      placeCd = 0.36;
       approachT = 0;
       if(buildIndex % 8 === 0) snapshotJobProgress();
     } else {
-      buildIndex++;
+      // failed physics — defer
+      cell.defers = (cell.defers || 0) + 1;
+      buildQueue.splice(buildIndex, 1);
+      if(cell.defers < 8) buildQueue.push(cell);
       approachT = 0;
-      placeCd = 0.2;
+      placeCd = 0.15;
     }
     return;
   }
