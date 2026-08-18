@@ -3,7 +3,7 @@
 // Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
-import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx } from './player.js';
+import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
 import { TYPES, ITEMS, faceURL, SKINS, applyEdit } from './render.js';
 import { gm } from './mode.js';
@@ -1041,6 +1041,43 @@ function ensureBuildBlocks(id){
 }
 
 /** Put the exact block type in the active hotbar slot so the hand matches the place. */
+
+function ensureFlying(){
+  if(!gm.forge) return false;
+  if(!state.flying){
+    try{ toggleFly(); }catch(e){ state.flying = true; }
+  }
+  return !!state.flying;
+}
+
+function stopFlying(){
+  if(state.flying){
+    try{ toggleFly(); }catch(e){ state.flying = false; }
+  }
+}
+
+/** Adjust altitude while flying toward a target block Y. Returns true when close enough. */
+function flyTowardY(targetY, dt){
+  if(!state.flying) return Math.abs(player.pos.y - targetY) < 3;
+  // Aim so feet are ~1.5 below the block (natural place height)
+  const wantY = targetY - 1.4;
+  const dy = wantY - player.pos.y;
+  if(Math.abs(dy) < 1.1){
+    keys.Space = false;
+    keys.ShiftLeft = keys.ShiftRight = keys.sprint = false;
+    return true;
+  }
+  if(dy > 0){
+    keys.Space = true;
+    keys.ShiftLeft = keys.ShiftRight = keys.sprint = false;
+  } else {
+    keys.Space = false;
+    keys.ShiftLeft = true; // fly down
+    keys.sprint = false;
+  }
+  return false;
+}
+
 function holdBlock(id){
   const kind = id >= 100 ? 'f' : 'b';
   // Prefer an existing matching slot
@@ -1109,6 +1146,7 @@ function tickBuilder(dt){
     if(builderMode === 'creative') setupCreative();
     else if(landmarkId) setupLandmark(landmarkId);
     else setupCreative();
+    if(gm.forge) ensureFlying();
     setPhase(PHASES.BUILD_PLACE, `Building ${buildName}…`);
     return;
   }
@@ -1119,29 +1157,39 @@ function tickBuilder(dt){
     }
     const cell = buildQueue[buildIndex];
     setStatus(`${buildName} · ${buildIndex + 1}/${buildQueue.length}`);
-    // Show the block we are about to place (matches map material)
     holdBlock(cell.id);
+
+    // Tall builds: fly up so the avatar is beside the block being placed
+    const needFly = gm.forge && (cell.y - (buildOrigin?.y || player.pos.y) > 2 || cell.y > player.pos.y + 3);
+    if(needFly || (gm.forge && state.flying)) ensureFlying();
+
     const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
-    // Walk near the cell
-    if(d > 3.2){
-      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.4});
+    const atAlt = !state.flying || flyTowardY(cell.y, dt);
+
+    // Move horizontally while adjusting height
+    if(d > 2.8){
+      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.0});
+      // navigateTo clears Space — restore vertical intent after
+      if(state.flying) flyTowardY(cell.y, dt);
       return;
     }
-    // Look at placement
-    faceToward(cell.x, cell.z, dt, Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
+
+    // Close in XZ: hold position and finish altitude
     keys.KeyW = false;
+    if(state.flying) flyTowardY(cell.y, dt);
+    faceToward(cell.x, cell.z, dt, Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
+
+    if(!atAlt && state.flying) return; // still climbing/descending
     if(placeCd > 0) return;
     if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
       buildIndex++;
-      placeCd = 0.28; // human place cadence
+      placeCd = 0.28;
     } else {
-      // no materials — skip or try gather
       if(!gm.forge){
         setStatus('Need blocks — gathering…');
         selectTool('pick');
         if(!mineLock) digLook(0.5);
         placeCd = 0.5;
-        // skip this cell after a few fails
         if(phaseT > 8){ buildIndex++; phaseT = 0; }
       } else {
         buildIndex++;
@@ -1152,8 +1200,13 @@ function tickBuilder(dt){
   if(phase === PHASES.BUILD_DONE){
     setStatus(`${buildName} complete — watching`);
     clearKeys();
+    // Gently return toward ground level after a tall build
+    if(state.flying){
+      const ground = surfaceY(Math.round(player.pos.x), Math.round(player.pos.z)) + 1;
+      if(player.pos.y > ground + 2) flyTowardY(ground + 1.4, dt);
+      else stopFlying();
+    }
     view.yaw += 0.1 * dt;
-    // Creative: start another doodle after a pause
     if(builderMode === 'creative' && phaseT > 6){
       setPhase(PHASES.BUILD_SETUP, 'Next creative build…');
     }
@@ -1219,6 +1272,7 @@ export function stop(){
   setStatus('');
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.remove('active');
+  stopFlying();
   hideStreamCam();
   closeProfileModal();
   addChat('🤖', 'Bot OFF.');
