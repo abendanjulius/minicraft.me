@@ -51,6 +51,9 @@ let buildOrigin = null;  // {x,y,z}
 let buildName = '';
 let placeCd = 0;
 let approachT = 0; // time spent trying to reach current build cell
+let unstuckHold = 0;
+let unstuckYawHold = 0;
+let unstuckRiseY = 0;
 let buildStartedAt = 0;  // performance.now()/1000 when first block of this job placed
 let buildPlaceTimes = []; // rolling samples of seconds per block
 let buildJobId = null;     // registry id of the active job
@@ -393,17 +396,17 @@ function passableColumn(x, yFeet, z){
   return true;
 }
 
-function faceYaw(want, dt, rate = 1.15){
+function faceYaw(want, dt, rate = 0.95){
   let dy = want - view.yaw;
   while(dy > Math.PI) dy -= Math.PI * 2;
   while(dy < -Math.PI) dy += Math.PI * 2;
-  // Dead-zone stops micro-jitter when almost aligned
-  if(Math.abs(dy) < 0.035) return true;
-  // Ease-in: slower when close, still capped
-  const ease = Math.min(1, Math.abs(dy) * 1.4);
-  const max = rate * dt * (0.4 + 0.6 * ease);
+  // Wider dead-zone — stops left/right shimmer
+  if(Math.abs(dy) < 0.06) return true;
+  // Strong ease when nearly aligned
+  const ease = Math.min(1, Math.abs(dy) * 0.9);
+  const max = rate * dt * (0.25 + 0.55 * ease);
   view.yaw += Math.max(-max, Math.min(max, dy));
-  return Math.abs(dy) < 0.07;
+  return Math.abs(dy) < 0.1;
 }
 
 function faceToward(tx, tz, dt, pitch = null, rate = 1.15){
@@ -748,7 +751,7 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
   // Active detour (stuck recovery)
   if(avoidT > 0){
     avoidT -= dt;
-    faceYaw(avoidYaw, dt, 2.0);
+    faceYaw(avoidYaw, dt, 1.0);
     keys.KeyW = true;
     keys.sprint = false;
     keys.Space = true;
@@ -784,12 +787,13 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
       return false;
     }
     steerDir = best;
-    steerHold = 0.55 + Math.random() * 0.35;
+    // Hold heading longer so camera does not flip-flop
+    steerHold = (botProfile === 'builder') ? (1.6 + Math.random() * 0.6) : (0.9 + Math.random() * 0.4);
   }
 
   const [bx, bz] = steerDir;
   const wantYaw = Math.atan2(-bx, -bz);
-  faceYaw(wantYaw, dt, 1.2);
+  faceYaw(wantYaw, dt, botProfile === 'builder' ? 0.85 : 1.1);
   if(opts.pitch != null) smoothPitch(opts.pitch, dt, 0.85);
   else smoothPitch(-0.08, dt, 0.7);
 
@@ -805,12 +809,12 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
     keys.Space = true;
   } else if(solid(ax, fy, az) && solid(ax, fy + 1, az)){
     smoothPitch(0.08, dt, 1.0);
-    if(digCd <= 0) digLook(0.5);
-    steerHold = 0; // allow rescore after wall
+    if(botProfile !== 'builder' && digCd <= 0) digLook(0.5);
+    if(botProfile !== 'builder') steerHold = 0;
   } else if(!solid(ax, fy, az) && solid(ax, fy + 1, az)){
     smoothPitch(-0.25, dt, 1.0);
-    if(digCd <= 0) digLook(0.5);
-    steerHold = 0;
+    if(botProfile !== 'builder' && digCd <= 0) digLook(0.5);
+    if(botProfile !== 'builder') steerHold = 0;
   }
 
   // Stuck recovery
@@ -825,9 +829,9 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
       view.pitch = 0.15;
       digLook(0.7);
     } else if(recoverMode === 1){
-      const side = (Math.floor(phaseT * 3) % 2) ? 1 : -1;
-      avoidYaw = view.yaw + side * (1.0 + Math.random() * 0.7);
-      avoidT = 1.1;
+      // Stable detour — do not flip side every tick
+      avoidYaw = view.yaw + 1.15;
+      avoidT = 1.4;
       keys.Space = true;
     } else if(recoverMode === 2){
       // dig head-height and feet-height ahead
@@ -846,8 +850,8 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
     } else {
       keys.KeyW = false;
       keys.KeyS = true;
-      avoidYaw = view.yaw + Math.PI * (0.5 + Math.random() * 0.5) * ((Math.floor(phaseT) % 2) ? 1 : -1);
-      avoidT = 0.7;
+      avoidYaw = view.yaw + 2.0;
+      avoidT = 1.0;
     }
   }
 
@@ -1243,16 +1247,29 @@ function standOutside(cell){
 }
 
 function builderUnstuck(dt){
-  // Aggressive fly + jump escape when a cell is hard to reach
+  // Smooth escape — pick ONE heading and keep it (no left/right strobing)
   ensureFlying();
-  keys.Space = true;
-  const side = (Math.floor(approachT * 2) % 2) ? 1 : -1;
-  avoidYaw = view.yaw + side * 1.4;
-  avoidT = 0.8;
-  faceYaw(avoidYaw, dt, 2.5);
+  unstuckHold -= dt;
+  if(unstuckHold <= 0){
+    // Prefer outward from structure center
+    if(buildOrigin){
+      const dx = player.pos.x - buildOrigin.x;
+      const dz = player.pos.z - buildOrigin.z;
+      if(Math.hypot(dx, dz) > 0.4)
+        unstuckYawHold = Math.atan2(-dx, -dz); // face outward
+      else
+        unstuckYawHold = view.yaw + 1.2;
+    } else {
+      unstuckYawHold = view.yaw + 1.2;
+    }
+    unstuckRiseY = (buildOrigin?.y || player.pos.y) + 8;
+    unstuckHold = 2.8; // hold this plan for seconds
+  }
+  faceYaw(unstuckYawHold, dt, 0.8);
   keys.KeyW = true;
-  // Rise above the structure briefly
-  if(buildOrigin) flyTowardY((buildOrigin.y || player.pos.y) + 12 + (approachT % 5), dt);
+  keys.Space = true; // steady climb, not pulsed
+  keys.ShiftLeft = keys.ShiftRight = keys.sprint = false;
+  flyTowardY(unstuckRiseY + 1.4, dt);
 }
 
 function placeBuildBlock(x, y, z, id){
@@ -1412,7 +1429,8 @@ function tickBuilder(dt){
     if(!near){
       navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR: 2.2});
       if(state.flying) flyTowardY(cell.y, dt);
-      keys.Space = true; // hop / fly-up assist
+      // Gentle rise only — constant Space caused jitter with fly
+      if(state.flying && player.pos.y < cell.y - 2) keys.Space = true;
       return;
     }
 
@@ -1422,10 +1440,10 @@ function tickBuilder(dt){
       if(!ok && approachT < 8) return;
     }
 
-    // Face the block from outside
+    // Face the block from outside (slow look)
     const eyeY = player.pos.y + 1.6;
     const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(0.6, distXZ(player.pos.x, player.pos.z, cx, cz)));
-    faceToward(cx, cz, dt, pitch, 2.2);
+    faceToward(cx, cz, dt, pitch, 0.9);
 
     if(placeCd > 0) return;
     if(placeOverlapsPlayer(cx, cy, cz)){
