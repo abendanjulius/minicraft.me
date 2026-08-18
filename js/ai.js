@@ -69,23 +69,32 @@ function streamCamEl(){ return document.getElementById('streamCam'); }
 
 function showStreamCam(){
   const el = streamCamEl();
-  if(!el) return;
+  if(!el){
+    console.warn('[ai] streamCam element missing');
+    return;
+  }
+  el.classList.add('scShow');
   el.style.display = 'block';
+  el.setAttribute('aria-hidden', 'false');
   const img = document.getElementById('scFace');
   const name = document.getElementById('scName');
   try{
     const idx = skinIdx();
-    if(img) img.src = faceURL(idx);
+    if(img){
+      img.src = faceURL(idx);
+      img.style.imageRendering = 'pixelated';
+    }
     if(name) name.textContent = (SKINS[idx]?.name || 'Player') + ' · AI';
-  }catch(e){}
+  }catch(e){ console.warn('[ai] streamCam face', e); }
   updateStreamCam('starting the run');
 }
 
 function hideStreamCam(){
   const el = streamCamEl();
   if(!el) return;
+  el.classList.remove('scShow','scMine','scFight','scSwim');
   el.style.display = 'none';
-  el.classList.remove('scMine','scFight','scSwim');
+  el.setAttribute('aria-hidden', 'true');
 }
 
 function updateStreamCam(action){
@@ -738,22 +747,43 @@ function navigateTo(goalX, goalZ, dt, opts = {}){
   return false;
 }
 
-/** Dig a 1×2 shaft downward toward target Y while staying near XZ. */
+/**
+ * Dig a vertical shaft under the player down to vault Y.
+ * World-locks the block under the feet so progress actually finishes.
+ */
 function digDownToward(ty, dt){
-  const px = Math.round(player.pos.x), pz = Math.round(player.pos.z);
-  const py = Math.round(player.pos.y);
-  selectTool('pick');
-  view.pitch = 1.15;
-  // clear under feet
-  if(solid(px, py - 1, pz) || solid(px, py, pz)){
-    digLook(0.55);
-    keys.KeyW = false;
-    return player.pos.y <= ty + 1.2;
+  if(player.pos.y <= ty + 1.6){
+    return true;
   }
-  if(mineLock){ keys.KeyW = false; return player.pos.y <= ty + 1.2; }
-  // if somehow floating, walk
-  keys.KeyW = false;
-  return player.pos.y <= ty + 1.2;
+  selectTool('pick');
+  keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false;
+  keys.sprint = false;
+  view.pitch = 1.35;
+
+  const px = Math.round(player.pos.x);
+  const pz = Math.round(player.pos.z);
+  // Prefer the solid block immediately under the feet, then one below
+  const candidates = [
+    Math.floor(player.pos.y - 0.15),
+    Math.floor(player.pos.y - 1.15),
+    Math.floor(player.pos.y - 2.15),
+  ];
+  for(const by of candidates){
+    if(by < 1 || by >= WH) continue;
+    if(!solid(px, by, pz)) continue;
+    // Already locked on this cell — holdMine will finish it
+    if(mineLock && mineLock.x === px && mineLock.y === by && mineLock.z === pz) return false;
+    // Lock a new under-foot cell (do not use digLook/cast — look drift was the bug)
+    mineLock = {x: px, y: by, z: pz};
+    state.mineScreen = null;
+    state.mineTarget = [px, by, pz];
+    state.mineHeld = true;
+    state.mining = null;
+    mineTimer = 15;
+    return false;
+  }
+  // Open air below — gravity drops us through the shaft
+  return false;
 }
 
 /** Climb / dig staircase upward to surface. */
@@ -898,17 +928,20 @@ export function tick(dt){
       const d = distXZ(player.pos.x, player.pos.z, target.x, target.z)|0;
       setStatus(`To vault · ${d}m`);
       if(navigateTo(target.x, target.z, dt, {sprint: true, arriveR: 2.2})){
+        clearMining();
         setPhase(PHASES.DESCEND, 'Descending into the vault…');
       }
       break;
     }
     case PHASES.DESCEND: {
       target = vaultTarget();
-      if(distXZ(player.pos.x, player.pos.z, target.x, target.z) > 3){
-        navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2});
+      // Stay over the vault mouth while digging the shaft
+      if(distXZ(player.pos.x, player.pos.z, target.x, target.z) > 2.5){
+        if(!mineLock) navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 1.5});
+        setStatus(`To vault mouth · ${distXZ(player.pos.x,player.pos.z,target.x,target.z)|0}m`);
         break;
       }
-      setStatus(`Descending · y ${player.pos.y|0}→${target.y}`);
+      setStatus(`Shaft dig · y ${player.pos.y|0} → vault ${target.y}`);
       if(digDownToward(target.y, dt)){
         setPhase(PHASES.LOOT, 'Searching for the Elder Cube…');
       }

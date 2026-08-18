@@ -1518,11 +1518,20 @@ html body #touchUI #btnFly.active:active{
   position:fixed;
   left:12px;
   bottom:12px;
-  z-index:4;
+  z-index:30;
   width:132px;
   pointer-events:none;
   font-family:monospace;
   filter:drop-shadow(0 4px 14px rgba(0,0,0,.55));
+  display:none;
+}
+#streamCam.scShow{
+  display:block !important;
+}
+/* Above the mobile joystick so it stays visible on iPad */
+body.touch #streamCam.scShow{
+  bottom: 155px;
+  left: 10px;
 }
 #streamCam .scLive{
   display:inline-flex;
