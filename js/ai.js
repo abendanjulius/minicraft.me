@@ -1,7 +1,8 @@
 // ai.js — Cube-arc spectator bot. Drives the local player until you turn it off.
 // No time limit. Nightfall-oriented: vault → Cube → Keepstone → siege → done.
+// Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
-import { WORLD, WH, CENTER, getBlock, heightAt, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
+import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
 import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
 import { gm } from './mode.js';
@@ -21,27 +22,32 @@ const CRYSTAL = 122;
 
 const PHASES = {
   IDLE: 'idle',
-  TRAVEL: 'travel',       // walk to vault XZ
-  DESCEND: 'descend',     // dig down to vault Y
-  LOOT: 'loot',           // mine cube / area
-  ASCEND: 'ascend',       // get back to surface
-  GATHER: 'gather',       // materials for Keepstone
-  PLACE: 'place',         // place Keepstone
-  SOCKET: 'socket',       // seat the Cube
-  DEFEND: 'defend',       // hold siege
-  DONE: 'done',           // claim finished — keep idling / watch
+  TRAVEL: 'travel',
+  DESCEND: 'descend',
+  LOOT: 'loot',
+  ASCEND: 'ascend',
+  GATHER: 'gather',
+  PLACE: 'place',
+  SOCKET: 'socket',
+  DEFEND: 'defend',
+  DONE: 'done',
 };
 
 let active = false;
 let phase = PHASES.IDLE;
 let status = '';
-let target = null;        // {x,y,z}
+let target = null;
 let mineTimer = 0;
 let actionCd = 0;
 let stuckT = 0;
-let lastPos = {x:0,z:0};
+let lastPos = {x:0, y:0, z:0};
 let phaseT = 0;
 let announceAt = 0;
+let avoidYaw = 0;          // temporary detour heading
+let avoidT = 0;            // seconds left on detour
+let digCd = 0;
+let wanderAng = 0;
+let recoverMode = 0;       // 0 none, 1 dig, 2 turn, 3 back up
 
 export const isActive = () => active;
 export const getPhase = () => phase;
@@ -70,21 +76,42 @@ function distXZ(ax, az, bx, bz){
   return Math.hypot(wrapDelta(bx - ax), wrapDelta(bz - az));
 }
 
-function faceToward(tx, tz, dt, pitch = null){
+function solid(x, y, z){
+  y = y|0;
+  if(y < 0 || y >= WH) return true;
+  const b = getBlock(Math.round(x), y, Math.round(z));
+  return !!(b && !isWalkThrough(b) && b !== 64);
+}
+
+function passableColumn(x, yFeet, z){
+  // body needs feet cell walk-through-or-ground and head clear
+  const fy = Math.round(yFeet);
+  if(solid(x, fy + 1, z)) return false; // chest
+  if(solid(x, fy + 2, z)) return false; // head
+  return true;
+}
+
+function faceYaw(want, dt, rate = 3.2){
+  let dy = want - view.yaw;
+  while(dy > Math.PI) dy -= Math.PI * 2;
+  while(dy < -Math.PI) dy += Math.PI * 2;
+  const max = rate * dt;
+  view.yaw += Math.max(-max, Math.min(max, dy));
+  return Math.abs(dy) < 0.12;
+}
+
+function faceToward(tx, tz, dt, pitch = null, rate = 3.2){
   const dx = wrapDelta(tx - player.pos.x);
   const dz = wrapDelta(tz - player.pos.z);
-  // look dir: (-sin yaw, -cos yaw) → yaw = atan2(-dx, -dz)
   const want = Math.atan2(-dx, -dz);
-  let dy = want - view.yaw;
-  while(dy > Math.PI) dy -= Math.PI*2;
-  while(dy < -Math.PI) dy += Math.PI*2;
-  const max = 2.8 * dt;
-  view.yaw += Math.max(-max, Math.min(max, dy));
+  const ok = faceYaw(want, dt, rate);
   if(pitch != null){
     const dp = pitch - view.pitch;
+    const max = rate * dt;
     view.pitch += Math.max(-max, Math.min(max, dp));
-    view.pitch = Math.max(-1.4, Math.min(1.4, view.pitch));
+    view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
   }
+  return ok;
 }
 
 function selectTool(id){
@@ -96,8 +123,7 @@ function selectTool(id){
 function selectItem(id){
   const i = hotbarSlots.findIndex(s => s && s.id === id);
   if(i >= 0){ sel.slot = i; renderHotbar(); return true; }
-  // put into an empty hotbar slot if we have it in inventory
-  if((inventory[id]||0) > 0){
+  if((inventory[id] || 0) > 0){
     const empty = hotbarSlots.findIndex(s => s === null);
     if(empty >= 0){
       hotbarSlots[empty] = {k: id >= 100 ? 'f' : 'b', id};
@@ -109,17 +135,15 @@ function selectItem(id){
   return false;
 }
 
-function has(id, n=1){ return (inventory[id]||0) >= n; }
+function has(id, n = 1){ return (inventory[id] || 0) >= n; }
 
 function tryCraftId(outId){
   const r = craft.RECIPES.find(x => x.out.id === outId);
-  if(!r) return false;
-  if(!craft.canCraft(r)) return false;
+  if(!r || !craft.canCraft(r)) return false;
   return craft.craft(r);
 }
 
 function ensureKeepstoneMats(){
-  // Keepstone: 2 crystal, 2 iron ingot, 8 stone
   while(has(IRON_CHUNK, 3) && !has(IRON_INGOT, 2)) tryCraftId(IRON_INGOT);
   if(has(CRYSTAL, 2) && has(IRON_INGOT, 2) && has(STONE, 8)){
     return tryCraftId(KEEPSTONE) || has(KEEPSTONE);
@@ -127,29 +151,28 @@ function ensureKeepstoneMats(){
   return has(KEEPSTONE);
 }
 
-function blockAhead(dist = 1){
-  const fx = Math.round(player.pos.x - Math.sin(view.yaw) * dist);
-  const fz = Math.round(player.pos.z - Math.cos(view.yaw) * dist);
-  const fy = Math.round(player.pos.y + 0.5);
-  return {x:fx, y:fy, z:fz, feet:getBlock(fx, fy, fz), head:getBlock(fx, fy+1, fz)};
-}
-
-function digAhead(dt){
+/** Mine whatever the crosshair hits (short reach). */
+function digLook(hold = 0.45){
   selectTool('pick') || selectTool('shovel') || selectTool('axe');
   const r = castBlock(5);
-  if(r && r.hit){
-    const t = getBlock(...r.hit);
-    if(t && t !== 64 && TYPES[t]?.hard < 90){
-      setMine(true);
-      mineTimer = 0.4;
-      return true;
-    }
-  }
-  return false;
+  if(!r || !r.hit) return false;
+  const t = getBlock(...r.hit);
+  if(!t || t === 64 || (TYPES[t]?.hard ?? 99) >= 90) return false;
+  setMine(true);
+  mineTimer = hold;
+  digCd = 0.2;
+  return true;
+}
+
+/** Explicitly mine a world cell by facing it. */
+function digCell(x, y, z, dt){
+  faceToward(x + 0.01, z + 0.01, dt, Math.atan2(-(y + 0.5 - (player.pos.y + 1.6)),
+    Math.max(0.4, distXZ(player.pos.x, player.pos.z, x, z))), 5);
+  return digLook(0.5);
 }
 
 function nearestHostile(){
-  let best = null, bestD = 6;
+  let best = null, bestD = 7;
   for(const zb of zombies.values()){
     if(!zb?.c?.g?.visible) continue;
     const p = zb.c.g.position;
@@ -162,12 +185,14 @@ function nearestHostile(){
 function fightNearby(dt){
   const p = nearestHostile();
   if(!p) return false;
-  faceToward(p.x, p.z, dt, -0.15);
-  keys.KeyW = distXZ(player.pos.x, player.pos.z, p.x, p.z) > 1.8;
+  faceToward(p.x, p.z, dt, -0.1);
+  const d = distXZ(player.pos.x, player.pos.z, p.x, p.z);
+  keys.KeyW = d > 1.6;
+  keys.sprint = false;
   if(actionCd <= 0){
     setMine(true);
-    actionCd = 0.35;
-    setTimeout(()=>setMine(false), 120);
+    actionCd = 0.32;
+    mineTimer = 0.15;
   }
   return true;
 }
@@ -177,29 +202,206 @@ function vaultTarget(){
   return {x: v.x, y: v.y + 1, z: v.z};
 }
 
-function goToXZ(tx, tz, dt, sprint = true){
-  faceToward(tx, tz, dt, -0.12);
-  const d = distXZ(player.pos.x, player.pos.z, tx, tz);
-  if(d < 1.2){ keys.KeyW = false; return true; }
+/**
+ * Score a step in direction (dx,dz). Higher = better.
+ * Prefers open 1-block steps toward the goal; penalizes walls and cliffs.
+ */
+function scoreStep(dx, dz, goalX, goalZ){
+  const nx = player.pos.x + dx;
+  const nz = player.pos.z + dz;
+  const fy = Math.round(player.pos.y);
+  // must not be solid at body
+  if(solid(nx, fy + 1, nz) && solid(nx, fy, nz)) return -100;
+  let score = 0;
+  // progress toward goal
+  const before = distXZ(player.pos.x, player.pos.z, goalX, goalZ);
+  const after = distXZ(nx, nz, goalX, goalZ);
+  score += (before - after) * 12;
+
+  const feetSolid = solid(nx, fy - 1, nz) || solid(nx, fy, nz);
+  const stepUp = !solid(nx, fy, nz) && solid(nx, fy - 1, nz) === false && solid(nx, fy, nz) === false;
+  // ground at same level
+  if(solid(nx, fy - 1, nz) && !solid(nx, fy, nz) && !solid(nx, fy + 1, nz)){
+    score += 8; // clean walk
+  } else if(solid(nx, fy, nz) && !solid(nx, fy + 1, nz) && !solid(nx, fy + 2, nz)){
+    score += 4; // 1-block step-up (jump)
+  } else if(!solid(nx, fy - 1, nz) && !solid(nx, fy - 2, nz)){
+    score -= 6; // drop / hole
+  } else if(solid(nx, fy, nz) && solid(nx, fy + 1, nz)){
+    score -= 20; // wall
+  }
+
+  // slight noise so we don't freeze on ties
+  score += Math.sin(nx * 12.3 + nz * 7.1 + phaseT) * 0.15;
+  return score;
+}
+
+/**
+ * Pick best of 8 directions toward goal. Sets view + movement keys.
+ * Returns true when within arriveR of goal XZ.
+ */
+function navigateTo(goalX, goalZ, dt, opts = {}){
+  const arriveR = opts.arriveR ?? 1.4;
+  const sprint = opts.sprint !== false;
+  const d = distXZ(player.pos.x, player.pos.z, goalX, goalZ);
+  if(d <= arriveR){
+    keys.KeyW = false;
+    faceToward(goalX, goalZ, dt, opts.pitch ?? -0.1);
+    return true;
+  }
+
+  // Active detour (stuck recovery)
+  if(avoidT > 0){
+    avoidT -= dt;
+    faceYaw(avoidYaw, dt, 4);
+    keys.KeyW = true;
+    keys.sprint = false;
+    keys.Space = true;
+    // dig while detouring if still blocked
+    const fx = player.pos.x - Math.sin(view.yaw);
+    const fz = player.pos.z - Math.cos(view.yaw);
+    const fy = Math.round(player.pos.y);
+    if(solid(fx, fy, fz) || solid(fx, fy + 1, fz)){
+      if(digCd <= 0) digLook(0.5);
+    }
+    return false;
+  }
+
+  // Score 8 compass directions (cardinal + diagonal)
+  const dirs = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+  let best = null, bestScore = -Infinity;
+  for(const [dx, dz] of dirs){
+    const len = Math.hypot(dx, dz);
+    const s = scoreStep(dx / len * 1.1, dz / len * 1.1, goalX, goalZ);
+    if(s > bestScore){ bestScore = s; best = [dx / len, dz / len]; }
+  }
+
+  // If every direction is bad, force recovery dig toward goal
+  if(bestScore < -15){
+    faceToward(goalX, goalZ, dt, 0.15);
+    keys.KeyW = true;
+    keys.Space = true;
+    if(digCd <= 0) digLook(0.55);
+    return false;
+  }
+
+  const [bx, bz] = best;
+  const wantYaw = Math.atan2(-bx, -bz);
+  faceYaw(wantYaw, dt, 3.5);
+  if(opts.pitch != null){
+    const dp = opts.pitch - view.pitch;
+    view.pitch += Math.max(-3 * dt, Math.min(3 * dt, dp));
+  } else {
+    view.pitch += Math.max(-2 * dt, Math.min(2 * dt, -0.08 - view.pitch));
+  }
+
   keys.KeyW = true;
-  keys.sprint = sprint;
-  const ahead = blockAhead(1);
-  if(ahead.feet && !isWalkThrough(ahead.feet)){
-    if(isWalkThrough(ahead.head) && isWalkThrough(getBlock(ahead.x, ahead.y+2, ahead.z))){
-      keys.Space = true; // jump up step
-    } else {
-      digAhead(dt);
+  keys.sprint = sprint && d > 8 && stuckT < 0.4;
+
+  // Step-up: solid at feet level ahead, clear above → jump
+  const ax = player.pos.x - Math.sin(view.yaw) * 1.0;
+  const az = player.pos.z - Math.cos(view.yaw) * 1.0;
+  const fy = Math.round(player.pos.y);
+  if(solid(ax, fy, az) && !solid(ax, fy + 1, az) && !solid(ax, fy + 2, az)){
+    keys.Space = true;
+  }
+  // Two-high wall → dig
+  else if(solid(ax, fy, az) && solid(ax, fy + 1, az)){
+    if(digCd <= 0){
+      view.pitch = 0.05;
+      digLook(0.5);
     }
   }
-  // stuck detection
-  const moved = Math.hypot(player.pos.x - lastPos.x, player.pos.z - lastPos.z);
-  if(moved < 0.05) stuckT += dt; else stuckT = 0;
-  if(stuckT > 1.2){
-    digAhead(dt);
-    keys.Space = true;
-    // slight strafe to unstick
-    keys.KeyA = (Math.floor(phaseT) % 2) === 0;
-    keys.KeyD = !keys.KeyA;
+  // Head-height only → dig head
+  else if(!solid(ax, fy, az) && solid(ax, fy + 1, az)){
+    if(digCd <= 0){
+      view.pitch = -0.35;
+      digLook(0.5);
+    }
+  }
+
+  // Stuck recovery
+  const moved = Math.hypot(player.pos.x - lastPos.x, player.pos.y - lastPos.y, player.pos.z - lastPos.z);
+  if(moved < 0.04) stuckT += dt;
+  else stuckT = Math.max(0, stuckT - dt * 2);
+
+  if(stuckT > 0.7){
+    recoverMode = (recoverMode + 1) % 4;
+    stuckT = 0.15;
+    if(recoverMode === 0){
+      // dig straight ahead
+      view.pitch = 0.1;
+      digLook(0.7);
+    } else if(recoverMode === 1){
+      // detour 70–110° left or right
+      const side = (Math.floor(phaseT * 3) % 2) ? 1 : -1;
+      avoidYaw = view.yaw + side * (0.9 + Math.random() * 0.5);
+      avoidT = 0.9 + Math.random() * 0.6;
+    } else if(recoverMode === 2){
+      // dig down one (escape floor traps / shallow embed)
+      view.pitch = 1.2;
+      digLook(0.6);
+      keys.KeyW = false;
+    } else {
+      // back up briefly then re-steer
+      keys.KeyW = false;
+      keys.KeyS = true;
+      avoidYaw = view.yaw + Math.PI * 0.6 * ((Math.floor(phaseT) % 2) ? 1 : -1);
+      avoidT = 0.55;
+    }
+  }
+
+  return false;
+}
+
+/** Dig a 1×2 shaft downward toward target Y while staying near XZ. */
+function digDownToward(ty, dt){
+  const px = Math.round(player.pos.x), pz = Math.round(player.pos.z);
+  const py = Math.round(player.pos.y);
+  selectTool('pick');
+  view.pitch = 1.15;
+  // clear under feet
+  if(solid(px, py - 1, pz) || solid(px, py, pz)){
+    digLook(0.55);
+    keys.KeyW = false;
+    return player.pos.y <= ty + 1.2;
+  }
+  // if somehow floating, walk
+  keys.KeyW = false;
+  return player.pos.y <= ty + 1.2;
+}
+
+/** Climb / dig staircase upward to surface. */
+function digUpToward(dt){
+  const surf = surfaceY(Math.round(player.pos.x), Math.round(player.pos.z));
+  if(player.pos.y >= surf - 0.4) return true;
+
+  selectTool('pick');
+  // Prefer a forward-up step: dig block at head+1 in front, then jump-walk
+  const fx = Math.round(player.pos.x - Math.sin(view.yaw));
+  const fz = Math.round(player.pos.z - Math.cos(view.yaw));
+  const hy = Math.round(player.pos.y + 2);
+  const mid = Math.round(player.pos.y + 1);
+
+  if(solid(fx, hy, fz) || solid(fx, mid, fz)){
+    view.pitch = -0.55;
+    digLook(0.5);
+  } else if(solid(Math.round(player.pos.x), hy, Math.round(player.pos.z))){
+    // ceiling above — dig straight up
+    view.pitch = -1.2;
+    digLook(0.5);
+  }
+
+  keys.KeyW = true;
+  keys.Space = true;
+  keys.sprint = false;
+
+  // rotate slowly if not gaining height
+  if(stuckT > 0.8){
+    view.yaw += 0.8;
     stuckT = 0;
   }
   return false;
@@ -208,10 +410,13 @@ function goToXZ(tx, tz, dt, sprint = true){
 function setPhase(p, msg){
   phase = p;
   phaseT = 0;
+  stuckT = 0;
+  avoidT = 0;
+  recoverMode = 0;
   setStatus(msg || p);
   if(performance.now() > announceAt){
     addChat('🤖', msg || p);
-    announceAt = performance.now() + 4000;
+    announceAt = performance.now() + 5000;
   }
 }
 
@@ -238,7 +443,7 @@ export function start(){
   }
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.add('active');
-  addChat('🤖', 'Cube-arc bot ON — sit back. No time limit.');
+  addChat('🤖', 'Cube-arc bot ON — smarter pathing. No time limit.');
 }
 
 export function stop(){
@@ -265,49 +470,46 @@ export function tick(dt){
 
   phaseT += dt;
   actionCd -= dt;
-  if(mineTimer > 0){ mineTimer -= dt; if(mineTimer <= 0) setMine(false); }
+  digCd -= dt;
+  if(mineTimer > 0){
+    mineTimer -= dt;
+    if(mineTimer <= 0) setMine(false);
+  }
 
   clearKeys();
   if(joy){ joy.x = 0; joy.y = 0; }
-  lastPos = {x: player.pos.x, z: player.pos.z};
 
-  // Always react to nearby threats unless fully done and far
+  // Water: always swim up
+  const feet = getBlock(Math.round(player.pos.x), Math.round(player.pos.y), Math.round(player.pos.z));
+  if(feet === 64){
+    keys.Space = true;
+    keys.KeyW = true;
+  }
+
   if(phase !== PHASES.DONE && fightNearby(dt)){
     setStatus('Fighting…');
+    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
     return;
   }
 
   switch(phase){
     case PHASES.TRAVEL: {
       target = vaultTarget();
-      setStatus(`To vault · ${distXZ(player.pos.x, player.pos.z, target.x, target.z)|0}m`);
-      if(goToXZ(target.x, target.z, dt)){
+      const d = distXZ(player.pos.x, player.pos.z, target.x, target.z)|0;
+      setStatus(`To vault · ${d}m`);
+      if(navigateTo(target.x, target.z, dt, {sprint: true, arriveR: 2.2})){
         setPhase(PHASES.DESCEND, 'Descending into the vault…');
       }
       break;
     }
     case PHASES.DESCEND: {
       target = vaultTarget();
-      // stay near xz while digging down
-      if(distXZ(player.pos.x, player.pos.z, target.x, target.z) > 2.5){
-        goToXZ(target.x, target.z, dt, false);
+      if(distXZ(player.pos.x, player.pos.z, target.x, target.z) > 3){
+        navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2});
         break;
       }
-      faceToward(target.x, target.z, dt, 1.1); // look down
-      keys.KeyW = false;
-      if(player.pos.y > target.y + 1.5){
-        selectTool('pick');
-        // dig block below / in view
-        if(!digAhead(dt)){
-          // dig straight down under feet
-          const bx = Math.round(player.pos.x), by = Math.round(player.pos.y - 0.6), bz = Math.round(player.pos.z);
-          if(getBlock(bx, by, bz)){
-            // face down more and mine
-            setMine(true);
-            mineTimer = 0.5;
-          }
-        }
-      } else {
+      setStatus(`Descending · y ${player.pos.y|0}→${target.y}`);
+      if(digDownToward(target.y, dt)){
         setPhase(PHASES.LOOT, 'Searching for the Elder Cube…');
       }
       break;
@@ -318,42 +520,25 @@ export function tick(dt){
         break;
       }
       target = vaultTarget();
-      faceToward(target.x, target.z, dt, 0.3);
       setStatus('Mining the vault…');
-      selectTool('pick');
-      // circle slowly and dig
-      keys.KeyW = true;
-      keys.KeyA = true;
-      digAhead(dt);
-      if(phaseT > 90){
-        // timeout: climb and retry path
-        setPhase(PHASES.ASCEND, 'Vault timed out — resurfacing…');
-      }
+      // spiral around vault center
+      wanderAng += dt * 1.1;
+      const ox = target.x + Math.cos(wanderAng) * 2.2;
+      const oz = target.z + Math.sin(wanderAng) * 2.2;
+      navigateTo(ox, oz, dt, {sprint: false, arriveR: 0.8, pitch: 0.35});
+      if(digCd <= 0) digLook(0.5);
+      if(phaseT > 100) setPhase(PHASES.ASCEND, 'Vault timed out — resurfacing…');
       break;
     }
     case PHASES.ASCEND: {
       const surf = surfaceY(Math.round(player.pos.x), Math.round(player.pos.z));
       setStatus(`Climbing · y ${player.pos.y|0}→${surf}`);
-      if(player.pos.y >= surf - 0.5){
+      if(digUpToward(dt)){
         setPhase(PHASES.GATHER, 'On surface — Keepstone materials…');
-        break;
       }
-      faceToward(player.pos.x - Math.sin(view.yaw), player.pos.z - Math.cos(view.yaw), dt, -0.6);
-      selectTool('pick');
-      // dig upward staircase: mine block at head+1 forward
-      const fx = Math.round(player.pos.x - Math.sin(view.yaw));
-      const fz = Math.round(player.pos.z - Math.cos(view.yaw));
-      const hy = Math.round(player.pos.y + 2);
-      if(getBlock(fx, hy, fz) || getBlock(fx, hy-1, fz)){
-        view.pitch = -0.7;
-        digAhead(dt);
-      }
-      keys.KeyW = true;
-      keys.Space = true;
-      if(phaseT > 120){
-        // emergency teleport-ish: walk any direction up via dig
-        view.yaw += 0.5;
-        phaseT = 60;
+      if(phaseT > 150){
+        // spin and keep trying
+        view.yaw += dt * 1.5;
       }
       break;
     }
@@ -367,20 +552,16 @@ export function tick(dt){
         break;
       }
       setStatus('Gathering stone / ores…');
-      selectTool('pick');
-      // dig nearby stone
-      faceToward(player.pos.x + Math.sin(phaseT)*4, player.pos.z + Math.cos(phaseT)*4, dt, 0.5);
-      keys.KeyW = true;
-      digAhead(dt);
-      // craft whatever we can each tick
       tryCraftId(IRON_INGOT);
-      if(has(STONE, 8) && has(IRON_INGOT, 2) && has(CRYSTAL, 2)) tryCraftId(KEEPSTONE);
-      // if low on crystal/iron, dig deeper
-      if(!has(CRYSTAL, 2) || !has(IRON_INGOT, 2)){
-        if(player.pos.y > 12){
-          view.pitch = 0.9;
-          digAhead(dt);
-        }
+      // wander & dig
+      wanderAng += dt * 0.6;
+      const wx = player.pos.x + Math.cos(wanderAng) * 10;
+      const wz = player.pos.z + Math.sin(wanderAng) * 10;
+      navigateTo(wx, wz, dt, {sprint: false, arriveR: 2, pitch: 0.4});
+      if(digCd <= 0) digLook(0.45);
+      if((!has(CRYSTAL, 2) || !has(IRON_INGOT, 2)) && player.pos.y > 10){
+        view.pitch = 0.95;
+        digLook(0.5);
       }
       break;
     }
@@ -389,25 +570,18 @@ export function tick(dt){
         setPhase(PHASES.GATHER, 'Need Keepstone materials…');
         break;
       }
-      // find open surface near us
+      selectItem(KEEPSTONE);
+      // place on open surface a couple blocks ahead
       const sx = Math.round(player.pos.x - Math.sin(view.yaw) * 2);
       const sz = Math.round(player.pos.z - Math.cos(view.yaw) * 2);
-      const sy = surfaceY(sx, sz);
-      faceToward(sx, sz, dt, 0.4);
-      selectItem(KEEPSTONE);
-      keys.KeyW = distXZ(player.pos.x, player.pos.z, sx, sz) > 1.5;
+      faceToward(sx, sz, dt, 0.45);
+      keys.KeyW = distXZ(player.pos.x, player.pos.z, sx, sz) > 1.6;
       if(actionCd <= 0){
         placeAction();
-        actionCd = 0.6;
+        actionCd = 0.55;
       }
-      // detect placed stone
       if(keepstones.all().length){
         setPhase(PHASES.SOCKET, 'Socketing the Elder Cube…');
-      }
-      if(phaseT > 25){
-        // try placing at feet
-        view.pitch = 0.8;
-        placeAction();
       }
       break;
     }
@@ -418,13 +592,12 @@ export function tick(dt){
         break;
       }
       const s = stones[stones.length - 1];
-      faceToward(s.x, s.z, dt, 0.25);
-      keys.KeyW = distXZ(player.pos.x, player.pos.z, s.x, s.z) > 2.2;
+      navigateTo(s.x, s.z, dt, {sprint: false, arriveR: 2.0, pitch: 0.3});
       if(actionCd <= 0){
-        placeAction(); // sockets when looking at stone + carrying cube
-        actionCd = 0.5;
+        placeAction();
+        actionCd = 0.45;
       }
-      if(keepstones.sieging() || (s.socketed)){
+      if(keepstones.sieging() || s.socketed){
         setPhase(PHASES.DEFEND, 'Cube seated — holding the siege…');
       }
       break;
@@ -440,23 +613,20 @@ export function tick(dt){
         break;
       }
       setStatus(`Siege · r ${s.radius|0}/${keepstones.targetRadius(s)|0}`);
-      // orbit the stone
-      const ang = phaseT * 0.7;
-      const ox = s.x + Math.cos(ang) * 6;
-      const oz = s.z + Math.sin(ang) * 6;
-      if(!fightNearby(dt)){
-        goToXZ(ox, oz, dt, false);
-      }
+      const ang = phaseT * 0.55;
+      const ox = s.x + Math.cos(ang) * 7;
+      const oz = s.z + Math.sin(ang) * 7;
+      if(!fightNearby(dt)) navigateTo(ox, oz, dt, {sprint: false, arriveR: 1.5});
       break;
     }
     case PHASES.DONE: {
       setStatus('Claim complete — watching');
       clearKeys();
-      // gentle look around
-      view.yaw += 0.15 * dt;
+      view.yaw += 0.12 * dt;
       break;
     }
-    default:
-      break;
+    default: break;
   }
+
+  lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
 }
