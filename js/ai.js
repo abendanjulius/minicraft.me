@@ -87,18 +87,55 @@ function isWaterAt(x, y, z){
   return getBlock(Math.round(x), y|0, Math.round(z)) === 64;
 }
 
+function headSubmerged(){
+  return isWaterAt(player.pos.x, player.pos.y + 1.5, player.pos.z);
+}
+
+function feetInWater(){
+  return isWaterAt(player.pos.x, player.pos.y, player.pos.z)
+      || isWaterAt(player.pos.x, player.pos.y + 0.5, player.pos.z);
+}
+
 function inWaterNow(){
-  const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
-  return isWaterAt(px, py, pz) || isWaterAt(px, py + 1, pz) || isWaterAt(px, py + 1.5, pz);
+  return headSubmerged() || feetInWater();
+}
+
+/** Best horizontal direction toward dry / shallow ground. */
+function shoreSteer(){
+  const px = Math.round(player.pos.x);
+  const py = Math.round(player.pos.y);
+  const pz = Math.round(player.pos.z);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  let best = null, bestScore = -Infinity;
+  for(const [dx, dz] of dirs){
+    const len = Math.hypot(dx, dz);
+    let score = 0;
+    // probe 1..4 blocks out
+    for(let step = 1; step <= 4; step++){
+      const nx = px + (dx / len) * step;
+      const nz = pz + (dz / len) * step;
+      if(!isWaterAt(nx, py + 1, nz) && !solid(nx, py + 1, nz)) score += 6;
+      if(!isWaterAt(nx, py, nz)) score += 5;
+      if(!isWaterAt(nx, py, nz) && solid(nx, py - 1, nz)) score += 12; // shore
+      if(solid(nx, py, nz) && solid(nx, py + 1, nz)) score -= 8; // wall
+    }
+    if(target){
+      const nx = px + dx / len * 2, nz = pz + dz / len * 2;
+      score += (distXZ(px, pz, target.x, target.z) - distXZ(nx, nz, target.x, target.z)) * 2;
+    }
+    if(score > bestScore){ bestScore = score; best = [dx / len, dz / len]; }
+  }
+  return best;
 }
 
 /**
- * Escape lakes / underwater pockets.
- * Priority: dig ceiling → swim straight up → swim toward nearest shore.
- * Returns true if it handled this frame (caller should skip normal pathing).
+ * Only seizes control when the HEAD is underwater (real submersion).
+ * Wading (feet only) returns false so normal pathing keeps working.
+ * Avoids the old "jump + look up forever" loop.
  */
 function escapeWater(dt){
-  if(!inWaterNow()) return false;
+  // Wading: do not hijack — navigateTo will prefer dry land
+  if(!headSubmerged()) return false;
 
   const px = Math.round(player.pos.x);
   const py = Math.round(player.pos.y);
@@ -107,80 +144,68 @@ function escapeWater(dt){
   setStatus('Swimming out…');
   keys.sprint = false;
   keys.ShiftLeft = keys.ShiftRight = false;
+  keys.Space = true; // always buoyancy when submerged
 
-  // 1) Solid block above head? Dig it — common "trapped under water+ceiling"
-  for(let dy = 2; dy <= 4; dy++){
-    if(solid(px, py + dy, pz)){
-      selectTool('pick');
-      view.pitch = -1.2;
-      faceYaw(view.yaw, dt, 1);
-      digLook(0.55);
-      keys.Space = true; // keep buoyancy while digging
-      keys.KeyW = false;
-      return true;
+  // Ceiling solids directly above — dig them (explicit look + mine)
+  let ceiling = null;
+  for(let dy = 2; dy <= 5; dy++){
+    if(solid(px, py + dy, pz)){ ceiling = py + dy; break; }
+  }
+  if(ceiling != null){
+    selectTool('pick');
+    // aim at the block center above the eyes
+    view.pitch = -1.35;
+    keys.KeyW = false;
+    if(digCd <= 0) digLook(0.65);
+    // also try mining the block in front-up if vertical ray misses
+    if(mineTimer <= 0){
+      const ax = Math.round(px - Math.sin(view.yaw));
+      const az = Math.round(pz - Math.cos(view.yaw));
+      if(solid(ax, ceiling, az) || solid(px, ceiling, pz)){
+        view.yaw += 0.15 * dt; // micro-sweep so castBlock catches a face
+        digLook(0.65);
+      }
     }
+    return true;
   }
 
-  // 2) Ceiling is clear of solids — swim up hard
-  keys.Space = true;
-  view.pitch = -0.9;
-
-  // 3) Find best horizontal escape toward shallower / dry ground
-  const dirs = [
-    [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1],
-  ];
-  let best = null, bestScore = -Infinity;
-  for(const [dx, dz] of dirs){
-    const len = Math.hypot(dx, dz);
-    const nx = px + (dx / len) * 2;
-    const nz = pz + (dz / len) * 2;
-    let score = 0;
-    // prefer air at head height
-    if(!isWaterAt(nx, py + 2, nz) && !solid(nx, py + 2, nz)) score += 20;
-    if(!isWaterAt(nx, py + 1, nz)) score += 10;
-    if(!isWaterAt(nx, py, nz)) score += 8;
-    // shore: solid under a non-water cell
-    if(!isWaterAt(nx, py, nz) && solid(nx, py - 1, nz)) score += 15;
-    // open column to surface
-    let openUp = 0;
-    for(let y = py; y < Math.min(WH, py + 8); y++){
-      if(solid(nx, y, nz)){ openUp = -5; break; }
-      if(!isWaterAt(nx, y, nz)){ openUp += 3; break; }
-      openUp += 1;
-    }
-    score += openUp;
-    // lightly bias toward current goal if we have one
-    if(target){
-      const before = distXZ(px, pz, target.x, target.z);
-      const after = distXZ(nx, nz, target.x, target.z);
-      score += (before - after) * 2;
-    }
-    if(score > bestScore){ bestScore = score; best = [dx / len, dz / len]; }
-  }
-
-  if(best){
-    const want = Math.atan2(-best[0], -best[1]);
-    faceYaw(want, dt, 3.5);
-    keys.KeyW = true;
+  // No ceiling: swim toward shore with mostly HORIZONTAL look so we can dig
+  // walls and actually path — not stare at the sky.
+  const steer = shoreSteer();
+  if(steer){
+    faceYaw(Math.atan2(-steer[0], -steer[1]), dt, 4);
   } else {
-    keys.KeyW = true;
-    view.yaw += dt * 1.2; // spin search
+    view.yaw += 1.5 * dt;
   }
+  keys.KeyW = true;
 
-  // 4) If still not rising and stuck, dig sideways underwater walls
-  const movedY = player.pos.y - lastPos.y;
-  if(stuckT > 0.5 || movedY < 0.02){
+  // Alternate dig ahead (walls) vs slight look-up (surface) every ~0.7s
+  const pulse = Math.floor(phaseT * 1.4) % 3;
+  if(pulse === 0){
+    view.pitch = -0.25; // look slightly up while swimming
+  } else if(pulse === 1){
+    view.pitch = 0.05;
     const ax = px - Math.sin(view.yaw);
     const az = pz - Math.cos(view.yaw);
     if(solid(ax, py + 1, az) || solid(ax, py + 2, az)){
-      view.pitch = -0.4;
-      digLook(0.5);
-    } else if(stuckT > 1.2){
-      // random turn to find a gap
-      avoidYaw = view.yaw + (Math.random() > 0.5 ? 1.2 : -1.2);
-      avoidT = 0.8;
-      stuckT = 0;
+      if(digCd <= 0) digLook(0.55);
     }
+  } else {
+    view.pitch = -0.15;
+    // carve forward if blocked
+    if(digCd <= 0) digLook(0.4);
+  }
+
+  // If not gaining height for a while, spin and dig a new direction
+  const movedY = player.pos.y - lastPos.y;
+  if(movedY < 0.03) stuckT += dt;
+  else stuckT = Math.max(0, stuckT - dt * 2);
+
+  if(stuckT > 1.0){
+    view.yaw += 1.1 + Math.random() * 0.8;
+    view.pitch = -0.2;
+    digLook(0.7);
+    stuckT = 0.2;
   }
 
   return true;
