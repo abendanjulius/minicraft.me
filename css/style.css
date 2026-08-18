@@ -1658,3 +1658,16 @@ html body.touch #streamCam.scShow{
   text-shadow:0 1px 2px #000;
 }
 body.touch #aiEta{ top: 100px; font-size:11px; }
+
+#aiContinueModal{
+  position:fixed;inset:0;z-index:41;
+  background:rgba(0,0,0,.55);
+  display:none;align-items:center;justify-content:center;
+  padding:16px;
+}
+#aiContinueModal.show{ display:flex !important; }
+.aiBuildBtn .badge{
+  display:inline-block;margin-top:4px;font-size:9px;
+  background:#c60;color:#fff;padding:1px 6px;border-radius:4px;
+}
+.aiBuildBtn.hasJob{ border-color:#fa6; }

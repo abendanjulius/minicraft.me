@@ -8,7 +8,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./css/style.css?v=2.5.19">
+<link rel="stylesheet" href="./css/style.css?v=2.5.20">
 </head>
 <body>
 <div id="rotate">🔄<br>Rotate your device to landscape</div>
@@ -262,6 +262,26 @@
   </div>
 </div>
 
+<div id="aiContinueModal" style="display:none" aria-hidden="true">
+  <div class="aiModalCard">
+    <h2 id="aiContinueTitle">Unfinished build</h2>
+    <p class="aiModalHint" id="aiContinueHint">A previous build is incomplete in this world.</p>
+    <div class="aiProfileGrid">
+      <button type="button" class="aiProfBtn" id="aiContinueBtn">
+        <span class="aiProfIcon">▶️</span>
+        <span class="aiProfTitle">Continue building</span>
+        <span class="aiProfDesc" id="aiContinueDesc">Resume from where it left off</span>
+      </button>
+      <button type="button" class="aiProfBtn" id="aiStartNewBtn">
+        <span class="aiProfIcon">✨</span>
+        <span class="aiProfTitle">Start new</span>
+        <span class="aiProfDesc">Build from scratch at your position</span>
+      </button>
+    </div>
+    <button type="button" class="aiCloseBtn" id="aiContinueClose">Cancel</button>
+  </div>
+</div>
+
 <!-- Streamer-style facecam (shown while Cube-arc bot is watching mode) -->
 <div id="streamCam" style="display:none" aria-hidden="true">
   <div class="scLive"><span class="scDot"></span> LIVE</div>
@@ -277,7 +297,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script type="module" src="./js/main.js?v=2.5.19"></script>
+<script type="module" src="./js/main.js?v=2.5.20"></script>
 <script>
 (function(){
   function showRecover(msg){

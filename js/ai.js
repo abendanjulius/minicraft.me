@@ -14,6 +14,7 @@ import { zombies } from './mobs.js';
 import * as survival from './survival.js';
 import * as net from './net.js';
 import * as buildings from './buildings.js';
+import * as persist from './persist.js';
 
 const CUBE = 186;
 const KEEPSTONE = 43;
@@ -51,6 +52,8 @@ let buildName = '';
 let placeCd = 0;
 let buildStartedAt = 0;  // performance.now()/1000 when first block of this job placed
 let buildPlaceTimes = []; // rolling samples of seconds per block
+let buildJobId = null;     // registry id of the active job
+let pendingLandmark = null; // landmark awaiting continue/new choice
 
 
 let active = false;
@@ -1088,6 +1091,77 @@ function noteBlockPlaced(){
   }
 }
 
+
+// ---- Build job registry (per world seed + save slot) ----
+function buildJobsKey(){
+  const slot = persist.activeSlot ?? 'tmp';
+  return `mc_buildjobs_${slot}_${seed}`;
+}
+function loadBuildJobs(){
+  try{
+    const raw = localStorage.getItem(buildJobsKey());
+    if(!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  }catch(e){ return []; }
+}
+function saveBuildJobs(list){
+  try{ localStorage.setItem(buildJobsKey(), JSON.stringify(list)); }catch(e){}
+}
+function findUnfinishedJob(landmarkId){
+  return loadBuildJobs().find(j => j.landmarkId === landmarkId && !j.completed) || null;
+}
+function upsertBuildJob(job){
+  const list = loadBuildJobs().filter(j => j.id !== job.id);
+  // Only one unfinished job per landmark id
+  const cleaned = list.filter(j => !(j.landmarkId === job.landmarkId && !j.completed && j.id !== job.id));
+  cleaned.push(job);
+  saveBuildJobs(cleaned);
+}
+function markJobCompleted(id){
+  const list = loadBuildJobs().map(j => j.id === id ? {...j, completed:true, buildIndex:j.total, updatedAt:Date.now()} : j);
+  saveBuildJobs(list);
+}
+function removeJob(id){
+  saveBuildJobs(loadBuildJobs().filter(j => j.id !== id));
+}
+function snapshotJobProgress(){
+  if(botProfile !== 'builder' || builderMode !== 'landmark') return;
+  if(!landmarkId || !buildOrigin || !buildQueue.length) return;
+  if(buildIndex >= buildQueue.length){
+    if(buildJobId) markJobCompleted(buildJobId);
+    return;
+  }
+  const job = {
+    id: buildJobId || (`job_${landmarkId}_${Date.now()}`),
+    landmarkId,
+    name: buildName || landmarkId,
+    origin: {...buildOrigin},
+    buildIndex,
+    total: buildQueue.length,
+    completed: false,
+    updatedAt: Date.now(),
+  };
+  buildJobId = job.id;
+  upsertBuildJob(job);
+}
+
+function resumeJob(job){
+  landmarkId = job.landmarkId;
+  builderMode = 'landmark';
+  botProfile = 'builder';
+  buildJobId = job.id;
+  buildName = job.name;
+  buildOrigin = {...job.origin};
+  const bp = buildings.blueprint(job.landmarkId);
+  const ox = job.origin.x, oy = job.origin.y, oz = job.origin.z;
+  const sorted = [...bp.blocks].sort((a,b)=>a[1]-b[1]||a[0]-b[0]||a[2]-b[2]);
+  buildQueue = sorted.map(([dx,dy,dz,bid])=>({x:ox+dx,y:oy+dy,z:oz+dz,id:bid}));
+  buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
+  buildStartedAt = 0;
+  buildPlaceTimes = [];
+}
+
 function ensureFlying(){
   if(!gm.forge) return false;
   if(!state.flying){
@@ -1157,21 +1231,28 @@ function placeBuildBlock(x, y, z, id){
   return true;
 }
 
-function setupLandmark(id){
+function setupLandmark(id, originOverride = null){
   const bp = buildings.blueprint(id);
   buildName = bp.name;
-  const ox = Math.round(player.pos.x);
-  const oz = Math.round(player.pos.z);
-  const oy = surfaceY(ox, oz) + 1;
+  landmarkId = id;
+  let ox, oy, oz;
+  if(originOverride){
+    ox = originOverride.x; oy = originOverride.y; oz = originOverride.z;
+  } else {
+    ox = Math.round(player.pos.x);
+    oz = Math.round(player.pos.z);
+    oy = surfaceY(ox, oz) + 1;
+  }
   buildOrigin = {x: ox, y: oy, z: oz};
-  // Sort bottom-up so foundations go first
   const sorted = [...bp.blocks].sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2]);
   buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
     x: ox + dx, y: oy + dy, z: oz + dz, id: bid
   }));
-  buildIndex = 0;
+  if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
+  if(!buildJobId) buildJobId = `job_${id}_${Date.now()}`;
+  snapshotJobProgress();
 }
 
 function setupCreative(){
@@ -1202,6 +1283,8 @@ function tickBuilder(dt){
   }
   if(phase === PHASES.BUILD_PLACE){
     if(buildIndex >= buildQueue.length){
+      if(buildJobId) markJobCompleted(buildJobId);
+      snapshotJobProgress();
       setPhase(PHASES.BUILD_DONE, `${buildName} complete`);
       return;
     }
@@ -1244,6 +1327,7 @@ function tickBuilder(dt){
       buildIndex++;
       noteBlockPlaced();
       placeCd = 0.28;
+      if(buildIndex % 5 === 0) snapshotJobProgress();
     } else {
       if(!gm.forge){
         setStatus('Need blocks — gathering…');
@@ -1282,6 +1366,11 @@ export function start(opts = {}){
   botProfile = opts.profile || 'story';
   builderMode = opts.builderMode || null;
   landmarkId = opts.landmarkId || null;
+  buildJobId = null;
+
+  if(opts.resumeJob){
+    resumeJob(opts.resumeJob);
+  }
 
   if(botProfile === 'story' && gm.forge){
     addChat('🤖', 'Story campaign needs Nightfall — switch mode and try again.');
@@ -1305,10 +1394,16 @@ export function start(opts = {}){
   buildIndex = 0;
 
   if(botProfile === 'builder'){
-    setPhase(PHASES.BUILD_SETUP, builderMode === 'creative' ? 'Creative building…' : 'Preparing landmark…');
-    addChat('🤖', builderMode === 'creative'
-      ? 'Builder ON — creative mode (no time limit).'
-      : `Builder ON — constructing ${(buildings.listBuildings().find(b=>b.id===landmarkId)||{}).name || 'landmark'}.`);
+    if(opts.resumeJob){
+      if(gm.forge) ensureFlying();
+      setPhase(PHASES.BUILD_PLACE, `Resuming ${buildName}…`);
+      addChat('🤖', `Resuming ${buildName} from ${buildIndex}/${buildQueue.length}.`);
+    } else {
+      setPhase(PHASES.BUILD_SETUP, builderMode === 'creative' ? 'Creative building…' : 'Preparing landmark…');
+      addChat('🤖', builderMode === 'creative'
+        ? 'Builder ON — creative mode (no time limit).'
+        : `Builder ON — constructing ${(buildings.listBuildings().find(b=>b.id===landmarkId)||{}).name || 'landmark'}.`);
+    }
   } else {
     reevaluatePhase();
     addChat('🤖', 'Story campaign ON — Elder Cube arc. No time limit.');
@@ -1321,6 +1416,11 @@ export function start(opts = {}){
 
 export function stop(){
   if(!active) return;
+  // Register unfinished landmark builds before wiping state
+  if(botProfile === 'builder' && builderMode === 'landmark' && buildQueue.length && buildIndex < buildQueue.length){
+    snapshotJobProgress();
+    addChat('🤖', `Build paused — ${buildName} saved at ${buildIndex}/${buildQueue.length}.`);
+  }
   active = false;
   setInputLocked?.(false);
   document.body.classList.remove('ai-driving');
@@ -1330,16 +1430,21 @@ export function stop(){
   phase = PHASES.IDLE;
   botProfile = 'story';
   builderMode = null;
+  // keep landmarkId/buildJobId cleared; progress is in registry
   landmarkId = null;
+  buildJobId = null;
+  buildQueue = [];
+  buildIndex = 0;
   setStatus('');
   const btn = document.getElementById('btnAI');
   if(btn) btn.classList.remove('active');
   stopFlying();
   hideStreamCam();
   closeProfileModal();
+  closeContinueModal();
   const etaEl = document.getElementById('aiEta');
   if(etaEl) etaEl.style.display = 'none';
-  addChat('🤖', 'Bot OFF.');
+  addChat('🤖', 'Bot OFF — all actions stopped.');
 }
 
 export function openProfileModal(){
@@ -1368,19 +1473,48 @@ function showBuilderOpts(){
   document.getElementById('aiBuildingList').style.display = 'none';
 }
 
+function closeContinueModal(){
+  const m = document.getElementById('aiContinueModal');
+  if(!m) return;
+  m.classList.remove('show');
+  m.style.display = 'none';
+  m.setAttribute('aria-hidden', 'true');
+  pendingLandmark = null;
+}
+
+function openContinueModal(job){
+  pendingLandmark = job.landmarkId;
+  const m = document.getElementById('aiContinueModal');
+  if(!m){
+    start({profile:'builder', builderMode:'landmark', landmarkId: job.landmarkId, resumeJob: job});
+    return;
+  }
+  document.getElementById('aiContinueTitle').textContent = job.name || 'Unfinished build';
+  document.getElementById('aiContinueHint').textContent =
+    `Saved progress: ${job.buildIndex}/${job.total} blocks (${Math.floor(100*job.buildIndex/Math.max(1,job.total))}%).`;
+  document.getElementById('aiContinueDesc').textContent =
+    `Resume at block ${job.buildIndex + 1} of ${job.total}`;
+  m.classList.add('show');
+  m.style.display = 'flex';
+  m.setAttribute('aria-hidden', 'false');
+}
+
 function showBuildingList(){
   document.getElementById('aiBuilderOpts').style.display = 'none';
   document.getElementById('aiBuildingList').style.display = 'block';
   const grid = document.getElementById('aiBuildingGrid');
   grid.innerHTML = '';
   for(const b of buildings.listBuildings()){
+    const job = findUnfinishedJob(b.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'aiBuildBtn';
-    btn.innerHTML = `<span class="ic">${b.icon}</span><span class="nm">${b.name}</span>`;
+    btn.className = 'aiBuildBtn' + (job ? ' hasJob' : '');
+    btn.innerHTML = `<span class="ic">${b.icon}</span><span class="nm">${b.name}</span>` +
+      (job ? `<span class="badge">Unfinished ${job.buildIndex}/${job.total}</span>` : '');
     btn.addEventListener('click', ()=>{
       closeProfileModal();
-      start({profile:'builder', builderMode:'landmark', landmarkId: b.id});
+      if(job) openContinueModal(job);
+      else start({profile:'builder', builderMode:'landmark', landmarkId: b.id});
     });
     grid.appendChild(btn);
   }
@@ -1418,6 +1552,21 @@ export function initProfileUI(){
   });
   document.getElementById('aiBuildingBack')?.addEventListener('click', showBuilderOpts);
   document.getElementById('aiProfileClose')?.addEventListener('click', closeProfileModal);
+
+  document.getElementById('aiContinueBtn')?.addEventListener('click', ()=>{
+    const job = pendingLandmark ? findUnfinishedJob(pendingLandmark) : null;
+    closeContinueModal();
+    if(job) start({profile:'builder', builderMode:'landmark', landmarkId: job.landmarkId, resumeJob: job});
+  });
+  document.getElementById('aiStartNewBtn')?.addEventListener('click', ()=>{
+    const id = pendingLandmark;
+    const old = id ? findUnfinishedJob(id) : null;
+    // Starting new abandons the old unfinished job (mark superseded)
+    if(old) removeJob(old.id);
+    closeContinueModal();
+    if(id) start({profile:'builder', builderMode:'landmark', landmarkId: id});
+  });
+  document.getElementById('aiContinueClose')?.addEventListener('click', closeContinueModal);
 }
 
 export function toggle(){
