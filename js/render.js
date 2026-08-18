@@ -1,5 +1,5 @@
 // render.js — scene, textures, block/tool content, chunk meshing, particles
-import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, topY, surfaceY } from './world.js';
+import { WORLD, WH, CH, CHUNKS, CENTER, chunks, cIndex, bIndex, wrapC, occludes, getBlock, setBlock, doorStyleOf, ensureChunk, chunkTopAt, topY, surfaceY } from './world.js';
 import { EXTRA_BLOCKS, EXTRA_ITEMS } from './content.js';
 import { gm } from './mode.js';
 import { claimedVisual, claimedCells } from './claim.js';
@@ -729,7 +729,8 @@ export function buildChunk(cx,cz){
     if(wi >= 0) windMeshes.splice(wi, 1);
   }
   const chunk = ensureChunk(cx, cz), byType = {}, x0 = cx*CH, z0 = cz*CH;
-  for(let y=0;y<WH;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
+  const yTop = Math.min(WH - 1, Math.max(0, chunkTopAt(cx, cz)));
+  for(let y=0;y<=yTop;y++)for(let lz=0;lz<CH;lz++)for(let lx=0;lx<CH;lx++){
     const t = chunk[bIndex(lx,y,lz)];
     if(!t || isCustomMeshBlock(t)) continue;
     const x = x0+lx, z = z0+lz;
@@ -738,8 +739,11 @@ export function buildChunk(cx,cz){
     (byType[t] ||= []).push([x,y,z]);
   }
   const list = [];
-  const center = new THREE.Vector3(x0+CH/2, WH/2, z0+CH/2);
-  const radius = Math.sqrt(CH*CH/2 + WH*WH/4) + 1;
+  // Bound the sphere to what this chunk actually contains — using full WH would
+  // balloon every chunk's cull radius now that the world is 160 tall.
+  const hSpan = yTop + 1;
+  const center = new THREE.Vector3(x0+CH/2, hSpan/2, z0+CH/2);
+  const radius = Math.sqrt(CH*CH/2 + hSpan*hSpan/4) + 1;
   for(const id in byType){
     const mats = TYPES[id]?.mats;
     if(!mats) continue; // never crash boot on missing material
@@ -760,7 +764,7 @@ export function buildChunk(cx,cz){
   // Water — Minecraft-style flowing top texture (not glass cubes)
   {
     const tops = [];
-    for(let y=0;y<WH;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
+    for(let y=0;y<=yTop;y++) for(let lz=0;lz<CH;lz++) for(let lx=0;lx<CH;lx++){
       if(chunk[bIndex(lx,y,lz)] !== 64) continue;
       const x = x0+lx, z = z0+lz;
       if(getBlock(x, y+1, z) === 64) continue;

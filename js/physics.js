@@ -1,6 +1,6 @@
 // physics.js — sand/gravel gravity + leaf decay (Minecraft-style)
 // No import from render.js (avoids circular deps). Callers rebuild meshes / particles.
-import { WH, getBlock, setBlock, wrapC } from './world.js';
+import { WH, getBlock, setBlock, wrapC, chunkTopAt } from './world.js';
 
 export const GRAVITY = new Set([6, 20]); // Sand, Gravel
 const LEAF = 5;
@@ -14,7 +14,8 @@ export function setPhysicsFx(fn){ onFx = fn; }
 function settleColumn(x, z, out){
   x = wrapC(x); z = wrapC(z);
   let moved = false;
-  for(let y = 1; y < WH; y++){
+  const scanTop = Math.min(WH - 1, Math.max(1, chunkTopAt(x >> 4, z >> 4)));
+  for(let y = 1; y <= scanTop; y++){
     const t = getBlock(x, y, z);
     if(!GRAVITY.has(t)) continue;
     if(getBlock(x, y - 1, z)) continue;

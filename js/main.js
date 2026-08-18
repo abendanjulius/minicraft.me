@@ -1,5 +1,5 @@
 // main.js — menu, boot, game loop
-import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME, villageSites } from './world.js';
+import { generateWorld, setBlock, getBlock, heightAt, CENTER, WORLD, placeDebugMarkers, DEBUG_MARKERS, wrapC, biomeAt, BIOME_NAME, villageSites, evictFarChunks } from './world.js';
 import { scene, camera, renderer, isTouch, buildAllChunks, updateChunkVisibility, tickWaterAnim, tickWind,
          updateParticles, SKINS, faceURL, trackTorch, updateTorchLights,
          setEditRecorder, setEditPhysicsHook, rebuildAt, spawnParticles, TYPES, trackDoor, trackBed, trackSpecial } from './render.js';
@@ -43,7 +43,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.5.26'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.6.2'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -632,7 +632,7 @@ function updateCompassMap(pos, yaw){
 }
 
 // ---- Main loop ----
-let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30, dripT=5, wasUnderground=false, pickupCd=0;
+let last = performance.now(), frames=0, fpsTime=0, elapsed=0, cullTimer=0, isAuthority=true, saveT=30, dripT=5, wasUnderground=false, pickupCd=0, evictT=15;
 
 
 
@@ -736,6 +736,12 @@ function loop(now){
       dripT -= dt;
       if(dripT<=0){ dripT = 4 + Math.random()*5; sfx.drip(); }
     } else wasUnderground = false;
+    // reclaim distant unedited chunk memory (224-tall chunks are 56 KB each)
+    evictT -= dt;
+    if(evictT <= 0){
+      evictT = 5;
+      evictFarChunks(playerMod.player.pos.x, playerMod.player.pos.z);
+    }
     saveT -= dt;
     if(saveT<=0){ saveT = 30; saveWorldNow(); }
     const dx = CENTER - playerMod.player.pos.x, dz = CENTER - playerMod.player.pos.z;

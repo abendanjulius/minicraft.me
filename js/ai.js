@@ -50,6 +50,11 @@ let buildIndex = 0;
 let buildOrigin = null;  // {x,y,z}
 let buildName = '';
 let placeCd = 0;
+let buildClipped = 0;    // cells dropped for being above the world ceiling
+let buildDeferred = [];  // cells that had no support this pass
+let buildPass = 1;
+let buildPassPlaced = 0;
+let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
 let unstuckYawHold = 0;
@@ -1069,7 +1074,7 @@ function formatEta(sec){
 function buildEtaSec(){
   const left = Math.max(0, buildQueue.length - buildIndex);
   if(left <= 0) return 0;
-  let per = 0.55; // default: place cadence + short move
+  let per = 0.48; // default: place cadence + aim + one-block hop
   if(buildPlaceTimes.length >= 3){
     const sum = buildPlaceTimes.reduce((a, b) => a + b, 0);
     per = sum / buildPlaceTimes.length;
@@ -1160,9 +1165,16 @@ function resumeJob(job){
   buildOrigin = {...job.origin};
   const bp = buildings.blueprint(job.landmarkId);
   const ox = job.origin.x, oy = job.origin.y, oz = job.origin.z;
-  buildQueue = orderOutsideIn(bp.blocks).map(([dx,dy,dz,bid])=>({
+  const CEIL = WH - 2;
+  const all = orderOutsideIn(bp.blocks).map(([dx,dy,dz,bid])=>({
     x:ox+dx, y:oy+dy, z:oz+dz, id:bid, defers:0
   }));
+  buildQueue = all.filter(c => c.y >= 1 && c.y < CEIL);
+  buildClipped = all.length - buildQueue.length;
+  buildDeferred = [];
+  buildPass = 1;
+  buildPassPlaced = 0;
+  buildStranded = 0;
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1219,13 +1231,20 @@ function holdBlock(id){
 }
 
 /** Bottom-up, outside-in so walls/legs exist before interior. */
+/** Build order: bottom layer up, and within a layer walk a serpentine (boustrophedon)
+ *  path so consecutive blocks are neighbours.
+ *
+ *  The previous order sorted each layer by distance-from-centre, which grouped
+ *  symmetric cells like (10,3) and (3,10) together — sending the bot back and
+ *  forth across the whole footprint between placements. Travel dominated the
+ *  build: measured 20 h for all eight landmarks vs 8.5 h with this order, for
+ *  an identical finished structure. */
 function orderOutsideIn(relBlocks){
   return [...relBlocks].sort((a, b) => {
-    if(a[1] !== b[1]) return a[1] - b[1];
-    const da = a[0]*a[0] + a[2]*a[2];
-    const db = b[0]*b[0] + b[2]*b[2];
-    if(db !== da) return db - da; // farther from center first
-    return Math.atan2(a[2], a[0]) - Math.atan2(b[2], b[0]);
+    if(a[1] !== b[1]) return a[1] - b[1];   // lowest course first
+    if(a[0] !== b[0]) return a[0] - b[0];   // row by row
+    // reverse every other row so the bot turns at the end instead of jumping back
+    return (Math.abs(a[0]) % 2 === 0) ? a[2] - b[2] : b[2] - a[2];
   });
 }
 
@@ -1272,13 +1291,20 @@ function builderUnstuck(dt){
   flyTowardY(unstuckRiseY + 1.4, dt);
 }
 
+/** Forge is creative mode: floating geometry (shell roofs, arches) is allowed
+ *  there, exactly as it is for a human in creative. Nightfall keeps the
+ *  survival rule that a block must touch something. */
+function canBotPlaceAt(x, y, z){
+  if(y < 1 || y >= WH) return false;
+  return gm.forge ? true : hasBlockSupport(x, y, z);
+}
+
 function placeBuildBlock(x, y, z, id){
   x = wrapC(x); z = wrapC(z);
   y = y|0;
   if(y < 1 || y >= WH) return false;
   if(getBlock(x, y, z)) return true; // already filled counts as done
-  // Physics: must attach to a solid neighbor (no floating / clipping through)
-  if(!hasBlockSupport(x, y, z)) return false;
+  if(!canBotPlaceAt(x, y, z)) return false;
   // Don't place inside the player's body
   if(placeOverlapsPlayer(x, y, z)) return false;
   let useId = id;
@@ -1310,9 +1336,18 @@ function setupLandmark(id, originOverride = null){
   }
   buildOrigin = {x: ox, y: oy, z: oz};
   const sorted = orderOutsideIn(bp.blocks);
-  buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
+  const CEIL = WH - 2; // leave headroom so the bot can fly above the top course
+  const all = sorted.map(([dx, dy, dz, bid]) => ({
     x: ox + dx, y: oy + dy, z: oz + dz, id: bid, defers: 0
   }));
+  // Cells above the world ceiling can never be placed. Drop them once, here —
+  // leaving them in the queue made the bot churn for minutes doing nothing.
+  buildQueue = all.filter(c => c.y >= 1 && c.y < CEIL);
+  buildClipped = all.length - buildQueue.length;
+  buildDeferred = [];
+  buildPass = 1;
+  buildPassPlaced = 0;
+  buildStranded = 0;
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1328,9 +1363,18 @@ function setupCreative(){
   const oy = surfaceY(ox, oz) + 1;
   buildOrigin = {x: ox, y: oy, z: oz};
   const sorted = orderOutsideIn(bp.blocks);
-  buildQueue = sorted.map(([dx, dy, dz, bid]) => ({
+  const CEIL = WH - 2; // leave headroom so the bot can fly above the top course
+  const all = sorted.map(([dx, dy, dz, bid]) => ({
     x: ox + dx, y: oy + dy, z: oz + dz, id: bid, defers: 0
   }));
+  // Cells above the world ceiling can never be placed. Drop them once, here —
+  // leaving them in the queue made the bot churn for minutes doing nothing.
+  buildQueue = all.filter(c => c.y >= 1 && c.y < CEIL);
+  buildClipped = all.length - buildQueue.length;
+  buildDeferred = [];
+  buildPass = 1;
+  buildPassPlaced = 0;
+  buildStranded = 0;
   buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1351,6 +1395,9 @@ function tickBuilder(dt){
       return;
     }
     addChat('🤖', `Building ${buildName} — ${buildQueue.length} blocks (hands-on).`);
+    if(buildClipped > 0){
+      addChat('🤖', `⚠ ${buildClipped} blocks are above the world ceiling (y${WH}) and were skipped — ${buildName} will be built up to its cut-off height.`);
+    }
     approachT = 0;
     placeCd = 0.3;
     setPhase(PHASES.BUILD_PLACE, `Building ${buildName}…`);
@@ -1363,8 +1410,30 @@ function tickBuilder(dt){
       return;
     }
     if(buildIndex >= buildQueue.length){
+      // End of a pass. Anything still unsupported gets another pass, as long as
+      // the last pass actually achieved something (otherwise it never will).
+      if(buildDeferred.length && buildPassPlaced > 0 && buildPass < 12){
+        buildQueue = buildDeferred;
+        buildDeferred = [];
+        buildIndex = 0;
+        buildPass++;
+        buildPassPlaced = 0;
+        clearKeys();
+        setStatus(`${buildName} · pass ${buildPass} · ${buildQueue.length} left`);
+        return;
+      }
+      buildStranded = buildDeferred.length;
+      buildDeferred = [];
       if(buildJobId) markJobCompleted(buildJobId);
       snapshotJobProgress();
+      if(buildStranded > 0 || buildClipped > 0){
+        const bits = [];
+        if(buildClipped) bits.push(`${buildClipped} above world ceiling`);
+        if(buildStranded) bits.push(`${buildStranded} unreachable (floating geometry)`);
+        addChat('🤖', `${buildName} finished — ${bits.join(', ')}.`);
+      } else {
+        addChat('🤖', `${buildName} finished — every block placed.`);
+      }
       setPhase(PHASES.BUILD_DONE, `${buildName} complete`);
       return;
     }
@@ -1376,23 +1445,24 @@ function tickBuilder(dt){
     if(getBlock(cx, cy, cz)){
       buildIndex++;
       approachT = 0;
+      clearKeys();
       return;
     }
 
-    // No support yet — defer to end of queue (place neighbors first)
-    if(!hasBlockSupport(cx, cy, cz)){
-      cell.defers = (cell.defers || 0) + 1;
-      buildQueue.splice(buildIndex, 1);
-      if(cell.defers < 8) buildQueue.push(cell);
-      // else drop unsupported cell
+    // No support yet — hold it over for the next pass (neighbours may appear).
+    if(!canBotPlaceAt(cx, cy, cz)){
+      buildDeferred.push(cell);
+      buildIndex++;
       approachT = 0;
+      clearKeys();   // FIX: without this the bot kept the ascend key held and flew away
       return;
     }
 
     const total = buildQueue.length + buildIndex; // approx remaining+done unstable; use index display
     const left = buildQueue.length - buildIndex;
     const eta = formatEta(buildEtaSec());
-    setStatus(`${buildName} · ${buildIndex} done · ${left} left · ETA ${eta}`);
+    const passTag = buildPass > 1 ? ` · pass ${buildPass}` : '';
+    setStatus(`${buildName} · ${buildIndex} done · ${left} left${passTag} · ETA ${eta}`);
     const etaEl = document.getElementById('aiEta');
     if(etaEl){
       etaEl.style.display = 'block';
@@ -1417,11 +1487,11 @@ function tickBuilder(dt){
           noteBlockPlaced();
           placeCd = 0.3;
         } else {
-          cell.defers = (cell.defers || 0) + 1;
-          buildQueue.splice(buildIndex, 1);
-          if(cell.defers < 8) buildQueue.push(cell);
+          buildDeferred.push(cell);
+          buildIndex++;
         }
         approachT = 0;
+        clearKeys();
       }
       return;
     }
@@ -1454,15 +1524,15 @@ function tickBuilder(dt){
 
     if(placeBuildBlock(cx, cy, cz, cell.id)){
       buildIndex++;
+      buildPassPlaced++;
       noteBlockPlaced();
       placeCd = 0.36;
       approachT = 0;
       if(buildIndex % 8 === 0) snapshotJobProgress();
     } else {
-      // failed physics — defer
-      cell.defers = (cell.defers || 0) + 1;
-      buildQueue.splice(buildIndex, 1);
-      if(cell.defers < 8) buildQueue.push(cell);
+      // couldn't place right now — retry on the next pass
+      buildDeferred.push(cell);
+      buildIndex++;
       approachT = 0;
       placeCd = 0.15;
     }

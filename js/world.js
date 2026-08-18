@@ -1,5 +1,10 @@
 // world.js — chunked block storage + seeded, deterministic generation
-export const WORLD = 2048, WH = 48, CH = 16, CHUNKS = WORLD/CH, CENTER = WORLD/2;
+// WH raised 48 → 224 in v2.6 so every landmark fits, including the Burj Khalifa
+// (167 tall; built on the world's highest ground at y38 its tip reaches y206).
+// Terrain generation and edit coordinates are unchanged, so older saves load as-is —
+// they simply gain empty sky above. Column scans are bounded by chunkTops (below)
+// so the taller world costs no extra CPU.
+export const WORLD = 2048, WH = 224, CH = 16, CHUNKS = WORLD/CH, CENTER = WORLD/2;
 // Sparse chunk storage — null until ensureChunk() generates it (streaming)
 export const chunks = new Array(CHUNKS * CHUNKS).fill(null);
 /** TEMP test flag — set false / remove markers later */
@@ -18,6 +23,36 @@ export function mulberry32(a){
   };
 }
 
+/** Ceiling of anything world-generation can produce (measured max terrain y38
+ *  + trees/ruins/watchtowers). Player builds go far higher; those raise
+ *  chunkTops via setBlock instead. */
+export const GEN_TOP = 72;
+
+/** Highest non-air Y per chunk (upper bound, never lowered on removal).
+ *  Lets scans and meshing skip the empty sky above the terrain. */
+export const chunkTops = new Int16Array(CHUNKS * CHUNKS).fill(-1);
+/** 1 = this chunk holds player/network edits and must never be evicted
+ *  (clean chunks are byte-identical when regenerated from the seed). */
+export const chunkDirty = new Uint8Array(CHUNKS * CHUNKS);
+let generating = false;   // true while fillChunk runs, so world-gen writes aren't "edits"
+let resident = 0;         // chunks currently held in memory
+export function chunkTopAt(cx, cz){
+  cx = ((cx % CHUNKS) + CHUNKS) % CHUNKS;
+  cz = ((cz % CHUNKS) + CHUNKS) % CHUNKS;
+  const t = chunkTops[cIndex(cx, cz)];
+  return t < 0 ? -1 : Math.min(WH - 1, t);
+}
+function recomputeChunkTop(ci, chunk){
+  let top = -1;
+  for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--){
+    let any = false;
+    const base = y * CH * CH;
+    for(let i = 0; i < CH * CH; i++) if(chunk[base + i]){ any = true; break; }
+    if(any){ top = y; break; }
+  }
+  chunkTops[ci] = top;
+}
+
 export const wrapC = v => ((v % WORLD) + WORLD) % WORLD;
 export const cIndex = (cx,cz)=>cx + cz*CHUNKS;
 export const bIndex = (lx,y,lz)=>lx + lz*CH + y*CH*CH;
@@ -28,7 +63,12 @@ export function ensureChunk(cx, cz){
   const i = cIndex(cx, cz);
   if(!chunks[i]){
     chunks[i] = new Uint8Array(CH * CH * WH);
+    resident++;
+    const wasGen = generating;
+    generating = true;
     fillChunk(cx, cz, chunks[i]);
+    generating = wasGen;
+    recomputeChunkTop(i, chunks[i]);
   }
   return chunks[i];
 }
@@ -41,9 +81,37 @@ export function getBlock(x,y,z){
 export function setBlock(x,y,z,t){
   if(y<0||y>=WH) return;
   x = wrapC(x); z = wrapC(z);
-  const ch = ensureChunk(x>>4, z>>4);
+  const cx = x>>4, cz = z>>4;
+  const ch = ensureChunk(cx, cz);
   ch[bIndex(x&15, y, z&15)] = t;
+  const ci = cIndex(((cx % CHUNKS) + CHUNKS) % CHUNKS, ((cz % CHUNKS) + CHUNKS) % CHUNKS);
+  if(t && y > chunkTops[ci]) chunkTops[ci] = y;
+  if(!generating) chunkDirty[ci] = 1;   // an edit — pin this chunk in memory
 }
+
+/** Free distant, unedited chunks so a long session can't grow without bound.
+ *  Edited chunks are never touched; clean ones regenerate identically on demand. */
+export function evictFarChunks(px, pz, cap = 1200, keepChunks = 20){
+  if(resident <= cap) return 0;
+  const pcx = wrapC(Math.round(px)) >> 4, pcz = wrapC(Math.round(pz)) >> 4;
+  const target = Math.floor(cap * 0.8);
+  let freed = 0;
+  for(let cz = 0; cz < CHUNKS; cz++){
+    for(let cx = 0; cx < CHUNKS; cx++){
+      const i = cIndex(cx, cz);
+      if(!chunks[i] || chunkDirty[i]) continue;
+      let dx = Math.abs(cx - pcx); dx = Math.min(dx, CHUNKS - dx);
+      let dz = Math.abs(cz - pcz); dz = Math.min(dz, CHUNKS - dz);
+      if(Math.max(dx, dz) <= keepChunks) continue;
+      chunks[i] = null;
+      chunkTops[i] = -1;
+      resident--; freed++;
+      if(resident <= target) return freed;
+    }
+  }
+  return freed;
+}
+export const residentChunks = ()=>resident;
 // glass (9) doesn't hide its neighbours
 export const occludes = (x,y,z)=>{ const b = getBlock(x,y,z); return b!==0 && b!==9 && b!==10 && b!==44 && !doorStyleOf(b) && b!==63 && b!==58 && b!==65 && b!==64 && b!==66 && b!==67 && b!==68 && b!==69; };
 // walk-through: air, torch, ladder, open doors (52-55)
@@ -96,14 +164,25 @@ export const sandy = (x,z)=> biomeAt(x,z) === 2 || (Math.sin(x*F(4)+3)*Math.cos(
 export const BIOME_NAME = ['Plains','Forest','Desert','Mountains','Swamp'];
 
 export function topY(x,z){
-  for(let y=WH-1;y>=0;y--) if(getBlock(x,y,z)) return y;
+  x = wrapC(Math.round(x)); z = wrapC(Math.round(z));
+  const cx = x>>4, cz = z>>4;
+  const ch = ensureChunk(cx, cz);
+  const lx = x&15, lz = z&15;
+  let start = chunkTopAt(cx, cz);
+  if(start < 0) return -1;
+  for(let y=start;y>=0;y--) if(ch[bIndex(lx,y,lz)]) return y;
   return -1;
 }
 /** Highest solid (non–walk-through) block — use for feet on ground (ignores grass, flowers, water, torches). */
 export function surfaceY(x,z){
-  x = Math.round(x); z = Math.round(z);
-  for(let y = WH - 1; y >= 0; y--){
-    const b = getBlock(x, y, z);
+  x = wrapC(Math.round(x)); z = wrapC(Math.round(z));
+  const cx = x>>4, cz = z>>4;
+  const ch = ensureChunk(cx, cz);
+  const lx = x&15, lz = z&15;
+  let start = chunkTopAt(cx, cz);
+  if(start < 0) return -1;
+  for(let y = start; y >= 0; y--){
+    const b = ch[bIndex(lx, y, lz)];
     if(b && !isWalkThrough(b)) return y;
   }
   return -1;
@@ -119,6 +198,9 @@ export function generateWorld(s){
   villageSites.length = 0;
   // Do NOT allocate the full 2048² — chunks generate on demand via ensureChunk
   for(let i = 0; i < CHUNKS * CHUNKS; i++) chunks[i] = null;
+  chunkTops.fill(-1);
+  chunkDirty.fill(0);
+  resident = 0;
 }
 
 /** Deterministic per-chunk terrain (same formulas as the old full-world gen). */
@@ -206,7 +288,7 @@ function fillChunk(cx, cz, chunk){
     const lx = 4 + Math.floor(trng() * (CH - 8));
     const lz = 4 + Math.floor(trng() * (CH - 8));
     let h = 0;
-    for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
+    for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
     if(chunk[bIndex(lx, h, lz)] !== 1) continue;
     if(h + 10 >= WH) continue;
 
@@ -323,13 +405,13 @@ function fillChunk(cx, cz, chunk){
     let sumH = 0, nH = 0;
     for(let lx = 0; lx < CH; lx++) for(let lz = 0; lz < CH; lz++){
       let h = 0;
-      for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
+      for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
       sumH += h; nH++;
     }
     const avgH = sumH / Math.max(1, nH);
     for(let lx = 0; lx < CH; lx++) for(let lz = 0; lz < CH; lz++){
       let h = 0;
-      for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
+      for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
       const bio = biomeAt(x0 + lx, z0 + lz);
       if(bio === 2) continue; // no desert lakes
       const thr = bio === 4 ? avgH - 0.5 : avgH - 2; // swamps flood more
@@ -346,7 +428,7 @@ function fillChunk(cx, cz, chunk){
   const prng = mulberry32((seed ^ 0x91a55) + cx * 2654435761 + cz * 1597334677);
   for(let lx = 1; lx < CH - 1; lx++) for(let lz = 1; lz < CH - 1; lz++){
     let h = 0;
-    for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
+    for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx, y, lz)]){ h = y; break; }
     if(chunk[bIndex(lx, h, lz)] !== 1) continue;
     if(h + 1 >= WH) continue;
     if(chunk[bIndex(lx, h + 1, lz)]) continue;
@@ -384,7 +466,7 @@ function fillChunk(cx, cz, chunk){
         chunk[bIndex(lx, y, lz)] = t;
       };
       const surfaceY = (lx, lz) => {
-        for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx, y, lz)]) return y;
+        for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx, y, lz)]) return y;
         return 20;
       };
       // Flatten a small pad for the village
@@ -551,7 +633,7 @@ function fillChunk(cx, cz, chunk){
     const lz0 = 1 + Math.floor(rrng() * (CH - 8));
     const w = 5 + Math.floor(rrng() * 3), dpt = 4 + Math.floor(rrng() * 3);
     let h = 0;
-    for(let y = WH - 1; y >= 0; y--) if(chunk[bIndex(lx0, y, lz0)]){ h = y; break; }
+    for(let y = Math.min(WH - 1, GEN_TOP); y >= 0; y--) if(chunk[bIndex(lx0, y, lz0)]){ h = y; break; }
     const ht = 2 + Math.floor(rrng() * 2);
     for(let dx = 0; dx < w && lx0 + dx < CH; dx++)
       for(let dz = 0; dz < dpt && lz0 + dz < CH; dz++){
