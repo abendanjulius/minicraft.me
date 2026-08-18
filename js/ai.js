@@ -55,6 +55,8 @@ let buildDeferred = [];  // cells that had no support this pass
 let buildPass = 1;
 let buildPassPlaced = 0;
 let buildPlacedTotal = 0;   // blocks actually placed (the cursor also moves on skips)
+let placeFailStreak = 0;    // consecutive rejected placements
+let failReported = false;
 let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
@@ -1177,6 +1179,8 @@ function resumeJob(job){
   buildPassPlaced = 0;
   buildPlacedTotal = 0;
   buildStranded = 0;
+  placeFailStreak = 0;
+  failReported = false;
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1317,22 +1321,24 @@ function canBotPlaceAt(x, y, z){
   return gm.forge ? true : hasBlockSupport(x, y, z);
 }
 
+let lastPlaceFail = '';
 function placeBuildBlock(x, y, z, id){
   x = wrapC(x); z = wrapC(z);
   y = y|0;
-  if(y < 1 || y >= WH) return false;
+  if(y < 1 || y >= WH){ lastPlaceFail = 'outside the world'; return false; }
   if(getBlock(x, y, z)) return true; // already filled counts as done
-  if(!canBotPlaceAt(x, y, z)) return false;
+  if(!canBotPlaceAt(x, y, z)){ lastPlaceFail = 'nothing to attach to'; return false; }
   // Don't place inside the player's body
-  if(placeOverlapsPlayer(x, y, z)) return false;
+  if(placeOverlapsPlayer(x, y, z)){ lastPlaceFail = 'bot is in the way'; return false; }
   let useId = id;
   if(!gm.forge){
     const ok = ensureBuildBlocks(id);
-    if(ok === false) return false;
+    if(ok === false){ lastPlaceFail = 'no materials'; return false; }
     if(ok !== true) useId = ok;
-    if((inventory[useId] || 0) <= 0) return false;
+    if((inventory[useId] || 0) <= 0){ lastPlaceFail = 'no materials'; return false; }
     inventory[useId]--;
   }
+  lastPlaceFail = '';
   holdBlock(useId);
   applyEdit(x, y, z, useId, false);
   try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
@@ -1367,6 +1373,8 @@ function setupLandmark(id, originOverride = null){
   buildPassPlaced = 0;
   buildPlacedTotal = 0;
   buildStranded = 0;
+  placeFailStreak = 0;
+  failReported = false;
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1395,6 +1403,8 @@ function setupCreative(){
   buildPassPlaced = 0;
   buildPlacedTotal = 0;
   buildStranded = 0;
+  placeFailStreak = 0;
+  failReported = false;
   buildIndex = 0;
   buildStartedAt = 0;
   buildPlaceTimes = [];
@@ -1548,6 +1558,7 @@ function tickBuilder(dt){
       buildIndex++;
       buildPassPlaced++;
       buildPlacedTotal++;
+      placeFailStreak = 0;
       noteBlockPlaced();
       placeCd = 0.36;
       approachT = 0;
@@ -1558,6 +1569,22 @@ function tickBuilder(dt){
       buildIndex++;
       approachT = 0;
       placeCd = 0.15;
+      placeFailStreak++;
+      // Silent failure used to look identical to working: the bot flew around
+      // animating with nothing appearing. Say what is wrong, once.
+      if(placeFailStreak >= 20 && !failReported){
+        failReported = true;
+        const why = lastPlaceFail || 'unknown';
+        if(why === 'no materials'){
+          addChat('🤖', `Can't build ${buildName} — no materials, and Nightfall has no free blocks.`);
+          addChat('🤖', 'Tap 🔨 to switch to Forge (unlimited blocks), then start the Builder again.');
+          setStatus('Stopped — no materials');
+          stop();
+          return;
+        }
+        addChat('🤖', `${buildName}: ${placeFailStreak} placements rejected — ${why}.`);
+        setStatus(`Struggling — ${why}`);
+      }
     }
     return;
   }
@@ -1601,7 +1628,17 @@ export function start(opts = {}){
     return;
   }
   if(botProfile === 'builder' && !gm.forge){
-    addChat('🤖', 'Builder tip: Forge mode has unlimited blocks.');
+    // Nightfall gives the bot no free blocks. It used to start anyway and then
+    // fail every single placement in silence — looking exactly like a working
+    // build that never produced anything. Check for usable stock up front.
+    const STOCK = [3, 7, 8, 13, 1, 4, 23, 16, 15];
+    const carried = STOCK.reduce((n, id) => n + (inventory[id] || 0), 0);
+    if(carried < 32){
+      addChat('🤖', 'Builder needs materials — Nightfall has no free blocks and your pack is nearly empty.');
+      addChat('🤖', 'Tap 🔨 for Forge mode (unlimited blocks), then start the Builder again.');
+      return;
+    }
+    addChat('🤖', `Building from your stock (${carried} blocks). Forge mode gives unlimited blocks.`);
   }
 
   active = true;
