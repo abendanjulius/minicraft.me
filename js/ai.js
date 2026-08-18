@@ -58,6 +58,9 @@ let buildPlacedTotal = 0;   // blocks actually placed (the cursor also moves on 
 let placeFailStreak = 0;    // consecutive rejected placements
 let failReported = false;
 let stallT = 0, stallMark = -1;   // watchdog: notice when nothing is being placed
+let approachBestD = Infinity;     // closest we've come to the current target
+let noProgressT = 0;              // seconds without getting closer
+let approachKey = '';             // which cell the two above refer to
 let buildStranded = 0;
 let approachT = 0; // time spent trying to reach current build cell
 let unstuckHold = 0;
@@ -1514,7 +1517,8 @@ function tickBuilder(dt){
       if(stallT > 12){
         stallT = 0;
         const dd = distXZ(player.pos.x, player.pos.z, cx, cz).toFixed(1);
-        addChat('🤖', `stalled: target ${cx},${cy},${cz} · dist ${dd} · dy ${(player.pos.y - cy).toFixed(1)}`
+        addChat('🤖', `stalled: target ${cx},${cy},${cz} · dist ${dd} (best ${approachBestD === Infinity ? '-' : approachBestD.toFixed(1)})`
+          + ` · dy ${(player.pos.y - cy).toFixed(1)} · noProgress ${noProgressT.toFixed(1)}s`
           + ` · fly ${state.flying ? 'on' : 'off'} · cd ${placeCd.toFixed(2)}`
           + ` · last reject: ${lastPlaceFail || 'never reached placement'}`);
       }
@@ -1523,27 +1527,39 @@ function tickBuilder(dt){
     approachT += dt;
     const stand = standOutside(cell);
     const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
-    // navigateTo stops steering once it is within arriveR, so `near` must never
-    // be tighter than arriveR — otherwise the bot parks just outside the
-    // threshold and waits forever (v2.6.4 did exactly that: 0 blocks placed).
-    const arriveR = stand.above ? 0.7 : 2.2;
-    const near = d <= (stand.above ? 1.4 : 2.8);
+    // Placement writes the block directly (no raycast), so the bot does not need
+    // to be pixel-accurate — it only needs to be plausibly over the spot. A tight
+    // radius just guarantees it never qualifies.
+    const arriveR = stand.above ? 1.6 : 2.2;
+    const near = d <= (stand.above ? 2.6 : 2.8);
 
-    // Stuck recovery: fly + jump + strafe outside
-    if(approachT > 5.5){
-      builderUnstuck(dt);
-      if(approachT > 12){
-        // give up on approach — try place if support+no overlap, else defer
+    // Track real progress toward THIS cell rather than a blind timer.
+    const key = cx + ',' + cy + ',' + cz;
+    if(key !== approachKey){ approachKey = key; approachBestD = Infinity; noProgressT = 0; approachT = 0; }
+    if(d < approachBestD - 0.15){ approachBestD = d; noProgressT = 0; }
+    else noProgressT += dt;
+
+    // Recovery only when genuinely not closing in. Critically it keeps steering
+    // toward the target: the old version stopped navigating and flew outward and
+    // 8 blocks up, so the bot fled the very block it was trying to place.
+    if(noProgressT > 4.5){
+      if(state.flying) flyTowardY(cell.y + HOVER + 4 + 1.4, dt);
+      navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR});
+      if(noProgressT > 9){
         if(!placeOverlapsPlayer(cx, cy, cz) && placeBuildBlock(cx, cy, cz, cell.id)){
           buildIndex++;
+          buildPassPlaced++;
+          buildPlacedTotal++;      // this path used to place without counting it
+          placeFailStreak = 0;
           noteBlockPlaced();
           placeCd = 0.3;
         } else {
+          if(!lastPlaceFail) lastPlaceFail = 'bot is in the way';
           buildDeferred.push(cell);
           buildIndex++;
+          placeFailStreak++;
         }
-        approachT = 0;
-        clearKeys();
+        approachT = 0; noProgressT = 0; approachBestD = Infinity;
       }
       return;
     }
@@ -1562,7 +1578,8 @@ function tickBuilder(dt){
     keys.KeyW = false;
     if(state.flying){
       const ok = flyTowardY(flyTarget, dt);
-      if(!ok && approachT < 8) return;
+      // give it a moment to settle, but never wait forever on exact altitude
+      if(!ok && noProgressT < 2.5 && Math.abs(player.pos.y - (cell.y + HOVER)) > 3) return;
     }
 
     // Look at the block (steeply down when hovering above it)
