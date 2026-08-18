@@ -3,7 +3,7 @@
 // Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
-import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly } from './player.js';
+import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly, pulsePlace } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
 import { TYPES, ITEMS, faceURL, SKINS, applyEdit } from './render.js';
 import { gm } from './mode.js';
@@ -50,6 +50,7 @@ let buildIndex = 0;
 let buildOrigin = null;  // {x,y,z}
 let buildName = '';
 let placeCd = 0;
+let approachT = 0; // time spent trying to reach current build cell
 let buildStartedAt = 0;  // performance.now()/1000 when first block of this job placed
 let buildPlaceTimes = []; // rolling samples of seconds per block
 let buildJobId = null;     // registry id of the active job
@@ -1228,6 +1229,8 @@ function placeBuildBlock(x, y, z, id){
   holdBlock(useId);
   applyEdit(x, y, z, useId, false);
   try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
+  // Look like a real player place — hand swing + sound
+  try{ pulsePlace(); }catch(e){}
   return true;
 }
 
@@ -1285,9 +1288,10 @@ function tickBuilder(dt){
       setPhase(PHASES.BUILD_DONE, 'Nothing to build');
       return;
     }
-    addChat('🤖', `Placing ${buildQueue.length} blocks for ${buildName}.`);
+    addChat('🤖', `Building ${buildName} — ${buildQueue.length} blocks (hands-on).`);
+    approachT = 0;
+    placeCd = 0.3;
     setPhase(PHASES.BUILD_PLACE, `Building ${buildName}…`);
-    placeCd = 0.15;
     return;
   }
 
@@ -1304,6 +1308,13 @@ function tickBuilder(dt){
     }
 
     const cell = buildQueue[buildIndex];
+    // Skip cells that are already solid (resume / overlap)
+    if(getBlock(wrapC(cell.x), cell.y|0, wrapC(cell.z))){
+      buildIndex++;
+      approachT = 0;
+      return;
+    }
+
     const total = buildQueue.length;
     const eta = formatEta(buildEtaSec());
     setStatus(`${buildName} · ${buildIndex}/${total} · ETA ${eta}`);
@@ -1316,27 +1327,46 @@ function tickBuilder(dt){
     holdBlock(cell.id);
     if(gm.forge && cell.y > (buildOrigin?.y || 0) + 2) ensureFlying();
 
-    // Cosmetic movement only — NEVER gates placing
+    approachT += dt;
     const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
-    if(d > 6){
-      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 4});
+    const wantY = cell.y - 1.4;
+    const dy = Math.abs(player.pos.y - wantY);
+    const altOk = !state.flying || dy < 2.2;
+    const near = d <= 3.2;
+
+    // Move the body to the work site — placement waits for this
+    if(!near){
+      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 2.4});
+      if(state.flying) flyTowardY(cell.y, dt);
+      // Safety: if pathfinding fails for a long time, still place once so builds finish
+      if(approachT < 14) return;
     } else {
       keys.KeyW = false;
-      faceToward(cell.x, cell.z, dt, 0.15, 1.0);
+      if(state.flying){
+        const ok = flyTowardY(cell.y, dt);
+        if(!ok && approachT < 10) return;
+      }
     }
-    if(state.flying) flyTowardY(cell.y, dt);
 
-    // Place on timer regardless of position (applyEdit is absolute)
+    // Aim at the exact cell being placed (crosshair + body face the work)
+    const eyeY = player.pos.y + 1.6;
+    const pitch = Math.atan2(-(cell.y + 0.5 - eyeY), Math.max(0.6, d));
+    faceToward(cell.x, cell.z, dt, pitch, 2.0);
+
+    // Must be mostly looking at it before the swing
     if(placeCd > 0) return;
+    if(approachT < 0.2 && near) return; // brief settle
 
-    const ok = placeBuildBlock(cell.x, cell.y, cell.z, cell.id);
-    // Always advance — skip occupied / failed cells so we never stall
-    buildIndex++;
-    noteBlockPlaced();
-    placeCd = 0.18;
-    if(buildIndex % 8 === 0) snapshotJobProgress();
-    if(!ok && !gm.forge){
-      // nightfall out of blocks: still advanced; status already set next frame
+    if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
+      buildIndex++;
+      noteBlockPlaced();
+      placeCd = 0.38; // human place rhythm
+      approachT = 0;
+      if(buildIndex % 8 === 0) snapshotJobProgress();
+    } else {
+      buildIndex++;
+      approachT = 0;
+      placeCd = 0.2;
     }
     return;
   }

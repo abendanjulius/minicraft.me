@@ -536,6 +536,12 @@ export function initControls(){
 
 export function jump(b){ keys.Space = b; }
 
+/** AI / scripted place: hand swing + place SFX without going through raycast. */
+export function pulsePlace(){
+  placeAnim = 1;
+  try{ sfx.place(); }catch(e){}
+}
+
 /** Solid block you can attach to */
 function isSupportBlock(b){
   return !!(b && !isWalkThrough(b) && b !== 64);
