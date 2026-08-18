@@ -2,6 +2,7 @@
 // Split out of ui.js so inventory UI and touch input stay independent.
 
 import * as UI from './ui.js';
+import { isInputLocked } from './player.js';
 
 const $ = id => document.getElementById(id);
 const invIsOpen = () => UI.invOpen;
@@ -15,6 +16,7 @@ export function initTouch(hooks){
   let joyId = null, joyCX = 0, joyCY = 0, lookId = null, lookX = 0, lookY = 0;
 
   $('joyZone').addEventListener('touchstart', e=>{
+    if(isInputLocked()) return;
     e.preventDefault();
     const t = e.changedTouches[0];
     joyId = t.identifier; joyCX = t.clientX; joyCY = t.clientY;
@@ -73,7 +75,7 @@ export function initTouch(hooks){
   const digSurface = document.querySelector('#game canvas') || $('game');
 
   digSurface.addEventListener('touchstart', e=>{
-    if(invIsOpen() || !hooks) return;
+    if(invIsOpen() || !hooks || isInputLocked()) return;
     // only primary finger for dig
     const t = e.changedTouches[0];
     if(isUiTouch(t.clientX, t.clientY)) return;

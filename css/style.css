@@ -1495,3 +1495,11 @@ html body #touchUI #btnFly.active:active{
   .linkBtn{margin:0}
   .backBtn{top:8px;left:8px;padding:5px 10px;font-size:12px}
 }
+
+
+/* Cube-arc AI spectator bot */
+#btnAI{position:fixed;top:10px;right:170px;width:44px;height:44px;border-radius:8px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.5);color:#fff;font-size:22px;display:none;align-items:center;justify-content:center;z-index:3;cursor:pointer}
+#btnAI.active{background:rgba(40,120,80,.75);border-color:#6f6}
+body:not(.touch) #btnAI{right:62px}
+body:not(.touch) #btnMap{right:118px}
+#aiStatus{position:fixed;top:58px;left:50%;transform:translateX(-50%);color:#cfe;font:13px monospace;text-shadow:0 1px 3px #000;z-index:3;pointer-events:none;background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -25,6 +25,7 @@ import { tryCommand, setCommandContext } from './commands.js';
 import * as claim from './claim.js';
 import * as keepstones from './keepstones.js';
 import * as eldercube from './eldercube.js';
+import * as ai from './ai.js';
 
 const $ = id=>document.getElementById(id);
 chests.setChestChangeHook(()=>net.sendChests?.());
@@ -42,7 +43,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.4.10'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.5.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -158,6 +159,7 @@ $('btnMode').addEventListener('touchstart', e=>{ e.preventDefault(); toggleMode(
 
 // ---- Quit (saves first) ----
 function quitGame(){
+  try{ ai.stop(); }catch(e){}
   if(!confirm('Quit to menu?')) return;
   saveWorldNow();
   location.reload();
@@ -434,6 +436,15 @@ function begin(seed, edits, authority, saved){
       bm.addEventListener('click', openMap);
       bm.addEventListener('touchstart', openMap, {passive:false});
     }
+    const ba = $('btnAI');
+    if(ba){
+      ba.style.display = 'flex';
+      const tog = e=>{ e.preventDefault(); e.stopPropagation(); ai.toggle(); };
+      ba.addEventListener('click', tog);
+      ba.addEventListener('touchstart', tog, {passive:false});
+    }
+    const as = $('aiStatus');
+    if(as) as.style.display = 'block';
     const bf = $('btnFly');
     if(bf) bf.style.display = (gm.forge && document.body.classList.contains('touch')) ? 'flex' : 'none';
     startMusic();
@@ -642,6 +653,7 @@ function loop(now){
     frames=0; fpsTime=0;
   }
 
+  if(playerMod.state.playing && !playerMod.state.paused) ai.tick(dt);
   playerMod.update(dt, elapsed);
   if(playerMod.state.playing && !playerMod.state.paused){
     const dl = updateDayNight(dt, playerMod.player.pos);

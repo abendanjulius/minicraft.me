@@ -110,6 +110,10 @@ export const view = { yaw:0, pitch:0 };
 export const state = { playing:false, mineHeld:false, mining:null, mineTarget:null, paused:false, flying:false, sleeping:false };
 let sleepSeq = null; // {phase, t, bed:{x,y,z}}
 export const keys = {};
+/** When true, human mouse/keyboard/touch look+move are ignored (AI drives). */
+let inputLocked = false;
+export function setInputLocked(on){ inputLocked = !!on; }
+export const isInputLocked = () => inputLocked;
 let usingLock = false, dragging = false, mouseDown = null;
 let handBob = 0, swingT = 0, placeAnim = 0;
 let shake = 0, wasGround = true, fallV = 0, stepTimer = 0, aimTimer = 0;
@@ -349,6 +353,7 @@ export function spawn(){
   bodyG.visible = true;
 }
 export function look(dx,dy){
+  if(inputLocked) return;
   view.yaw -= dx; view.pitch -= dy;
   view.pitch = Math.max(-Math.PI/2+.01, Math.min(Math.PI/2-.01, view.pitch));
 }
@@ -453,7 +458,7 @@ export function initControls(){
 
   document.addEventListener('pointerlockchange', ()=>{ usingLock = !!document.pointerLockElement; });
   document.addEventListener('mousemove', e=>{
-    if(isTouch || !state.playing || invOpen || state.paused) return;
+    if(inputLocked || isTouch || !state.playing || invOpen || state.paused) return;
     // Pointer lock is the reliable path. Without it, only look while dragging.
     // Always re-request lock on any movement if we lost it (fixes "can strafe but can't turn").
     if(!usingLock && !mouseDown){
@@ -478,6 +483,7 @@ export function initControls(){
     }
     if(state.paused) return;
     if(e.code==='Enter' && state.playing){ for(const k in keys) keys[k]=false; openChat(); return; }
+    if(inputLocked) return; // AI drives movement; still allow Escape above
     keys[e.code]=true;
     if(e.code.startsWith('Digit')){
       const n = +e.code[5];
@@ -506,7 +512,7 @@ export function initControls(){
     renderHotbar();
   }, {passive:true});
   document.addEventListener('mousedown', e=>{
-    if(isTouch || !state.playing || invOpen) return;
+    if(inputLocked || isTouch || !state.playing || invOpen) return;
     if(e.target.closest('#hotbar,#inv,#btnQuit')) return;
     if(usingLock){
       if(e.button===0) setMine(true);
