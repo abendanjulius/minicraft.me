@@ -1040,6 +1040,22 @@ function ensureBuildBlocks(id){
   return false;
 }
 
+/** Put the exact block type in the active hotbar slot so the hand matches the place. */
+function holdBlock(id){
+  const kind = id >= 100 ? 'f' : 'b';
+  // Prefer an existing matching slot
+  let i = hotbarSlots.findIndex(s => s && s.k === kind && s.id === id);
+  if(i < 0){
+    // Use slot 0 for building so it's always visible
+    i = 0;
+    hotbarSlots[0] = {k: kind, id};
+  }
+  sel.slot = i;
+  // Forge: keep a visible stock count; Nightfall uses real inventory
+  if(gm.forge && id < 100) inventory[id] = Math.max(inventory[id] || 0, 64);
+  renderHotbar();
+}
+
 function placeBuildBlock(x, y, z, id){
   if(y < 1 || y >= WH) return false;
   if(getBlock(x, y, z)) return true; // already filled counts as done
@@ -1051,6 +1067,8 @@ function placeBuildBlock(x, y, z, id){
     if((inventory[useId] || 0) <= 0) return false;
     inventory[useId]--;
   }
+  // Hand / hotbar must show the same block being placed
+  holdBlock(useId);
   applyEdit(x, y, z, useId, false);
   try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
   return true;
@@ -1101,6 +1119,8 @@ function tickBuilder(dt){
     }
     const cell = buildQueue[buildIndex];
     setStatus(`${buildName} · ${buildIndex + 1}/${buildQueue.length}`);
+    // Show the block we are about to place (matches map material)
+    holdBlock(cell.id);
     const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
     // Walk near the cell
     if(d > 3.2){
