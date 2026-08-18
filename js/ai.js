@@ -224,6 +224,7 @@ export function start(){
   }
   active = true;
   setInputLocked?.(true);
+  document.body.classList.add('ai-driving');
   clearKeys();
   target = vaultTarget();
   if(carryingCube() || has(CUBE)){
@@ -244,6 +245,7 @@ export function stop(){
   if(!active) return;
   active = false;
   setInputLocked?.(false);
+  document.body.classList.remove('ai-driving');
   clearKeys();
   setMine(false);
   phase = PHASES.IDLE;
