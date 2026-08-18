@@ -1213,6 +1213,8 @@ function holdBlock(id){
 }
 
 function placeBuildBlock(x, y, z, id){
+  x = wrapC(x); z = wrapC(z);
+  y = y|0;
   if(y < 1 || y >= WH) return false;
   if(getBlock(x, y, z)) return true; // already filled counts as done
   let useId = id;
@@ -1223,7 +1225,6 @@ function placeBuildBlock(x, y, z, id){
     if((inventory[useId] || 0) <= 0) return false;
     inventory[useId]--;
   }
-  // Hand / hotbar must show the same block being placed
   holdBlock(useId);
   applyEdit(x, y, z, useId, false);
   try{ net.sendEdit?.(x, y, z, useId); }catch(e){}
@@ -1272,14 +1273,24 @@ function setupCreative(){
 
 function tickBuilder(dt){
   placeCd -= dt;
+
   if(phase === PHASES.BUILD_SETUP){
     if(builderMode === 'creative') setupCreative();
     else if(landmarkId) setupLandmark(landmarkId);
     else setupCreative();
     if(gm.forge) ensureFlying();
+    if(!buildQueue.length){
+      setStatus('Build queue empty');
+      addChat('🤖', 'Build failed — empty blueprint.');
+      setPhase(PHASES.BUILD_DONE, 'Nothing to build');
+      return;
+    }
+    addChat('🤖', `Placing ${buildQueue.length} blocks for ${buildName}.`);
     setPhase(PHASES.BUILD_PLACE, `Building ${buildName}…`);
+    placeCd = 0.15;
     return;
   }
+
   if(phase === PHASES.BUILD_PLACE){
     if(!buildQueue.length){
       setPhase(PHASES.BUILD_SETUP, 'Rebuilding queue…');
@@ -1291,67 +1302,53 @@ function tickBuilder(dt){
       setPhase(PHASES.BUILD_DONE, `${buildName} complete`);
       return;
     }
+
     const cell = buildQueue[buildIndex];
-    const done = buildIndex;
     const total = buildQueue.length;
     const eta = formatEta(buildEtaSec());
-    setStatus(`${buildName} · ${done}/${total} · ETA ${eta}`);
+    setStatus(`${buildName} · ${buildIndex}/${total} · ETA ${eta}`);
     const etaEl = document.getElementById('aiEta');
     if(etaEl){
       etaEl.style.display = 'block';
-      etaEl.textContent = `⏱ ${eta} remaining`;
+      etaEl.textContent = `⏱ ${eta} remaining · ${buildIndex}/${total}`;
     }
-    holdBlock(cell.id);
 
-    // Fly for tall sections (Forge)
+    holdBlock(cell.id);
     if(gm.forge && cell.y > (buildOrigin?.y || 0) + 2) ensureFlying();
 
+    // Cosmetic movement only — NEVER gates placing
     const d = distXZ(player.pos.x, player.pos.z, cell.x, cell.z);
-    const altOk = flyTowardY(cell.y, dt);
-
-    // Approach cell, but do not soft-lock forever on pathing
-    if(d > 5.5){
-      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 3.5});
-      if(state.flying) flyTowardY(cell.y, dt);
-      // After lingering too long on approach, place remotely (applyEdit is absolute)
-      if(phaseT < 2.5) return;
+    if(d > 6){
+      navigateTo(cell.x, cell.z, dt, {sprint: false, arriveR: 4});
     } else {
       keys.KeyW = false;
-      if(state.flying) flyTowardY(cell.y, dt);
-      faceToward(cell.x, cell.z, dt,
-        Math.atan2(-(cell.y + 0.5 - (player.pos.y + 1.6)), Math.max(0.5, d)), 1.2);
-      // Wait briefly for altitude only when reasonably close
-      if(state.flying && !altOk && phaseT < 1.2) return;
+      faceToward(cell.x, cell.z, dt, 0.15, 1.0);
     }
+    if(state.flying) flyTowardY(cell.y, dt);
 
+    // Place on timer regardless of position (applyEdit is absolute)
     if(placeCd > 0) return;
 
-    // Place at absolute coords — does not require perfect stand position
-    if(placeBuildBlock(cell.x, cell.y, cell.z, cell.id)){
-      buildIndex++;
-      noteBlockPlaced();
-      placeCd = 0.22;
-      phaseT = 0; // reset approach timer for next cell
-      if(buildIndex % 5 === 0) snapshotJobProgress();
-    } else {
-      if(!gm.forge){
-        setStatus('Need blocks — gathering…');
-        placeCd = 0.4;
-        if(phaseT > 6){ buildIndex++; phaseT = 0; }
-      } else {
-        // should not fail in Forge — skip bad cell
-        buildIndex++;
-        phaseT = 0;
-      }
+    const ok = placeBuildBlock(cell.x, cell.y, cell.z, cell.id);
+    // Always advance — skip occupied / failed cells so we never stall
+    buildIndex++;
+    noteBlockPlaced();
+    placeCd = 0.18;
+    if(buildIndex % 8 === 0) snapshotJobProgress();
+    if(!ok && !gm.forge){
+      // nightfall out of blocks: still advanced; status already set next frame
     }
     return;
   }
+
   if(phase === PHASES.BUILD_DONE){
     setStatus(`${buildName} complete`);
     const etaEl = document.getElementById('aiEta');
-    if(etaEl){ etaEl.textContent = '⏱ Done'; setTimeout(()=>{ if(etaEl.textContent==='⏱ Done') etaEl.style.display='none'; }, 2500); }
+    if(etaEl){
+      etaEl.textContent = '⏱ Done';
+      setTimeout(()=>{ if(etaEl.textContent === '⏱ Done') etaEl.style.display = 'none'; }, 2500);
+    }
     clearKeys();
-    // Gently return toward ground level after a tall build
     if(state.flying){
       const ground = surfaceY(Math.round(player.pos.x), Math.round(player.pos.z)) + 1;
       if(player.pos.y > ground + 2) flyTowardY(ground + 1.4, dt);
@@ -1363,6 +1360,7 @@ function tickBuilder(dt){
     }
   }
 }
+
 
 export function start(opts = {}){
   if(active) return;
@@ -1615,8 +1613,10 @@ export function tick(dt){
   if(joy){ joy.x = 0; joy.y = 0; }
 
   // Builder must not run craft/tool brain — it steals the hotbar from holdBlock
-  if(botProfile !== 'builder') manageInventory(dt);
-  checkStuckAlarm(dt);
+  if(botProfile !== 'builder'){
+    manageInventory(dt);
+    checkStuckAlarm(dt);
+  }
   tickStreamFace(dt);
 
   // Keep facecam visible (mobile Safari / layout can drop it)
@@ -1626,6 +1626,14 @@ export function tick(dt){
     const cam = streamCamEl();
     if(cam && !cam.classList.contains('scShow')) showStreamCam();
     else if(cam && cam.style.display === 'none') showStreamCam();
+  }
+
+  // Builder: pure place loop — never blocked by mining lock / water escape / stuck digs
+  if(botProfile === 'builder'){
+    clearMining();
+    tickBuilder(dt);
+    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
+    return;
   }
 
   // Finish the current dig before walking again — moving resets mine progress.
@@ -1641,17 +1649,6 @@ export function tick(dt){
     const moved = Math.hypot(player.pos.x - lastPos.x, player.pos.y - lastPos.y, player.pos.z - lastPos.z);
     if(moved < 0.05) stuckT += dt;
     else stuckT = Math.max(0, stuckT - dt);
-    lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
-    return;
-  }
-
-  // Builder profile skips combat focus unless attacked up close
-  if(botProfile === 'builder'){
-    if(nearestHostile() && fightNearby(dt)){
-      lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
-      return;
-    }
-    tickBuilder(dt);
     lastPos = {x: player.pos.x, y: player.pos.y, z: player.pos.z};
     return;
   }
