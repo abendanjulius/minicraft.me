@@ -1682,9 +1682,17 @@ function tickBuilder(dt){
     // every frame near the boundary — re-aiming and re-accelerating each time,
     // which reads as circling. Engage steering only when clearly far, and
     // disengage well inside that, so the two states can't chatter.
-    if(!navActive && d > (stand.above ? 4.0 : 3.4)) navActive = true;
-    if(navActive && d <= (stand.above ? 1.5 : 2.0)) navActive = false;
-    if(d < approachBestD - 0.15){ approachBestD = d; noProgressT = 0; }
+    // Precise steering converges (unlike the old held-heading navigator), so the
+    // bot can be asked to actually reach its spot rather than parking 2+ blocks
+    // short — which left the bearing to its work drifting.
+    if(!navActive && d > (stand.above ? 2.2 : 3.4)) navActive = true;
+    if(navActive && d <= (stand.above ? 0.9 : 2.0)) navActive = false;
+    // Only count "no progress" while the bot still needs to TRAVEL. Once it is
+    // in range it is meant to sit still and place; counting that as being stuck
+    // fired the recovery routine every few seconds, which rose 4 blocks and
+    // re-navigated — settle, lurch, settle, lurch. That loop was the spinning.
+    if(near){ noProgressT = 0; if(d < approachBestD) approachBestD = d; }
+    else if(d < approachBestD - 0.15){ approachBestD = d; noProgressT = 0; }
     else noProgressT += dt;
 
     // Watchdog — a build that places nothing now explains itself instead of
@@ -1706,7 +1714,7 @@ function tickBuilder(dt){
     // Recovery only when genuinely not closing in. Critically it keeps steering
     // toward the target: the old version stopped navigating and flew outward and
     // 8 blocks up, so the bot fled the very block it was trying to place.
-    if(noProgressT > 4.5){
+    if(!near && noProgressT > 4.5){
       if(state.flying) flyTowardY(cell.y + HOVER + 4 + 1.4, dt);
       navigateTo(stand.x, stand.z, dt, {sprint: false, arriveR, precise: d < 12});
       if(noProgressT > 9){
