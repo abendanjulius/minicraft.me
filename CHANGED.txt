@@ -1,9 +1,24 @@
-MiniCraft / Eldercube — v2.7.2
+Eldercube — CUMULATIVE delta for v2.7.0 + v2.7.1 + v2.7.2
+=========================================================
+Apply ALL of these together. Two are NEW files; the others import them, so a
+partial upload breaks the whole script graph (that is the "Game script failed
+to load" message).
 
-  js/player.js   held items no longer clip through walls (viewmodel retraction)
-  js/ai.js       builder now faces its work, using a latched heading
-  js/main.js     APP_VERSION -> 2.7.2
-  sw.js          CACHE -> minicraft-v186
-  version.json   -> 2.7.2
+  js/pathfind.js   *** NEW ***  A* voxel pathfinder            (v2.7.0)
+  js/aitest.js     *** NEW ***  /aitest self-test harness      (v2.7.1)
+  js/ai.js         route following, builder facing, driveTo hook
+  js/player.js     held items no longer clip through walls     (v2.7.2)
+  js/commands.js   registers /aitest
+  js/main.js       ticks aitest; APP_VERSION -> 2.7.2
+  sw.js            CACHE -> minicraft-v186; precaches both new files
+  version.json     -> 2.7.2
 
-Note: v2.7.1 (/aitest) must be applied first, or apply both deltas together.
+CHECK AFTER UPLOAD
+  The repo must contain js/pathfind.js and js/aitest.js.
+  If the loading error persists, hard-refresh (Ctrl+Shift+R), or use the
+  "Clear cache & reload" button on the title screen.
+
+USAGE
+  /aitest path          audit the pathfinder where you stand (instant)
+  /aitest travel [n]    walk to a random point n blocks away, timed
+  /aitest stop          abort a running test
