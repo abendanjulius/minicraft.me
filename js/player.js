@@ -1381,6 +1381,9 @@ export function update(dt, elapsed){
   );
   handGroup.rotation.set(swing*0.7 + tuck * 0.85, swing*0.12 - tuck * 0.45, tuck * 0.40);
   handGroup.scale.setScalar(1 - tuck * 0.18);
+  // Retraction alone can still leave a corner of the cube inside a wall, so once
+  // it is mostly tucked the item is simply hidden — geometry never intersects.
+  if(heldExtra) heldExtra.visible = tuck < 0.72;
 }
 
 let handTuck = 0;
@@ -1389,10 +1392,12 @@ const _handProbe = new THREE.Vector3();
 // camera, so these are exact — my first attempt rebuilt the basis by hand and
 // got the right-vector sign backwards, sampling the wrong side of the view).
 const HAND_SAMPLES = [
-  [0.38, -0.42, -0.42],
-  [0.44, -0.36, -0.62],
-  [0.50, -0.30, -0.82],
-  [0.30, -0.50, -0.62],
+  [0.38, -0.42, -0.35],
+  [0.42, -0.38, -0.55],
+  [0.48, -0.32, -0.75],
+  [0.54, -0.28, -0.95],
+  [0.26, -0.52, -0.55],
+  [0.62, -0.30, -0.70],
 ];
 /** Is the space the held item occupies inside a solid block? */
 function handObstructed(){

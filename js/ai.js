@@ -64,7 +64,6 @@ let noProgressT = 0;              // seconds without getting closer
 let approachKey = '';             // which cell the two above refer to
 let overlapT = 0;
 let navActive = false;   // steering engaged? (hysteresis, see BUILD_PLACE)
-let buildFaceYaw = null, buildFaceHold = 0, buildFaceLayer = -1;  // one heading per course
 const failCounts = Object.create(null);
 function countFail(why){ failCounts[why] = (failCounts[why] || 0) + 1; }
 function failSummary(){
@@ -1273,7 +1272,7 @@ function resumeJob(job){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  buildFaceYaw = null; buildFaceHold = 0; buildFaceLayer = -1;
+  courseLayer = -1;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
@@ -1359,14 +1358,46 @@ function orderOutsideIn(relBlocks){
  *  clear. When flying, hover over the cell and look down at it; that reaches
  *  interior and exterior cells alike. On foot (Nightfall) hovering isn't an
  *  option, so fall back to the radial position. */
-const HOVER = 2.4;
+const HOVER = 1.4;   // how far above the course the bot hovers
+const SIDE  = 2.6;   // how far to the side of the target it sits
+
+// The offset direction is chosen ONCE per course. Because every block in a
+// course is approached from the same side, the bearing from the bot to the
+// block it is placing is identical for all of them — so the bot looks directly
+// at its work and its heading only changes when it starts a new layer.
+let courseLayer = -1, courseDx = 1, courseDz = 0;
+function courseDir(cy){
+  if(cy !== courseLayer){
+    courseLayer = cy;
+    let ax = 0, az = 0, n = 0;
+    for(let k = buildIndex; k < Math.min(buildIndex + 160, buildQueue.length); k++){
+      if(buildQueue[k].y !== cy) break;
+      ax += buildQueue[k].x; az += buildQueue[k].z; n++;
+    }
+    let dx = 1, dz = 0;
+    if(n && buildOrigin){
+      ax /= n; az /= n;
+      dx = ax - buildOrigin.x; dz = az - buildOrigin.z;
+    }
+    const L = Math.hypot(dx, dz);
+    if(L < 0.6){                       // centred course: pick a slowly rotating side
+      const a = cy * 0.7;
+      dx = Math.cos(a); dz = Math.sin(a);
+    } else { dx /= L; dz /= L; }
+    courseDx = dx; courseDz = dz;
+  }
+  return [courseDx, courseDz];
+}
+
 function standOutside(cell, prevCell){
   if(state.flying){
-    // Directly above: consecutive cells are ~1 block apart, so the bot barely
-    // moves between placements. Offsetting to one side gives a nicer bearing but
-    // swings the stand position across small footprints, which is translation
-    // circling. Facing is solved separately, by latching (see below).
-    return { x: cell.x, z: cell.z, hoverY: cell.y + HOVER, above: true };
+    const [dx, dz] = courseDir(cell.y);
+    return {
+      x: cell.x + dx * SIDE,
+      z: cell.z + dz * SIDE,
+      hoverY: cell.y + HOVER,
+      above: true,
+    };
   }
   const ox = buildOrigin?.x ?? cell.x;
   const oz = buildOrigin?.z ?? cell.z;
@@ -1435,6 +1466,9 @@ function placeBuildBlock(x, y, z, id){
   y = y|0;
   if(y < 1 || y >= WH){ lastPlaceFail = 'outside the world'; return false; }
   if(!withinReach(x, y, z)){ lastPlaceFail = 'out of reach'; return false; }
+  // A player can technically reach 8 blocks up, but a bot stacking a tower from
+  // the ground looks wrong — it should rise with its work.
+  if(y > player.pos.y + 3.2){ lastPlaceFail = 'too high — climb first'; return false; }
   if(getBlock(x, y, z)) return true; // already filled counts as done
   if(!canBotPlaceAt(x, y, z)){ lastPlaceFail = 'nothing to attach to'; return false; }
   // Don't place inside the player's body
@@ -1486,7 +1520,7 @@ function setupLandmark(id, originOverride = null){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  buildFaceYaw = null; buildFaceHold = 0; buildFaceLayer = -1;
+  courseLayer = -1;
   for(const k in failCounts) delete failCounts[k];
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
@@ -1520,7 +1554,7 @@ function setupCreative(){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  buildFaceYaw = null; buildFaceHold = 0; buildFaceLayer = -1;
+  courseLayer = -1;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = 0;
   buildStartedAt = 0;
@@ -1620,8 +1654,11 @@ function tickBuilder(dt){
     // Fly only when the work is genuinely out of reach. Walking stops dead when
     // the key releases; flight coasts, and that coasting is what turns every
     // approach into an orbit. Ground courses are laid on foot.
-    const groundY = surfaceY(cx, cz);
-    const lowWork = groundY >= 0 && (cy - groundY) <= 3;
+    // surfaceY() returns the top of what has ALREADY been built here, so as the
+    // tower rose it always looked like ground level and the bot never took off.
+    // Measure against the ground the build started from instead.
+    const groundY = buildOrigin ? buildOrigin.y - 1 : surfaceY(cx, cz);
+    const lowWork = groundY >= 0 && (cy - groundY) <= 2 && (player.pos.y - groundY) <= 4;
     if(gm.forge){
       if(lowWork){
         if(state.flying && (player.pos.y - groundY) < 6){ try{ toggleFly(); }catch(e){} }
@@ -1723,42 +1760,10 @@ function tickBuilder(dt){
     const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(stand.above ? 0.15 : 0.6, horiz));
 
     if(stand.above){
-      // FACING — one heading per COURSE, not per block.
-      // Facing each block means turning constantly on a narrow build (Big Ben's
-      // serpentine rows are 1-3 blocks long, which measured ~21 turns/min and
-      // was plainly dizzying). So the heading is chosen once when the bot starts
-      // a new layer, aimed at that layer's centre of mass, and held — with a
-      // hard 8 s floor so thin courses can't chain turns together.
-      buildFaceHold -= dt;
-      if(cy !== buildFaceLayer && buildFaceHold <= 0){
-        let ax = 0, az = 0, an = 0;
-        for(let k = buildIndex; k < Math.min(buildIndex + 60, buildQueue.length); k++){
-          if(buildQueue[k].y !== cy) break;
-          ax += buildQueue[k].x; az += buildQueue[k].z; an++;
-        }
-        if(an){
-          ax /= an; az /= an;
-          const ddx = ax - player.pos.x, ddz = az - player.pos.z;
-          if(Math.hypot(ddx, ddz) > 1.5){
-            buildFaceYaw = Math.atan2(-ddx, -ddz);
-            buildFaceHold = 8;
-            buildFaceLayer = cy;
-          }
-        }
-      }
-      if(buildFaceYaw !== null){
-        let dy = buildFaceYaw - view.yaw;
-        while(dy >  Math.PI) dy -= Math.PI * 2;
-        while(dy < -Math.PI) dy += Math.PI * 2;
-        const maxTurn = 0.7 * dt;              // slow, deliberate
-        view.yaw += Math.max(-maxTurn, Math.min(maxTurn, dy));
-      }
-      const dp = pitch - view.pitch;
-      if(Math.abs(dp) > 0.03){
-        const max = 0.6 * 0.85 * dt;
-        view.pitch += Math.max(-max, Math.min(max, dp));
-      }
-      view.pitch = Math.max(-1.45, Math.min(1.45, view.pitch));
+      // Look straight at the block. Because the bot always approaches a course
+      // from the same side, this bearing is the SAME for every block in that
+      // course — it faces its work without turning between blocks.
+      faceToward(cx, cz, dt, pitch, 0.6);
       keys.KeyW = keys.KeyA = keys.KeyD = keys.KeyS = false;
     } else {
       faceToward(cx, cz, dt, pitch, 0.9);
