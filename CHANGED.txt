@@ -1,13 +1,16 @@
-Eldercube — v2.7.4  (CUMULATIVE: supersedes 2.7.0 - 2.7.3)
+Eldercube — v2.7.5  (CUMULATIVE: supersedes 2.7.0 - 2.7.4)
 
   js/pathfind.js   *** NEW ***  A* voxel pathfinder
   js/aitest.js     *** NEW ***  /aitest self-test harness
-  js/ai.js         A* routing, builder facing (syntax fix from 2.7.3)
-  js/player.js     held-item clipping FIXED PROPERLY (camera-space probe)
+  js/ai.js         builder facing is now ONE HEADING PER COURSE (was per block
+                   -> ~24 turns/min, dizzying). Big Ben now ~5.5/min,
+                   Pyramid/Colosseum under 0.5/min. 8-second minimum hold.
+  js/player.js     held items no longer clip through walls
   js/commands.js   registers /aitest
-  js/main.js       APP_VERSION -> 2.7.4
-  sw.js            CACHE -> minicraft-v188
-  version.json     -> 2.7.4
+  js/main.js       APP_VERSION -> 2.7.5
+  sw.js            CACHE -> minicraft-v189
+  version.json     -> 2.7.5
 
 Upload all eight. js/pathfind.js and js/aitest.js are NEW files.
-Verified with a real ES-module parser + module load test (33/33 pass).
+If it is STILL too much movement, say so — the fallback is to freeze the
+heading entirely while placing (v2.6.9 behaviour) and turn only when flying.
