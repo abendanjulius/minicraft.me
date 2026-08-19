@@ -1,15 +1,9 @@
-MiniCraft / Eldercube — v2.7.1  (/aitest self-test harness)
+MiniCraft / Eldercube — v2.7.2
 
-  js/aitest.js    NEW — test harness (path audit + live travel test)
-  js/ai.js        exports driveTo() / routeInfo() for the harness
-  js/commands.js  registers /aitest, listed in /help
-  js/main.js      ticks aitest each frame; APP_VERSION -> 2.7.1
-  sw.js           CACHE -> minicraft-v185, precaches js/aitest.js
-  version.json    -> 2.7.1
+  js/player.js   held items no longer clip through walls (viewmodel retraction)
+  js/ai.js       builder now faces its work, using a latched heading
+  js/main.js     APP_VERSION -> 2.7.2
+  sw.js          CACHE -> minicraft-v186
+  version.json   -> 2.7.2
 
-USAGE (type in chat):
-  /aitest path            audit the pathfinder where you stand (instant)
-  /aitest path 40         ...with 40 sample routes
-  /aitest travel          walk to a random point 60 blocks away, timed
-  /aitest travel 120      ...120 blocks
-  /aitest stop            abort a running test
+Note: v2.7.1 (/aitest) must be applied first, or apply both deltas together.

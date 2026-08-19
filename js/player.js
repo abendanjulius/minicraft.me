@@ -1366,8 +1366,42 @@ export function update(dt, elapsed){
   // Keep the hand anchored lower-right; bob lightly while moving
   const bobY = Math.sin(handBob)*0.012;
   const bobX = Math.cos(handBob*0.5)*0.008;
-  handGroup.position.set(0.38 + bobX, -0.42 + bobY + swing*0.03, -0.50 + swing*0.08);
-  handGroup.rotation.set(swing*0.7, swing*0.12, 0);
+
+  // Held items used to sink straight through walls. Rather than simulate the
+  // item (it isn't a world object), pull the hand back toward the body when the
+  // space it would occupy is solid — the standard viewmodel retraction. Eased,
+  // so it tucks in and out smoothly instead of snapping.
+  handTuck += ((handObstructed() ? 1 : 0) - handTuck) * Math.min(1, dt * 12);
+  const tuck = handTuck;                       // 0 = extended, 1 = pulled in
+
+  handGroup.position.set(
+    0.38 + bobX - tuck * 0.10,
+    -0.42 + bobY + swing*0.03 - tuck * 0.16,
+    -0.50 + swing*0.08 + tuck * 0.30           // toward the camera = out of the wall
+  );
+  handGroup.rotation.set(swing*0.7 + tuck * 0.55, swing*0.12 - tuck * 0.35, tuck * 0.30);
+}
+
+let handTuck = 0;
+const _handProbe = new THREE.Vector3();
+/** Is the space the held item occupies inside a solid block? */
+function handObstructed(){
+  // sample just ahead of the eye, on the hand's side of the view
+  const yaw = view.yaw, pitch = view.pitch;
+  const fx = -Math.sin(yaw) * Math.cos(pitch);
+  const fz = -Math.cos(yaw) * Math.cos(pitch);
+  const fy = -Math.sin(pitch);
+  const rx = -Math.cos(yaw), rz = Math.sin(yaw);      // camera right
+  for(const reach of [0.75, 1.15]){
+    _handProbe.set(
+      player.pos.x + fx * reach + rx * 0.35,
+      player.pos.y + 1.6 + fy * reach - 0.25,
+      player.pos.z + fz * reach + rz * 0.35
+    );
+    const b = getBlock(Math.round(_handProbe.x), Math.round(_handProbe.y), Math.round(_handProbe.z));
+    if(b && !isWalkThrough(b)) return true;
+  }
+  return false;
 }
 
 // State snapshot for the network

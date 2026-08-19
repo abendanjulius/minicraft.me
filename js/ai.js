@@ -64,6 +64,7 @@ let noProgressT = 0;              // seconds without getting closer
 let approachKey = '';             // which cell the two above refer to
 let overlapT = 0;
 let navActive = false;   // steering engaged? (hysteresis, see BUILD_PLACE)
+let faceYawTarget = null, faceHold = 0;   // latched build facing
 const failCounts = Object.create(null);
 function countFail(why){ failCounts[why] = (failCounts[why] || 0) + 1; }
 function failSummary(){
@@ -1272,6 +1273,7 @@ function resumeJob(job){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
+  faceYawTarget = null; faceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
@@ -1357,9 +1359,13 @@ function orderOutsideIn(relBlocks){
  *  clear. When flying, hover over the cell and look down at it; that reaches
  *  interior and exterior cells alike. On foot (Nightfall) hovering isn't an
  *  option, so fall back to the radial position. */
-const HOVER = 2.6;
-function standOutside(cell){
+const HOVER = 2.4;
+function standOutside(cell, prevCell){
   if(state.flying){
+    // Directly above: consecutive cells are ~1 block apart, so the bot barely
+    // moves between placements. Offsetting to one side gives a nicer bearing but
+    // swings the stand position across small footprints, which is translation
+    // circling. Facing is solved separately, by latching (see below).
     return { x: cell.x, z: cell.z, hoverY: cell.y + HOVER, above: true };
   }
   const ox = buildOrigin?.x ?? cell.x;
@@ -1480,6 +1486,7 @@ function setupLandmark(id, originOverride = null){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
+  faceYawTarget = null; faceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
@@ -1513,6 +1520,7 @@ function setupCreative(){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
+  faceYawTarget = null; faceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = 0;
   buildStartedAt = 0;
@@ -1621,7 +1629,7 @@ function tickBuilder(dt){
     }
 
     approachT += dt;
-    const stand = standOutside(cell);
+    const stand = standOutside(cell, buildQueue[buildIndex - 1]);
     const d = distXZ(player.pos.x, player.pos.z, stand.x, stand.z);
     // Placement writes the block directly (no raycast), so the bot does not need
     // to be pixel-accurate — it only needs to be plausibly over the spot. A tight
@@ -1715,13 +1723,38 @@ function tickBuilder(dt){
     const pitch = Math.atan2(-(cy + 0.5 - eyeY), Math.max(stand.above ? 0.15 : 0.6, horiz));
 
     if(stand.above){
-      // DON'T TURN WHILE PLACING. Any heading computed from the build geometry
-      // oscillates: the block underneath gives a noise-driven bearing, and on a
-      // narrow structure like Big Ben the serpentine rows are 1-3 blocks long so
-      // the travel direction reverses every couple of blocks (measured: a >90°
-      // swing on 30% of blocks). That oscillation *is* the circling.
-      // Yaw is left wherever the last real flight pointed it; only the pitch
-      // eases down onto the block. The bot turns when it flies, not when it lays.
+      // FACING, without the spin. A bearing recomputed per block flips as soon
+      // as consecutive cells sit on opposite sides of a small footprint (Big Ben
+      // measured 22% of blocks demanding a >90° turn). So aim at the CENTRE OF
+      // THE UPCOMING WORK and latch it: re-aim only when it differs by >35° and
+      // at least 2.5 s has passed. The bot faces what it is building and turns
+      // deliberately, at most once every couple of seconds.
+      faceHold -= dt;
+      let ax = 0, az = 0, an = 0;
+      for(let k = buildIndex; k < Math.min(buildIndex + 20, buildQueue.length); k++){
+        ax += buildQueue[k].x; az += buildQueue[k].z; an++;
+      }
+      if(an){
+        ax /= an; az /= an;
+        const ddx = ax - player.pos.x, ddz = az - player.pos.z;
+        if(Math.hypot(ddx, ddz) > 1.2){
+          const want = Math.atan2(-ddx, -ddz);
+          let diff = want - (faceYawTarget ?? want);
+          while(diff >  Math.PI) diff -= Math.PI * 2;
+          while(diff < -Math.PI) diff += Math.PI * 2;
+          if(faceYawTarget === null || (Math.abs(diff) > 0.6 && faceHold <= 0)){
+            faceYawTarget = want;
+            faceHold = 2.5;
+          }
+        }
+      }
+      if(faceYawTarget !== null){
+        let dy = faceYawTarget - view.yaw;
+        while(dy >  Math.PI) dy -= Math.PI * 2;
+        while(dy < -Math.PI) dy += Math.PI * 2;
+        const maxTurn = 1.1 * dt;
+        view.yaw += Math.max(-maxTurn, Math.min(maxTurn, dy));
+      }
       const dp = pitch - view.pitch;
       if(Math.abs(dp) > 0.03){
         const max = 0.6 * 0.85 * dt;
