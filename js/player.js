@@ -1375,34 +1375,37 @@ export function update(dt, elapsed){
   const tuck = handTuck;                       // 0 = extended, 1 = pulled in
 
   handGroup.position.set(
-    0.38 + bobX - tuck * 0.10,
-    -0.42 + bobY + swing*0.03 - tuck * 0.16,
-    -0.50 + swing*0.08 + tuck * 0.30           // toward the camera = out of the wall
+    0.38 + bobX + tuck * 0.10,                 // slide outward, away from the view centre
+    -0.42 + bobY + swing*0.03 - tuck * 0.30,   // and down out of frame
+    -0.50 + swing*0.08 + tuck * 0.34           // toward the camera = out of the wall
   );
-  handGroup.rotation.set(swing*0.7 + tuck * 0.55, swing*0.12 - tuck * 0.35, tuck * 0.30);
+  handGroup.rotation.set(swing*0.7 + tuck * 0.85, swing*0.12 - tuck * 0.45, tuck * 0.40);
+  handGroup.scale.setScalar(1 - tuck * 0.18);
 }
 
 let handTuck = 0;
 const _handProbe = new THREE.Vector3();
+// Points across the held item, in CAMERA space (the hand is a child of the
+// camera, so these are exact — my first attempt rebuilt the basis by hand and
+// got the right-vector sign backwards, sampling the wrong side of the view).
+const HAND_SAMPLES = [
+  [0.38, -0.42, -0.42],
+  [0.44, -0.36, -0.62],
+  [0.50, -0.30, -0.82],
+  [0.30, -0.50, -0.62],
+];
 /** Is the space the held item occupies inside a solid block? */
 function handObstructed(){
-  // sample just ahead of the eye, on the hand's side of the view
-  const yaw = view.yaw, pitch = view.pitch;
-  const fx = -Math.sin(yaw) * Math.cos(pitch);
-  const fz = -Math.cos(yaw) * Math.cos(pitch);
-  const fy = -Math.sin(pitch);
-  const rx = -Math.cos(yaw), rz = Math.sin(yaw);      // camera right
-  for(const reach of [0.75, 1.15]){
-    _handProbe.set(
-      player.pos.x + fx * reach + rx * 0.35,
-      player.pos.y + 1.6 + fy * reach - 0.25,
-      player.pos.z + fz * reach + rz * 0.35
-    );
+  camera.updateMatrixWorld();
+  for(const [lx, ly, lz] of HAND_SAMPLES){
+    _handProbe.set(lx, ly, lz);
+    camera.localToWorld(_handProbe);
     const b = getBlock(Math.round(_handProbe.x), Math.round(_handProbe.y), Math.round(_handProbe.z));
     if(b && !isWalkThrough(b)) return true;
   }
   return false;
 }
+
 
 // State snapshot for the network
 export function netState(){
