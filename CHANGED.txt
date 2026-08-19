@@ -1,24 +1,22 @@
-Eldercube — CUMULATIVE delta for v2.7.0 + v2.7.1 + v2.7.2
-=========================================================
-Apply ALL of these together. Two are NEW files; the others import them, so a
-partial upload breaks the whole script graph (that is the "Game script failed
-to load" message).
+Eldercube — v2.7.3  (CUMULATIVE: replaces 2.7.0 / 2.7.1 / 2.7.2)
+================================================================
+FIXES THE "Game script failed to load" ERROR.
 
-  js/pathfind.js   *** NEW ***  A* voxel pathfinder            (v2.7.0)
-  js/aitest.js     *** NEW ***  /aitest self-test harness      (v2.7.1)
-  js/ai.js         route following, builder facing, driveTo hook
-  js/player.js     held items no longer clip through walls     (v2.7.2)
+Cause: js/ai.js had a real syntax error — my new `faceHold` variable collided
+with an existing one, so the module never parsed and the whole script graph
+died. My syntax checker (`node --check`) was silently passing broken files;
+I have replaced it with a real ES-module parser and re-verified all 33 files.
+
+Upload ALL of these together. Two are NEW files:
+
+  js/pathfind.js   *** NEW ***  A* voxel pathfinder
+  js/aitest.js     *** NEW ***  /aitest self-test harness
+  js/ai.js         SYNTAX FIX + A* routing + builder facing
+  js/player.js     held items no longer clip through walls
   js/commands.js   registers /aitest
-  js/main.js       ticks aitest; APP_VERSION -> 2.7.2
-  sw.js            CACHE -> minicraft-v186; precaches both new files
-  version.json     -> 2.7.2
+  js/main.js       APP_VERSION -> 2.7.3
+  sw.js            CACHE -> minicraft-v187; precaches both new files
+  version.json     -> 2.7.3
 
-CHECK AFTER UPLOAD
-  The repo must contain js/pathfind.js and js/aitest.js.
-  If the loading error persists, hard-refresh (Ctrl+Shift+R), or use the
-  "Clear cache & reload" button on the title screen.
-
-USAGE
-  /aitest path          audit the pathfinder where you stand (instant)
-  /aitest travel [n]    walk to a random point n blocks away, timed
-  /aitest stop          abort a running test
+After upload, confirm js/pathfind.js and js/aitest.js exist in the repo,
+then hard-refresh (Ctrl+Shift+R) or use "Clear cache & reload".

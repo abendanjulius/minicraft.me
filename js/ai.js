@@ -64,7 +64,7 @@ let noProgressT = 0;              // seconds without getting closer
 let approachKey = '';             // which cell the two above refer to
 let overlapT = 0;
 let navActive = false;   // steering engaged? (hysteresis, see BUILD_PLACE)
-let faceYawTarget = null, faceHold = 0;   // latched build facing
+let buildFaceYaw = null, buildFaceHold = 0;   // latched build facing (faceHold is taken)
 const failCounts = Object.create(null);
 function countFail(why){ failCounts[why] = (failCounts[why] || 0) + 1; }
 function failSummary(){
@@ -1273,7 +1273,7 @@ function resumeJob(job){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  faceYawTarget = null; faceHold = 0;
+  buildFaceYaw = null; buildFaceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = Math.min(job.buildIndex|0, buildQueue.length);
   buildStartedAt = 0;
@@ -1486,7 +1486,7 @@ function setupLandmark(id, originOverride = null){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  faceYawTarget = null; faceHold = 0;
+  buildFaceYaw = null; buildFaceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   if(!originOverride) buildIndex = 0;
   buildStartedAt = 0;
@@ -1520,7 +1520,7 @@ function setupCreative(){
   failReported = false;
   stallT = 0; stallMark = -1;
   overlapT = 0;
-  faceYawTarget = null; faceHold = 0;
+  buildFaceYaw = null; buildFaceHold = 0;
   for(const k in failCounts) delete failCounts[k];
   buildIndex = 0;
   buildStartedAt = 0;
@@ -1729,7 +1729,7 @@ function tickBuilder(dt){
       // THE UPCOMING WORK and latch it: re-aim only when it differs by >35° and
       // at least 2.5 s has passed. The bot faces what it is building and turns
       // deliberately, at most once every couple of seconds.
-      faceHold -= dt;
+      buildFaceHold -= dt;
       let ax = 0, az = 0, an = 0;
       for(let k = buildIndex; k < Math.min(buildIndex + 20, buildQueue.length); k++){
         ax += buildQueue[k].x; az += buildQueue[k].z; an++;
@@ -1739,17 +1739,17 @@ function tickBuilder(dt){
         const ddx = ax - player.pos.x, ddz = az - player.pos.z;
         if(Math.hypot(ddx, ddz) > 1.2){
           const want = Math.atan2(-ddx, -ddz);
-          let diff = want - (faceYawTarget ?? want);
+          let diff = want - (buildFaceYaw ?? want);
           while(diff >  Math.PI) diff -= Math.PI * 2;
           while(diff < -Math.PI) diff += Math.PI * 2;
-          if(faceYawTarget === null || (Math.abs(diff) > 0.6 && faceHold <= 0)){
-            faceYawTarget = want;
-            faceHold = 2.5;
+          if(buildFaceYaw === null || (Math.abs(diff) > 0.6 && buildFaceHold <= 0)){
+            buildFaceYaw = want;
+            buildFaceHold = 2.5;
           }
         }
       }
-      if(faceYawTarget !== null){
-        let dy = faceYawTarget - view.yaw;
+      if(buildFaceYaw !== null){
+        let dy = buildFaceYaw - view.yaw;
         while(dy >  Math.PI) dy -= Math.PI * 2;
         while(dy < -Math.PI) dy += Math.PI * 2;
         const maxTurn = 1.1 * dt;
