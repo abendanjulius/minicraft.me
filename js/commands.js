@@ -2,6 +2,7 @@
 // Host/solo-only for world-affecting cmds; local cmds for everyone.
 
 import { WORLD, WH, CENTER, getBlock, setBlock, heightAt, wrapC, biomeAt, BIOME_NAME, DEBUG_MARKERS } from './world.js';
+import * as aitest from './aitest.js';
 import { rebuildAt, applyEdit, trackTorch, trackDoor, trackBed, trackSpecial, TYPES, ITEMS } from './render.js';
 import { day, setDayTime } from './sky.js';
 import { addChat, inventory, hotbarSlots, renderHotbar, renderInv, addToInventory, startHordeCountdown, showCenterNotice } from './ui.js';
@@ -238,10 +239,19 @@ export function tryCommand(raw){
       reply(`Gave ${n}× Keepstone. Place one, then click it holding the Elder Cube.`);
       return true;
     }
+    case 'aitest': {
+      const sub = (args[0] || 'help').toLowerCase();
+      if(sub === 'path'){ aitest.auditPaths(Number(args[1]) || 24); return true; }
+      if(sub === 'travel'){ aitest.startTravel(Number(args[1]) || 60); return true; }
+      if(sub === 'stop'){ aitest.stopTest('test aborted'); return true; }
+      aitest.help();
+      return true;
+    }
+
     case 'help':
     case 'commands': {
       reply('Local: /where /fly /home /tp /heal /cube');
-      reply('Testing: /cube get · /keepstone [n]  (Nightfall only)');
+      reply('Testing: /cube get · /keepstone [n]  (Nightfall only) · /aitest path|travel');
       reply('Host: /flat /day /night /time /fill /give /clear /god /peace /killmobs /horde /markers /chunk /gm /skip /seed');
       return true;
     }

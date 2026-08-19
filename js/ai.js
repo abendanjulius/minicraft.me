@@ -801,6 +801,19 @@ function followRoute(gx, gz, gy, dt, opts = {}){
 }
 export function clearRoute(){ route = null; routeGoal = null; routeIdx = 0; }
 
+/** Test hook: steer the character to (gx,gz) using the same A* route follower
+ *  the bot uses. Returns true on arrival. Used by /aitest — not by the bot. */
+export function driveTo(gx, gz, gy, dt){
+  if(distXZ(player.pos.x, player.pos.z, gx, gz) <= 2.5){ clearKeys(); clearRoute(); return true; }
+  if(!followRoute(gx, gz, gy, dt, {sprint: false}) && !route){
+    navigateTo(gx, gz, dt, {sprint: false, arriveR: 2.2});
+  }
+  return false;
+}
+export function routeInfo(){
+  return {legs: route ? route.length : 0, idx: routeIdx, digs: route ? route.filter(w => w.dig).length : 0};
+}
+
 function navigateTo(goalX, goalZ, dt, opts = {}){
   // Never walk while a dig is locked in
   if(mineLock){ keys.KeyW = false; return false; }

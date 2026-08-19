@@ -26,6 +26,7 @@ import * as claim from './claim.js';
 import * as keepstones from './keepstones.js';
 import * as eldercube from './eldercube.js';
 import * as ai from './ai.js';
+import * as aitest from './aitest.js';
 
 const $ = id=>document.getElementById(id);
 chests.setChestChangeHook(()=>net.sendChests?.());
@@ -43,7 +44,7 @@ setEditPhysicsHook((x,y,z,old,t)=>{
 
 
 // ---- Version check ----
-const APP_VERSION = '2.7.0'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
+const APP_VERSION = '2.7.1'; // UPDATE ON EVERY RELEASE (with version.json + sw.js CACHE)
 // FORCE_SW_BUST — drop old caches when version changes
 (async () => {
   try {
@@ -653,7 +654,7 @@ function loop(now){
     frames=0; fpsTime=0;
   }
 
-  if(playerMod.state.playing && !playerMod.state.paused) ai.tick(dt);
+  if(playerMod.state.playing && !playerMod.state.paused){ ai.tick(dt); aitest.tick(dt); }
   playerMod.update(dt, elapsed);
   if(playerMod.state.playing && !playerMod.state.paused){
     const dl = updateDayNight(dt, playerMod.player.pos);
