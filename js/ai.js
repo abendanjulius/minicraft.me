@@ -3,6 +3,7 @@
 // Pathing: 8-way scored steering + jump/dig recovery (v2.5.2).
 
 import { WORLD, WH, getBlock, surfaceY, isWalkThrough, wrapC, seed } from './world.js';
+import { findPath, smooth } from './pathfind.js';
 import { player, view, state, keys, setMine, placeAction, castBlock, carryingCube, setInputLocked, skinIdx, toggleFly, pulsePlace, hasBlockSupport, placeOverlapsPlayer } from './player.js';
 import { inventory, hotbarSlots, sel, renderHotbar, joy, addChat } from './ui.js';
 import { TYPES, ITEMS, faceURL, SKINS, applyEdit } from './render.js';
@@ -756,6 +757,50 @@ function scoreStep(dx, dz, goalX, goalZ){
  * Pick best of 8 directions toward goal. Sets view + movement keys.
  * Returns true when within arriveR of goal XZ.
  */
+// ── A* route following ────────────────────────────────────────────────────
+let route = null, routeIdx = 0, routeGoal = null, routeAge = 0, routeFail = 0;
+
+function routeStale(gx, gz){
+  if(!route || routeIdx >= route.length) return true;
+  if(!routeGoal) return true;
+  if(distXZ(routeGoal.x, routeGoal.z, gx, gz) > 3) return true;      // goal moved
+  if(routeAge > 4) return true;                                     // world changes
+  const wp = route[routeIdx];
+  if(distXZ(player.pos.x, player.pos.z, wp.x, wp.z) > 9) return true; // knocked off course
+  return false;
+}
+
+/** Walk an A* route to (gx,gz). Returns true once the last waypoint is reached. */
+function followRoute(gx, gz, gy, dt, opts = {}){
+  routeAge += dt;
+  if(routeStale(gx, gz)){
+    const res = findPath(player.pos.x, player.pos.y, player.pos.z, gx, gy ?? player.pos.y, gz,
+                         {canDig: botProfile !== 'builder'});
+    routeAge = 0;
+    if(res.path.length > 1){
+      route = smooth(res.path);
+      routeIdx = 1;                 // [0] is where we already stand
+      routeGoal = {x: gx, z: gz};
+      routeFail = 0;
+    } else {
+      routeFail++;
+      route = null;
+      return false;                 // caller falls back to direct steering
+    }
+  }
+  // advance through reached waypoints
+  while(routeIdx < route.length &&
+        distXZ(player.pos.x, player.pos.z, route[routeIdx].x, route[routeIdx].z) < 1.3){
+    routeIdx++;
+  }
+  if(routeIdx >= route.length){ route = null; return true; }
+  const wp = route[routeIdx];
+  navigateTo(wp.x, wp.z, dt, {sprint: opts.sprint, arriveR: 0.9, precise: true});
+  if(wp.dig && digCd <= 0) digLook(0.5);      // route goes through a block
+  return false;
+}
+export function clearRoute(){ route = null; routeGoal = null; routeIdx = 0; }
+
 function navigateTo(goalX, goalZ, dt, opts = {}){
   // Never walk while a dig is locked in
   if(mineLock){ keys.KeyW = false; return false; }
@@ -970,6 +1015,7 @@ function digUpToward(dt){
 
 function setPhase(p, msg){
   phase = p;
+  clearRoute();          // a route computed for the old goal is meaningless now
   phaseT = 0;
   stuckT = 0;
   avoidT = 0;
@@ -2063,9 +2109,16 @@ export function tick(dt){
       target = vaultTarget();
       const d = distXZ(player.pos.x, player.pos.z, target.x, target.z)|0;
       setStatus(`To vault · ${d}m`);
-      if(navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2.2})){
+      const arrivedT = distXZ(player.pos.x, player.pos.z, target.x, target.z) <= 2.2;
+      if(arrivedT){
+        clearRoute();
         clearMining();
         setPhase(PHASES.DESCEND, 'Descending into the vault…');
+      } else if(state.flying){
+        navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2.2});
+      } else if(!followRoute(target.x, target.z, surfaceY(target.x, target.z) + 1, dt, {sprint: false})){
+        // A* had nothing (or is still searching) — direct steering keeps it moving
+        if(!route) navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 2.2});
       }
       break;
     }
@@ -2073,7 +2126,13 @@ export function tick(dt){
       target = vaultTarget();
       // Stay over the vault mouth while digging the shaft
       if(distXZ(player.pos.x, player.pos.z, target.x, target.z) > 2.5){
-        if(!mineLock) navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 1.5});
+        if(!mineLock){
+          const far = distXZ(player.pos.x, player.pos.z, target.x, target.z) > 8;
+          if(far && !state.flying){
+            if(!followRoute(target.x, target.z, target.y ?? player.pos.y, dt, {sprint: false}) && !route)
+              navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 1.5});
+          } else navigateTo(target.x, target.z, dt, {sprint: false, arriveR: 1.5});
+        }
         setStatus(`To vault mouth · ${distXZ(player.pos.x,player.pos.z,target.x,target.z)|0}m`);
         break;
       }
